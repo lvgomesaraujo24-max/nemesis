@@ -6,6 +6,6 @@
    de segurança (RLS) do arquivo supabase/schema.sql.
    Com os dois campos vazios, o app abre em MODO DEMONSTRAÇÃO. */
 window.NEMESIS_CONFIG = {
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: ""
+  SUPABASE_URL: "https://ycndwyjvddrmlzunnhvv.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_5yvQMMuri_LUlS3l8OFLbg_L-ot_kcM"
 };
