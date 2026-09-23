@@ -1,0 +1,15 @@
+.form-pagina { max-width: 560px; margin: 0 auto; padding: 36px 16px 48px; display: flex; flex-direction: column; gap: 18px; }
+.form-cab { display: flex; flex-direction: column; gap: 10px; }
+.form-cab .sobre { color: var(--roxo-claro); font-size: 12.5px; letter-spacing: .16em; text-transform: uppercase; font-weight: 600; }
+.form-cab h1 { font-size: 30px; }
+.form-cab h1 em { color: var(--roxo-claro); font-style: italic; font-weight: 600; }
+.passos { display: flex; gap: 6px; }
+.passos span { flex: 1; height: 4px; border-radius: 99px; background: var(--sup2); }
+.passos span.on { background: var(--roxo-claro); }
+.form-rodape { display: flex; gap: 10px; }
+.form-rodape .btn { flex: 1; }
+.feito { text-align: center; align-items: center; padding: 36px 20px; }
+.feito .selo { width: 64px; height: 64px; border-radius: 50%; background: var(--roxo-fundo); color: var(--roxo-claro); display: flex; align-items: center; justify-content: center; font-size: 28px; }
+.feito h2 { font-family: var(--serif); font-size: 24px; }
+.consentimento { font-size: 13px; color: var(--suave); align-items: flex-start; }
+.consentimento input { margin-top: 2px; }
