@@ -2,10 +2,15 @@
 import { html, useState, useEffect, useRef } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
+import { ResponderFormulario, pendenciasDaAluna } from './vivo.js';
+import { CardioAluna, TestesAluna, MetasAluna } from './extras.js';
+import { DEMO } from './api.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Escala, toast, num, dataBR, hoje, segundaDe, lerNum, relativo, diasEntre } from './util.js';
 
 export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
   const [pulouAnamnese, setPulou] = useState(false);
+  const [base, id, sub] = rota;
+  const pend = useCarregar(() => (DEMO ? Promise.resolve([]) : pendenciasDaAluna(perfil.id).catch(() => [])), [perfil.id, base]);
   if (!perfil.anamnese_ok && !pulouAnamnese) {
     return html`<div class="tela"><header class="topo"><span class="marca">NEMESIS</span></header>
       <main class="conteudo">
@@ -16,19 +21,28 @@ export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
         <button class="btn-texto" onClick=${() => setPulou(true)}>Preencher depois</button>
       </main></div>`;
   }
-  const [base, id] = rota;
+  const bloqueio = (pend.dados || []).find((p) => p.atribuicao.bloqueia_app);
+  if (bloqueio && base !== 'form') {
+    return html`<div class="tela"><header class="topo"><span class="marca">NEMESIS</span></header><main class="conteudo pilha">
+      <div class="boas-vindas"><p class="sobre">Antes de continuar</p><h1>${bloqueio.formulario.titulo}</h1></div>
+      <${ResponderFormulario} formularioId=${bloqueio.formulario.id} atribuicaoId=${bloqueio.atribuicao.id} onEnviado=${() => pend.recarregar()}/></main></div>`;
+  }
   let tela;
   if (base === 'treino' && id) tela = html`<${Execucao} perfil=${perfil} treinoId=${id} ir=${ir}/>`;
+  else if (base === 'form' && id) tela = html`<div class="pilha"><button class="btn-texto" onClick=${() => ir('')}>‹ Voltar</button>
+    <h1 class="titulo">${((pend.dados || []).find((p) => p.formulario.id === id) || { formulario: { titulo: 'Formulário' } }).formulario.titulo}</h1>
+    <${ResponderFormulario} formularioId=${id} atribuicaoId=${sub || null} onEnviado=${() => { pend.recarregar(); ir(''); }}/></div>`;
+  else if (base === 'cardio') tela = html`<h1 class="titulo">Cardio</h1><${CardioAluna} aluna=${perfil} podeEditar=${false}/>`;
   else if (base === 'evolucao') tela = html`<h1 class="titulo">Evolução</h1><${Evolucao} alunaId=${perfil.id}/>`;
   else if (base === 'checkin') tela = html`<${CheckinAluna} perfil=${perfil}/>`;
   else if (base === 'perfil') tela = html`<${PerfilAluna} perfil=${perfil} recarregarPerfil=${recarregarPerfil}/>`;
-  else tela = html`<${InicioAluna} perfil=${perfil} ir=${ir}/>`;
+  else tela = html`<${InicioAluna} perfil=${perfil} ir=${ir} pendentes=${(pend.dados || []).filter((p) => p.formulario.tipo !== 'oraculo')}/>`;
   const aba = base === 'treino' ? '' : base || '';
   return html`<div class="tela com-nav">
     <header class="topo"><span class="marca">NEMESIS</span></header>
     <main class="conteudo">${tela}</main>
     ${base !== 'treino' && html`<nav class="nav-baixo">
-      ${[['', 'Treinos', '◆'], ['evolucao', 'Evolução', '↗'], ['checkin', 'Check-in', '✓'], ['perfil', 'Perfil', '●']].map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><span class="nav-i">${i}</span>${r}</a>`)}
+      ${[['', 'Treinos', '◆'], ['evolucao', 'Evolução', '↗'], ['checkin', 'Oráculo', '✓'], ['perfil', 'Perfil', '●']].map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><span class="nav-i">${i}</span>${r}</a>`)}
     </nav>`}
   </div>`;
 }
@@ -36,21 +50,23 @@ export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
 const primeiroNome = (n) => (n || '').split(' ')[0] || '';
 
 // ---------- início: lista de treinos ----------
-function InicioAluna({ perfil, ir }) {
+function InicioAluna({ perfil, ir, pendentes = [] }) {
   const e = useCarregar(async () => {
-    const [treinos, sessoes, checkins] = await Promise.all([
+    const [treinos, sessoes, checkins, cardio] = await Promise.all([
       api.q('treinos', { eq: { aluna_id: perfil.id, ativo: true }, order: 'ordem' }),
       api.q('sessoes', { eq: { aluna_id: perfil.id }, order: 'data' }),
       api.q('checkins', { eq: { aluna_id: perfil.id, semana: segundaDe() } }),
+      api.q('cardio_prescricoes', { eq: { aluna_id: perfil.id, ativo: true } }).catch(() => []),
     ]);
     const itens = await api.q('treino_itens', { eq: { aluna_id: perfil.id } });
-    return { treinos, sessoes, itens, checkinFeito: checkins.length > 0 };
+    return { treinos, sessoes, itens, checkinFeito: checkins.length > 0, cardio };
   }, [perfil.id]);
   const hora = new Date().getHours();
   const saud = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
   return html`<div class="pilha">
     <div class="ola"><p class="sobre">${saud},</p><h1>${primeiroNome(perfil.nome)}</h1></div>
-    <${Estado} e=${e}>${({ treinos, sessoes, itens, checkinFeito }) => {
+    ${pendentes.map((p) => html`<a class="card aviso" href=${`#/form/${p.formulario.id}/${p.atribuicao.id}`}><b>${p.formulario.titulo}</b><span>${p.formulario.descricao || 'Toque para responder.'}</span></a>`)}
+    <${Estado} e=${e}>${({ treinos, sessoes, itens, checkinFeito, cardio }) => {
       if (!treinos.length) return html`<${Vazio} titulo="Sua ficha está sendo montada" texto="Assim que o treinador publicar os seus treinos, eles aparecem aqui."/>`;
       const semana = sessoes.filter((s) => s.data >= segundaDe());
       const obrig = treinos.filter((t) => !t.opcional);
@@ -64,7 +80,8 @@ function InicioAluna({ perfil, ir }) {
           <div class="progresso"><div style=${`width:${Math.min(100, (semana.length / Math.max(1, obrig.length)) * 100)}%`}></div></div>
           <p class="suave">${semana.length >= obrig.length ? 'Semana completa. Isso é constância.' : `Faltam ${obrig.length - semana.length} treino(s) para fechar a semana.`}</p>
         </div>
-        ${!checkinFeito && [5, 6, 0].includes(new Date().getDay()) ? html`<a class="card aviso" href="#/checkin"><b>Seu check-in da semana está aberto</b><span>Leva 1 minuto. É com ele que eu ajusto o seu treino.</span></a>` : null}
+        ${!checkinFeito && [5, 6, 0].includes(new Date().getDay()) ? html`<a class="card aviso" href="#/checkin"><b>O Oráculo da semana está aberto</b><span>Leva 2 minutos. É com ele que eu ajusto o seu treino.</span></a>` : null}
+        ${cardio && cardio.length > 0 && html`<a class="card" href="#/cardio"><div class="card-topo"><h3>Cardio da semana</h3><span class="seta">›</span></div><small>${cardio.map((c) => `${c.duracao_min} min ${c.modalidade} · ${c.vezes_semana}x`).join(' · ')}</small></a>`}
         ${emAndamento && html`<button class="card aviso" onClick=${() => ir('treino/' + emAndamento.treino_id)}><b>Treino em andamento</b><span>Continuar ${emAndamento.treino_nome}</span></button>`}
         <h2 class="secao">Seus treinos</h2>
         ${treinos.map((t) => {
@@ -251,17 +268,22 @@ const ITENS_CHECKIN = [
 function CheckinAluna({ perfil }) {
   const semana = segundaDe();
   const e = useCarregar(async () => {
-    const [lista, sessoes] = await Promise.all([
+    const [lista, sessoes, oraculo, atribs] = await Promise.all([
       api.q('checkins', { eq: { aluna_id: perfil.id }, order: 'semana', asc: false }),
       api.q('sessoes', { eq: { aluna_id: perfil.id }, gte: { data: semana } }),
+      DEMO ? Promise.resolve([]) : api.q('formularios', { eq: { tipo: 'oraculo', ativo: true }, order: 'created_at' }).catch(() => []),
+      DEMO ? Promise.resolve([]) : api.q('atribuicoes', { eq: { ativa: true } }).catch(() => []),
     ]);
-    return { lista, treinosSemana: sessoes.length };
+    const form = oraculo[0] || null;
+    const atrib = form ? atribs.find((a) => a.formulario_id === form.id && (!a.aluna_id || a.aluna_id === perfil.id)) : null;
+    return { lista, treinosSemana: sessoes.length, form, atrib };
   }, [perfil.id]);
-  return html`<div class="pilha"><h1 class="titulo">Check-in semanal</h1>
-    <${Estado} e=${e}>${({ lista, treinosSemana }) => {
+  return html`<div class="pilha"><h1 class="titulo">Oráculo da semana</h1>
+    <${Estado} e=${e}>${({ lista, treinosSemana, form, atrib }) => {
       const atual = lista.find((c) => c.semana === semana);
       return html`${atual ? html`<section class="card"><div class="card-topo"><h3>Esta semana</h3><span class="tag roxo">enviado</span></div>
           <${ResumoCheckin} c=${atual}/>${atual.resposta ? html`<div class="resposta"><b>Resposta do treinador</b><p>${atual.resposta}</p></div>` : html`<p class="suave">Recebido. A resposta chega até o dia seguinte.</p>`}</section>`
+        : form ? html`<div class="card"><${ResponderFormulario} formularioId=${form.id} atribuicaoId=${atrib ? atrib.id : null} onEnviado=${e.recarregar}/></div>`
         : html`<${FormCheckin} perfil=${perfil} semana=${semana} treinos=${treinosSemana} onSalvo=${e.recarregar}/>`}
       ${lista.filter((c) => c.semana !== semana).length > 0 && html`<h2 class="secao">Semanas anteriores</h2>
         ${lista.filter((c) => c.semana !== semana).map((c) => html`<details class="card"><summary><b>Semana de ${dataBR(c.semana)}</b>${c.resposta ? html`<span class="tag">respondido</span>` : null}</summary>
@@ -272,7 +294,11 @@ export function ResumoCheckin({ c }) {
   return html`<div class="resumo-checkin">
     ${c.peso != null && html`<span>Peso <b>${num(c.peso, 1)} kg</b></span>`}
     ${c.treinos_feitos != null && html`<span>Treinos <b>${c.treinos_feitos}</b></span>`}
-    ${ITENS_CHECKIN.map(([k, r]) => (c[k] != null ? html`<span class=${alerta(k, c[k]) ? 'ruim' : ''}>${r.split(' ')[0]} <b>${c[k]}/5</b></span>` : null))}
+    ${ITENS_CHECKIN.map(([k, r]) => (c[k] != null && !(k === 'estresse' && c.estresse10 != null) ? html`<span class=${alerta(k, c[k]) ? 'ruim' : ''}>${r.split(' ')[0]} <b>${c[k]}/5</b></span>` : null))}
+    ${c.estresse10 != null && html`<span class=${c.estresse10 >= 7 ? 'ruim' : ''}>Estresse <b>${c.estresse10}/10</b></span>`}
+    ${c.dor_muscular != null && html`<span class=${c.dor_muscular >= 4 ? 'ruim' : ''}>Dor muscular <b>${c.dor_muscular}/5</b></span>`}
+    ${c.dor_articular != null && html`<span class=${c.dor_articular >= 3 ? 'ruim' : ''}>Dor articular <b>${c.dor_articular}/5</b>${c.dor_local ? ' · ' + c.dor_local : ''}</span>`}
+    ${c.insonia && html`<span class="ruim">Menos de 5 h de sono</span>`}
   </div>${c.comentario && html`<p class="nota">"${c.comentario}"</p>`}`;
 }
 export const alerta = (k, v) => (['estresse', 'fome', 'dor'].includes(k) ? v >= 4 : v <= 2);
@@ -310,7 +336,7 @@ function PerfilAluna({ perfil, recarregarPerfil }) {
     catch (err) { toast(err.message, 'erro'); }
   };
   return html`<div class="pilha"><h1 class="titulo">Perfil</h1>
-    <div class="abas">${[['dados', 'Dados'], ['avaliacoes', 'Avaliações'], ['anamnese', 'Anamnese']].map(([k, r]) => html`<button class=${aba === k ? 'on' : ''} onClick=${() => setAba(k)}>${r}</button>`)}</div>
+    <div class="abas">${[['dados', 'Dados'], ['metas', 'Metas'], ['avaliacoes', 'Avaliações'], ['testes', 'Testes'], ['anamnese', 'Alistamento']].map(([k, r]) => html`<button class=${aba === k ? 'on' : ''} onClick=${() => setAba(k)}>${r}</button>`)}</div>
     ${aba === 'dados' && html`
       <${Estado} e=${ass}>${(l) => { const a = l[0]; if (!a) return null; const resta = diasEntre(hoje(), a.fim);
         return html`<section class="card"><div class="card-topo"><h3>Plano ${a.plano_nome}</h3><span class=${'tag' + (resta < 0 ? ' perigo' : resta <= 10 ? ' atencao' : ' roxo')}>${resta < 0 ? 'vencido' : `${resta} dias`}</span></div>
@@ -324,6 +350,8 @@ function PerfilAluna({ perfil, recarregarPerfil }) {
       </form>
       <button class="btn" onClick=${() => api.sair()}>Sair da conta</button>`}
     ${aba === 'avaliacoes' && html`<${Avaliacoes} aluna=${perfil} podeEditar=${false}/>`}
+    ${aba === 'metas' && html`<${MetasAluna} aluna=${perfil} podeEditar=${false}/>`}
+    ${aba === 'testes' && html`<${TestesAluna} aluna=${perfil} podeEditar=${false}/>`}
     ${aba === 'anamnese' && html`<${Anamnese} alunaId=${perfil.id} onSalvo=${recarregarPerfil}/>`}
   </div>`;
 }

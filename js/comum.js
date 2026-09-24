@@ -78,7 +78,7 @@ function EvolucaoCorpo({ d }) {
     </section>`}
 
     <section class="card">
-      <div class="card-topo"><h3>Recordes</h3><span class="tag">${recs.length}</span></div>
+      <div class="card-topo"><h3>Olimpo · recordes</h3><span class="tag">${recs.length}</span></div>
       ${recs.length ? html`<ul class="lista">${(verTodos ? recs : recs.slice(0, 6)).map((r) => html`<li class="linha">
         <div><b>${r.nome}</b><small>${relativo(r.created_at)}</small></div>
         <span class="valor">${num(r.carga, 1)} kg × ${r.reps || '·'}</span></li>`)}</ul>
@@ -146,7 +146,7 @@ export function Anamnese({ alunaId, leitura, onSalvo }) {
 }
 
 function AnamneseLeitura({ r, quando }) {
-  if (!r) return html`<${Vazio} titulo="Anamnese não preenchida" texto="A aluna preenche no primeiro acesso ao app (ou depois, em Perfil)."/>`;
+  if (!r) return html`<${Vazio} titulo="Alistamento não preenchido" texto="A aluna preenche no primeiro acesso ao app (ou depois, em Perfil)."/>`;
   const alertas = PARQ.map((p, i) => [p, (r.parq || {})['p' + (i + 1)]]).filter(([, v]) => v === 'Sim');
   return html`<div class="pilha">
     <p class="suave">Atualizada em ${dataBR(quando)}</p>

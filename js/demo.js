@@ -143,28 +143,30 @@ export function criarDemo() {
       await espera();
       const m = carregar(); const linhas = (Array.isArray(linha) ? linha : [linha]).map((r) => ({ id: uid(), created_at: new Date().toISOString(), ...r }));
       if (tabela === 'leads') linhas.forEach((r) => { r.status = r.status || 'novo'; });
-      m.db[tabela].push(...linhas); salvar(); return copia(linhas);
+      (m.db[tabela] = m.db[tabela] || []).push(...linhas); salvar(); return copia(linhas);
     },
     async enviar(tabela, linha) { await this.ins(tabela, linha); },
     async upd(tabela, id, patch, chave = 'id') {
       await espera();
       const m = carregar(); const out = [];
-      m.db[tabela].forEach((r) => { if (r[chave] === id) { Object.assign(r, patch); out.push(r); } });
+      (m.db[tabela] || []).forEach((r) => { if (r[chave] === id) { Object.assign(r, patch); out.push(r); } });
       salvar(); return copia(out);
     },
     async ups(tabela, linha, conflito) {
       const m = carregar(); const ks = conflito.split(',');
-      const ex = m.db[tabela].find((r) => ks.every((k) => r[k] === linha[k]));
+      const ex = (m.db[tabela] || []).find((r) => ks.every((k) => r[k] === linha[k]));
       if (ex) { Object.assign(ex, linha); salvar(); return copia([ex]); }
       return this.ins(tabela, linha);
     },
     async del(tabela, id) {
       await espera();
-      const m = carregar(); m.db[tabela] = m.db[tabela].filter((r) => r.id !== id);
+      const m = carregar(); m.db[tabela] = (m.db[tabela] || []).filter((r) => r.id !== id);
       if (tabela === 'treinos') m.db.treino_itens = m.db.treino_itens.filter((r) => r.treino_id !== id);
       if (tabela === 'sessoes') m.db.series = m.db.series.filter((r) => r.sessao_id !== id);
       if (tabela === 'assinaturas') m.db.lancamentos = m.db.lancamentos.filter((r) => r.assinatura_id !== id);
       salvar();
     },
+    async rpc() { throw new Error('Esta parte (Acrópole, formulários vivos) só funciona com o banco ligado.'); },
+    aoInserir() { return () => {}; },
   };
 }

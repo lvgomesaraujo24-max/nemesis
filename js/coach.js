@@ -1,30 +1,44 @@
 // Lado do TREINADOR
-import { html, useState } from '../lib/preact-htm.js';
+import { html, useState, useEffect } from '../lib/preact-htm.js';
 import { api } from './api.js';
+import { Acropole } from './comando.js';
+import { Selo, DossieAluna } from './dossie.js';
+import { Formularios, ModalEnvio } from './formularios.js';
+import { Agenda, Mesociclo, CardioAluna, TestesAluna, MetasAluna } from './extras.js';
 import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
 import { ResumoCheckin } from './aluna.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Abas, Barras, toast, num, brl, dataBR, hoje, segundaDe, somaDias,
   somaMeses, diasEntre, lerNum, relativo, linkWhats, copiar, mesNome, idadeDe } from './util.js';
 
-const NAV = [['', 'Painel', '◆'], ['alunas', 'Alunas', '●'], ['checkins', 'Check-ins', '✓'], ['leads', 'Leads', '✉'], ['financeiro', 'Financeiro', '$']];
+// nome grego no título, conteúdo em português direto
+const NAV = [['', 'Acrópole', 'Ω'], ['alunas', 'Alunas', '●'], ['checkins', 'Oráculo', '✓'], ['agenda', 'Agenda', '◷'], ['formularios', 'Formulários', '☰'],
+  ['leads', 'Inscrições', '✉'], ['financeiro', 'Financeiro', '$'], ['exercicios', 'Exercícios', '▤']];
+const NAV_BAIXO = ['', 'alunas', 'checkins', 'agenda', 'financeiro'];
 
 export function AppCoach({ perfil, rota, ir }) {
   const [base, id, sub] = rota;
   let tela;
-  if (base === 'aluna' && id) tela = html`<${AlunaDetalhe} id=${id} aba=${sub || 'ficha'} ir=${ir}/>`;
+  if (base === 'aluna' && id) tela = html`<${AlunaDetalhe} id=${id} aba=${sub || 'ficha'} ir=${ir} onAluna=${(a) => setAlunaAtual(a)}/>`;
   else if (base === 'alunas') tela = html`<${Alunas} ir=${ir}/>`;
   else if (base === 'checkins') tela = html`<${CheckinsCoach} ir=${ir}/>`;
   else if (base === 'leads') tela = html`<${Leads}/>`;
   else if (base === 'financeiro') tela = html`<${Financeiro} ir=${ir}/>`;
   else if (base === 'exercicios') tela = html`<${Exercicios}/>`;
-  else tela = html`<${Painel} perfil=${perfil} ir=${ir}/>`;
+  else if (base === 'agenda') tela = html`<${Agenda} ir=${ir}/>`;
+  else if (base === 'formularios') tela = html`<${Formularios} id=${id} aba=${sub} ir=${ir}/>`;
+  else if (base === 'painel') tela = html`<${Painel} perfil=${perfil} ir=${ir}/>`;
+  else tela = html`<${Acropole} perfil=${perfil} ir=${ir}/>`;
   const aba = base === 'aluna' ? 'alunas' : base || '';
+  const [alunaAtual, setAlunaAtual] = useState(null);
+  useEffect(() => { if (base !== 'aluna') setAlunaAtual(null); }, [base]);
   return html`<div class="tela com-nav coach">
     <header class="topo"><span class="marca">NEMESIS</span>
-      <nav class="nav-topo">${NAV.map(([k, r]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}>${r}</a>`)}<a href="#/exercicios" class=${aba === 'exercicios' ? 'on' : ''}>Exercícios</a></nav>
+      <nav class="nav-topo">${NAV.map(([k, r]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}>${r}</a>`)}</nav>
+      <details class="menu-mais"><summary aria-label="Mais">☰</summary><div>${NAV.filter(([k]) => !NAV_BAIXO.includes(k)).map(([k, r]) => html`<a href=${'#/' + k} onClick=${(ev) => ev.currentTarget.closest('details').removeAttribute('open')}>${r}</a>`)}</div></details>
       <button class="btn-texto" onClick=${() => api.sair()}>Sair</button></header>
-    <main class="conteudo largo">${tela}</main>
-    <nav class="nav-baixo">${NAV.map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><span class="nav-i">${i}</span>${r}</a>`)}</nav>
+    <main class=${'conteudo largo' + (aba === '' ? ' acropole' : '')}>${tela}</main>
+    <${Selo} alunaAtual=${alunaAtual}/>
+    <nav class="nav-baixo">${NAV.filter(([k]) => NAV_BAIXO.includes(k)).map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><span class="nav-i">${i}</span>${r}</a>`)}</nav>
   </div>`;
 }
 
@@ -130,9 +144,10 @@ function Convite({ onFechar }) {
 // ============================================================
 // DETALHE DA ALUNA
 // ============================================================
-const ABAS_ALUNA = [['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['checkins', 'Check-ins'], ['avaliacoes', 'Avaliações'], ['anamnese', 'Anamnese'], ['financeiro', 'Financeiro'], ['dados', 'Dados']];
-function AlunaDetalhe({ id, aba, ir }) {
-  const e = useCarregar(() => api.um('profiles', { id }), [id]);
+const ABAS_ALUNA = [['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['checkins', 'Oráculo'], ['dossie', 'Dossiê'], ['metas', 'Metas'], ['cardio', 'Cardio'], ['testes', 'Testes'],
+  ['avaliacoes', 'Avaliações'], ['anamnese', 'Alistamento'], ['financeiro', 'Financeiro'], ['dados', 'Dados']];
+function AlunaDetalhe({ id, aba, ir, onAluna }) {
+  const e = useCarregar(async () => { const a = await api.um('profiles', { id }); if (a && onAluna) onAluna({ id: a.id, nome: a.nome }); return a; }, [id]);
   return html`<${Estado} e=${e}>${(a) => (!a ? html`<${Vazio} titulo="Aluna não encontrada"/>` : html`<div class="pilha">
     <button class="btn-texto" onClick=${() => ir('alunas')}>‹ Alunas</button>
     <div class="aluna-cab"><span class="avatar grande">${(a.nome || '?').slice(0, 1)}</span>
@@ -142,6 +157,10 @@ function AlunaDetalhe({ id, aba, ir }) {
     ${aba === 'ficha' && html`<${Ficha} aluna=${a}/>`}
     ${aba === 'evolucao' && html`<${Evolucao} alunaId=${a.id}/>`}
     ${aba === 'checkins' && html`<${CheckinsDaAluna} aluna=${a}/>`}
+    ${aba === 'dossie' && html`<${DossieAluna} aluna=${a}/>`}
+    ${aba === 'metas' && html`<${MetasAluna} aluna=${a}/>`}
+    ${aba === 'cardio' && html`<${CardioAluna} aluna=${a}/>`}
+    ${aba === 'testes' && html`<${TestesAluna} aluna=${a}/>`}
     ${aba === 'avaliacoes' && html`<${Avaliacoes} aluna=${a} podeEditar=${true}/>`}
     ${aba === 'anamnese' && html`<${Anamnese} alunaId=${a.id} leitura=${true}/>`}
     ${aba === 'financeiro' && html`<${FinanceiroAluna} aluna=${a}/>`}
@@ -150,10 +169,12 @@ function AlunaDetalhe({ id, aba, ir }) {
 }
 
 function DadosAluna({ aluna, onSalvo }) {
-  const [f, setF] = useState({ nome: aluna.nome || '', telefone: aluna.telefone || '', nascimento: aluna.nascimento || '', sexo: aluna.sexo || 'F', objetivo: aluna.objetivo || '', ativo: aluna.ativo });
+  const [f, setF] = useState({ nome: aluna.nome || '', telefone: aluna.telefone || '', nascimento: aluna.nascimento || '', sexo: aluna.sexo || 'F', objetivo: aluna.objetivo || '', ativo: aluna.ativo,
+    alistada_em: aluna.alistada_em || String(aluna.created_at || '').slice(0, 10), treinos_semana_alvo: aluna.treinos_semana_alvo || '' });
   const salvar = async (ev) => {
     ev.preventDefault();
-    try { await api.upd('profiles', aluna.id, { ...f, telefone: f.telefone || null, nascimento: f.nascimento || null }); toast('Dados salvos', 'ok'); onSalvo(); }
+    const alvo = lerNum(f.treinos_semana_alvo);
+    try { await api.upd('profiles', aluna.id, { ...f, telefone: f.telefone || null, nascimento: f.nascimento || null, alistada_em: f.alistada_em || null, treinos_semana_alvo: alvo ? Math.min(7, Math.max(1, Math.round(alvo))) : null }); toast('Dados salvos', 'ok'); onSalvo(); }
     catch (err) { toast(err.message, 'erro'); }
   };
   return html`<form class="card pilha" onSubmit=${salvar}>
@@ -164,6 +185,10 @@ function DadosAluna({ aluna, onSalvo }) {
     </div>
     <${Campo} rotulo="Sexo (usado na fórmula de % de gordura)"><div class="chips">${[['F', 'Feminino'], ['M', 'Masculino']].map(([k, r]) => html`<button type="button" class=${f.sexo === k ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, sexo: k })}>${r}</button>`)}</div><//>
     <${Campo} rotulo="Objetivo"><input class="input" value=${f.objetivo} onInput=${(ev) => setF({ ...f, objetivo: ev.target.value })}/><//>
+    <div class="grade2">
+      <${Campo} rotulo="Alistada em" dica="Dia zero da jornada"><input class="input" type="date" value=${f.alistada_em} onInput=${(ev) => setF({ ...f, alistada_em: ev.target.value })}/><//>
+      <${Campo} rotulo="Treinos por semana (meta)" dica="Vazio = treinos obrigatórios da ficha"><input class="input" inputmode="numeric" value=${f.treinos_semana_alvo} onInput=${(ev) => setF({ ...f, treinos_semana_alvo: ev.target.value })}/><//>
+    </div>
     <label class="toggle"><input type="checkbox" checked=${f.ativo} onChange=${(ev) => setF({ ...f, ativo: ev.target.checked })}/> Aluna ativa</label>
     <p class="suave">E-mail de acesso: ${aluna.email}</p>
     <button class="btn primario">Salvar</button>
@@ -191,6 +216,7 @@ function Ficha({ aluna }) {
     });
     const totalSeries = (t) => itens.filter((i) => i.treino_id === t.id).reduce((s, i) => s + i.series, 0);
     return html`<div class="pilha">
+      <${Mesociclo} aluna=${aluna}/>
       <div class="acoes">
         <button class="btn primario" onClick=${() => setModal({ tipo: 'treino' })}>+ Novo treino</button>
         <button class="btn" onClick=${() => setModal({ tipo: 'copiar' })}>Copiar ficha de outra aluna</button>
@@ -303,7 +329,8 @@ function ModalCopiar({ aluna, ordemInicial, onFechar, onFeito }) {
 // ============================================================
 // CHECK-INS
 // ============================================================
-function CartaoResposta({ c, aluna, onFeito }) {
+function CartaoResposta({ c, aluna, envio, onFeito }) {
+  const [verEnvio, setVerEnvio] = useState(false);
   const [txt, setTxt] = useState(c.resposta || '');
   const [editando, setEditando] = useState(!c.resposta);
   const salvar = async () => {
@@ -315,6 +342,8 @@ function CartaoResposta({ c, aluna, onFeito }) {
     <div class="card-topo"><div>${aluna && html`<a href=${`#/aluna/${aluna.id}/checkins`}><h3>${aluna.nome}</h3></a>`}<small class="suave">Semana de ${dataBR(c.semana)} · enviado ${relativo(c.created_at)}</small></div>
       ${c.resposta ? html`<span class="tag roxo">respondido</span>` : html`<span class="tag atencao">aguardando</span>`}</div>
     <${ResumoCheckin} c=${c}/>
+    ${envio && html`<button class="btn-texto" onClick=${() => setVerEnvio(true)}>Ver o Oráculo completo (dores, ciclo, RIR)</button>`}
+    ${verEnvio && html`<${ModalEnvio} envio=${envio} nome=${aluna ? aluna.nome : 'Oráculo'} onFechar=${() => setVerEnvio(false)}/>`}
     ${editando ? html`<textarea class="input" rows="3" placeholder="Sua resposta (a aluna vê no app)" value=${txt} onInput=${(ev) => setTxt(ev.target.value)}></textarea>
       <div class="acoes"><button class="btn primario" onClick=${salvar}>Responder</button>
       ${aluna && aluna.telefone && html`<a class="btn" target="_blank" rel="noopener" href=${linkWhats(aluna.telefone, txt ? `Oi, ${aluna.nome.split(' ')[0]}! Sobre o seu check-in:\n\n${txt}` : '')}>Mandar no WhatsApp</a>`}</div>`
@@ -322,25 +351,44 @@ function CartaoResposta({ c, aluna, onFeito }) {
   </section>`;
 }
 
+// envio do Oráculo que gerou o check-in daquela semana (quando veio pelo formulário vivo)
+async function enviosOraculo(filtro = {}) {
+  try {
+    const [forms, envios] = await Promise.all([api.q('formularios', {}), api.q('envios', { ...filtro, order: 'enviado_em', asc: false, limit: 300 })]);
+    return { forms, envios };
+  } catch (e) { return { forms: [], envios: [] }; }
+}
+const envioDoCheckin = (c, { forms, envios }) => {
+  const ora = new Set(forms.filter((f) => f.tipo === 'oraculo').map((f) => f.id));
+  return envios.find((x) => x.aluna_id === c.aluna_id && ora.has(x.formulario_id) && segundaDe(new Date(x.enviado_em)) === c.semana) || null;
+};
+
 function CheckinsCoach() {
   const e = useCarregar(async () => {
-    const [alunas, pend, semana] = await Promise.all([alunasAtivas(), api.q('checkins', { eq: { resposta: null }, order: 'created_at' }), api.q('checkins', { eq: { semana: segundaDe() } })]);
-    return { alunas: alunas.filter((a) => a.ativo), pend, semana };
+    const [alunas, pend, semana, ev] = await Promise.all([alunasAtivas(), api.q('checkins', { eq: { resposta: null }, order: 'created_at' }), api.q('checkins', { eq: { semana: segundaDe() } }), enviosOraculo()]);
+    return { alunas: alunas.filter((a) => a.ativo), pend, semana, ev };
   }, []);
-  return html`<div class="pilha"><h1 class="titulo">Check-ins</h1>
-    <${Estado} e=${e}>${({ alunas, pend, semana }) => {
+  const [aberto, setAberto] = useState(null);
+  return html`<div class="pilha"><h1 class="titulo">Oráculo</h1>
+    <${Estado} e=${e}>${({ alunas, pend, semana, ev }) => {
       const faltam = alunas.filter((a) => !semana.some((c) => c.aluna_id === a.id));
+      const outros = new Set(ev.forms.filter((f) => f.tipo !== 'oraculo').map((f) => f.id));
+      const naoLidos = ev.envios.filter((x) => outros.has(x.formulario_id) && !x.lido_em);
+      const nome = (id) => (alunas.find((a) => a.id === id) || {}).nome || 'Aluna';
       return html`
-        ${pend.length ? pend.map((c) => html`<${CartaoResposta} key=${c.id} c=${c} aluna=${alunas.find((a) => a.id === c.aluna_id)} onFeito=${e.recarregar}/>`)
-          : html`<${Vazio} titulo="Nenhum check-in pendente" texto="Todos respondidos."/>`}
+        ${naoLidos.length > 0 && html`<section class="card"><h3>Formulários para ler</h3><ul class="lista">${naoLidos.map((x) => html`<li class="linha"><button class="linha-botao" onClick=${() => setAberto(x)}>
+          <div><b>${nome(x.aluna_id)}</b><small>${(ev.forms.find((f) => f.id === x.formulario_id) || {}).titulo} · ${relativo(x.enviado_em)}</small></div><span class="seta">›</span></button></li>`)}</ul></section>`}
+        ${aberto && html`<${ModalEnvio} envio=${aberto} nome=${nome(aberto.aluna_id)} onFechar=${() => { setAberto(null); e.recarregar(); }}/>`}
+        ${pend.length ? pend.map((c) => html`<${CartaoResposta} key=${c.id} c=${c} envio=${envioDoCheckin(c, ev)} aluna=${alunas.find((a) => a.id === c.aluna_id)} onFeito=${e.recarregar}/>`)
+          : html`<${Vazio} titulo="Nenhum Oráculo esperando resposta" texto="Todos respondidos."/>`}
         ${faltam.length > 0 && html`<section class="card"><h3>Ainda não mandaram o desta semana</h3><ul class="lista">${faltam.map((a) => html`<li class="linha"><b>${a.nome}</b>
           ${a.telefone && html`<a class="btn-texto" target="_blank" rel="noopener" href=${linkWhats(a.telefone, `Oi, ${a.nome.split(' ')[0]}! Passando pra lembrar do check-in da semana no app. Leva 1 minutinho e é com ele que eu ajusto o seu treino 💜`)}>Lembrar no WhatsApp</a>`}</li>`)}</ul></section>`}`;
     }}<//></div>`;
 }
 
 function CheckinsDaAluna({ aluna }) {
-  const e = useCarregar(() => api.q('checkins', { eq: { aluna_id: aluna.id }, order: 'semana', asc: false }), [aluna.id]);
-  return html`<${Estado} e=${e}>${(l) => (l.length ? html`<div class="pilha">${l.map((c) => html`<${CartaoResposta} key=${c.id} c=${c} aluna=${null} onFeito=${e.recarregar}/>`)}</div>`
+  const e = useCarregar(async () => { const [l, ev] = await Promise.all([api.q('checkins', { eq: { aluna_id: aluna.id }, order: 'semana', asc: false }), enviosOraculo({ eq: { aluna_id: aluna.id } })]); return { l, ev }; }, [aluna.id]);
+  return html`<${Estado} e=${e}>${({ l, ev }) => (l.length ? html`<div class="pilha">${l.map((c) => html`<${CartaoResposta} key=${c.id} c=${c} envio=${envioDoCheckin(c, ev)} aluna=${null} onFeito=${e.recarregar}/>`)}</div>`
     : html`<${Vazio} titulo="Nenhum check-in ainda"/>`)}<//>`;
 }
 

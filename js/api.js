@@ -37,6 +37,14 @@ function criarSupabase() {
     async upd(tabela, id, patch, chave = 'id') { return erro(await sb.from(tabela).update(patch).eq(chave, id).select()); },
     async ups(tabela, linha, conflito) { return erro(await sb.from(tabela).upsert(linha, { onConflict: conflito }).select()); },
     async del(tabela, id) { erro(await sb.from(tabela).delete().eq('id', id)); },
+    async rpc(fn, args = {}) { return erro(await sb.rpc(fn, args)); },
+    // tempo real: chama fn quando entra linha nova em alguma das tabelas; devolve a função que desliga
+    aoInserir(tabelas, fn) {
+      const canal = sb.channel('nemesis-' + tabelas.join('-') + '-' + Math.random().toString(36).slice(2, 7));
+      tabelas.forEach((t) => canal.on('postgres_changes', { event: 'INSERT', schema: 'public', table: t }, fn));
+      canal.subscribe();
+      return () => sb.removeChannel(canal);
+    },
   };
 }
 
