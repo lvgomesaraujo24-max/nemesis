@@ -8,13 +8,17 @@ import { Agenda, Mesociclo, CardioAluna, TestesAluna, MetasAluna } from './extra
 import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
 import { ResumoCheckin } from './aluna.js';
 import { Relatorio } from './relatorio.js';
+import { Icone } from './icones.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Abas, Barras, toast, num, brl, dataBR, hoje, segundaDe, somaDias,
   somaMeses, diasEntre, lerNum, relativo, linkWhats, copiar, mesNome, idadeDe } from './util.js';
 
-// nome grego no título, conteúdo em português direto
-const NAV = [['', 'Acrópole', 'Ω'], ['alunas', 'Alunas', '●'], ['checkins', 'Oráculo', '✓'], ['agenda', 'Agenda', '◷'], ['formularios', 'Formulários', '☰'],
-  ['leads', 'Inscrições', '✉'], ['financeiro', 'Financeiro', '$'], ['exercicios', 'Exercícios', '▤']];
+// menu lateral em grupos, como no painel: principal, ferramentas
+const NAV = [
+  [['', 'Acrópole', 'inicio'], ['alunas', 'Alunas', 'alunas'], ['agenda', 'Agenda', 'agenda'], ['financeiro', 'Financeiro', 'financeiro']],
+  [['checkins', 'Oráculo', 'oraculo'], ['formularios', 'Formulários', 'formularios'], ['leads', 'Inscrições', 'inscricoes'], ['exercicios', 'Exercícios', 'exercicios']],
+];
 const NAV_BAIXO = ['', 'alunas', 'checkins', 'agenda', 'financeiro'];
+const CHAVE_MENU = 'nemesis-menu-recolhido';
 
 export function AppCoach({ perfil, rota, ir }) {
   const [base, id, sub] = rota;
@@ -31,15 +35,35 @@ export function AppCoach({ perfil, rota, ir }) {
   else tela = html`<${Acropole} perfil=${perfil} ir=${ir}/>`;
   const aba = base === 'aluna' ? 'alunas' : base || '';
   const [alunaAtual, setAlunaAtual] = useState(null);
+  const [recolhido, setRecolhido] = useState(() => { try { return localStorage.getItem(CHAVE_MENU) === '1'; } catch (e) { return false; } });
+  const [gaveta, setGaveta] = useState(false);
   useEffect(() => { if (base !== 'aluna') setAlunaAtual(null); }, [base]);
-  return html`<div class="tela com-nav coach">
-    <header class="topo"><span class="marca">NEMESIS</span>
-      <nav class="nav-topo">${NAV.map(([k, r]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}>${r}</a>`)}</nav>
-      <details class="menu-mais"><summary aria-label="Mais">☰</summary><div>${NAV.filter(([k]) => !NAV_BAIXO.includes(k)).map(([k, r]) => html`<a href=${'#/' + k} onClick=${(ev) => ev.currentTarget.closest('details').removeAttribute('open')}>${r}</a>`)}</div></details>
-      <button class="btn-texto" onClick=${() => api.sair()}>Sair</button></header>
-    <main class=${'conteudo largo' + (aba === '' ? ' acropole' : '')}>${tela}</main>
+  useEffect(() => { setGaveta(false); }, [rota.join('/')]);
+  const alternarMenu = () => {
+    if (matchMedia('(min-width: 900px)').matches) {
+      const v = !recolhido; setRecolhido(v);
+      try { localStorage.setItem(CHAVE_MENU, v ? '1' : '0'); } catch (e) { /* sem storage */ }
+    } else setGaveta(!gaveta);
+  };
+  const nome = perfil.nome || perfil.email || 'Treinador';
+  return html`<div class=${'tela com-nav coach casca' + (recolhido ? ' recolhido' : '') + (gaveta ? ' gaveta' : '')}>
+    <aside class="lateral" aria-label="Menu lateral">
+      <div class="lateral-topo"><span class="marca">NEMESIS</span></div>
+      <nav class="lateral-nav">${NAV.map((grupo) => html`<div class="lateral-grupo">${grupo.map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''} title=${r}><${Icone} nome=${i}/><span>${r}</span></a>`)}</div>`)}</nav>
+      <button class="lateral-sair" title="Sair" onClick=${() => api.sair()}><${Icone} nome="sair"/><span>Sair</span></button>
+    </aside>
+    <div class="lateral-fundo" onClick=${() => setGaveta(false)}></div>
+    <div class="casca-corpo">
+      <header class="topo">
+        <button class="icone" aria-label="Menu" onClick=${alternarMenu}><${Icone} nome="menu" tam=${22}/></button>
+        <span class="marca">NEMESIS</span>
+        <details class="usuario"><summary><span class="avatar mini">${nome.slice(0, 1)}</span><b>${nome.toUpperCase()}</b><${Icone} nome="abaixo" tam=${16}/></summary>
+          <div><a href="#/alunas">Alunas</a><a href="#/financeiro">Financeiro</a><button onClick=${() => api.sair()}>Sair</button></div></details>
+      </header>
+      <main class=${'conteudo largo' + (aba === '' ? ' acropole' : '')}>${tela}</main>
+    </div>
     <${Selo} alunaAtual=${alunaAtual}/>
-    <nav class="nav-baixo">${NAV.filter(([k]) => NAV_BAIXO.includes(k)).map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><span class="nav-i">${i}</span>${r}</a>`)}</nav>
+    <nav class="nav-baixo">${NAV.flat().filter(([k]) => NAV_BAIXO.includes(k)).map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><${Icone} nome=${i} tam=${21}/>${r}</a>`)}</nav>
   </div>`;
 }
 

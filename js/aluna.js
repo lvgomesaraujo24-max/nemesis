@@ -5,6 +5,7 @@ import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
 import { ResponderFormulario, pendenciasDaAluna } from './vivo.js';
 import { CardioAluna, TestesAluna, MetasAluna } from './extras.js';
 import { Relatorio } from './relatorio.js';
+import { Icone } from './icones.js';
 import { DEMO } from './api.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Escala, toast, num, dataBR, hoje, segundaDe, lerNum, relativo, diasEntre } from './util.js';
 
@@ -46,7 +47,7 @@ export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
     <header class="topo"><span class="marca">NEMESIS</span></header>
     <main class="conteudo">${tela}</main>
     ${base !== 'treino' && html`<nav class="nav-baixo">
-      ${[['', 'Treinos', '◆'], ['evolucao', 'Evolução', '↗'], ['checkin', 'Oráculo', '✓'], ['perfil', 'Perfil', '●']].map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><span class="nav-i">${i}</span>${r}</a>`)}
+      ${[['', 'Treinos', 'exercicios'], ['evolucao', 'Evolução', 'relatorio'], ['checkin', 'Oráculo', 'oraculo'], ['perfil', 'Perfil', 'alunas']].map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><${Icone} nome=${i} tam=${21}/>${r}</a>`)}
     </nav>`}
   </div>`;
 }
