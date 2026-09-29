@@ -12,6 +12,7 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 - Avaliação física com 7 dobras (Jackson & Pollock + Siri), circunferências e comparação com a anterior
 - Check-ins: responder pelo app ou mandar no WhatsApp, lembrete para quem não enviou
 - Inscrições do formulário da bio, com status (novo, contatado, fechado, perdido) e botão de WhatsApp
+- Relatório de evolução (mês, ficha ou período livre): resumo, carga e força estimada, recordes, volume por grupamento, frequência, corpo e bem-estar. Baixa em PDF e manda no WhatsApp
 - Financeiro: planos (Ágora, Delfos, Ítaca, Olimpo), parcelas geradas mês a mês, despesas, saldo do mês, atrasos e renovações
 - Biblioteca de exercícios com link de vídeo e instruções
 
@@ -19,6 +20,7 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 - Treinos da semana, com o próximo treino destacado
 - Execução: carga e reps por série, "última vez" de cada exercício, cronômetro de descanso, aviso de recorde
 - Evolução: gráfico de carga por exercício, recordes, peso, % de gordura, tonelagem acumulada
+- Relatório de evolução do mês, o mesmo que o treinador manda
 - Check-in semanal (peso, sono, energia, estresse, fome, dor, alimentação) e a sua resposta
 - Anamnese com PAR-Q no primeiro acesso
 
@@ -69,6 +71,7 @@ js/app.js         entrada, login e rotas
 js/coach.js       telas do treinador
 js/aluna.js       telas da aluna
 js/comum.js       evolução, anamnese e avaliação (usadas pelos dois lados)
+js/relatorio.js   relatório de evolução (métricas do período e PDF)
 js/api.js         conexão com o Supabase
 js/demo.js        modo demonstração
 js/util.js        datas, números, gráficos, componentes

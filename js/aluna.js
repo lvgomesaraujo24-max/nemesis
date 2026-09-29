@@ -4,6 +4,7 @@ import { api } from './api.js';
 import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
 import { ResponderFormulario, pendenciasDaAluna } from './vivo.js';
 import { CardioAluna, TestesAluna, MetasAluna } from './extras.js';
+import { Relatorio } from './relatorio.js';
 import { DEMO } from './api.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Escala, toast, num, dataBR, hoje, segundaDe, lerNum, relativo, diasEntre } from './util.js';
 
@@ -33,11 +34,14 @@ export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
     <h1 class="titulo">${((pend.dados || []).find((p) => p.formulario.id === id) || { formulario: { titulo: 'Formulário' } }).formulario.titulo}</h1>
     <${ResponderFormulario} formularioId=${id} atribuicaoId=${sub || null} onEnviado=${() => { pend.recarregar(); ir(''); }}/></div>`;
   else if (base === 'cardio') tela = html`<h1 class="titulo">Cardio</h1><${CardioAluna} aluna=${perfil} podeEditar=${false}/>`;
-  else if (base === 'evolucao') tela = html`<h1 class="titulo">Evolução</h1><${Evolucao} alunaId=${perfil.id}/>`;
+  else if (base === 'evolucao') tela = html`<div class="pilha"><h1 class="titulo">Evolução</h1>
+    <a class="card pendencia" href="#/relatorio"><b>Relatório de evolução</b><span>Seu resumo do mês: treinos, força, recordes e frequência</span></a>
+    <${Evolucao} alunaId=${perfil.id}/></div>`;
+  else if (base === 'relatorio') tela = html`<div class="pilha"><button class="btn-texto" onClick=${() => ir('evolucao')}>‹ Evolução</button><h1 class="titulo">Relatório</h1><${Relatorio} aluna=${perfil}/></div>`;
   else if (base === 'checkin') tela = html`<${CheckinAluna} perfil=${perfil}/>`;
   else if (base === 'perfil') tela = html`<${PerfilAluna} perfil=${perfil} recarregarPerfil=${recarregarPerfil}/>`;
   else tela = html`<${InicioAluna} perfil=${perfil} ir=${ir} pendentes=${(pend.dados || []).filter((p) => p.formulario.tipo !== 'oraculo')}/>`;
-  const aba = base === 'treino' ? '' : base || '';
+  const aba = base === 'treino' ? '' : base === 'relatorio' ? 'evolucao' : base || '';
   return html`<div class="tela com-nav">
     <header class="topo"><span class="marca">NEMESIS</span></header>
     <main class="conteudo">${tela}</main>

@@ -7,6 +7,7 @@ import { Formularios, ModalEnvio } from './formularios.js';
 import { Agenda, Mesociclo, CardioAluna, TestesAluna, MetasAluna } from './extras.js';
 import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
 import { ResumoCheckin } from './aluna.js';
+import { Relatorio } from './relatorio.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Abas, Barras, toast, num, brl, dataBR, hoje, segundaDe, somaDias,
   somaMeses, diasEntre, lerNum, relativo, linkWhats, copiar, mesNome, idadeDe } from './util.js';
 
@@ -18,7 +19,7 @@ const NAV_BAIXO = ['', 'alunas', 'checkins', 'agenda', 'financeiro'];
 export function AppCoach({ perfil, rota, ir }) {
   const [base, id, sub] = rota;
   let tela;
-  if (base === 'aluna' && id) tela = html`<${AlunaDetalhe} id=${id} aba=${sub || 'ficha'} ir=${ir} onAluna=${(a) => setAlunaAtual(a)}/>`;
+  if (base === 'aluna' && id) tela = html`<${AlunaDetalhe} id=${id} aba=${sub || 'ficha'} ir=${ir} coachNome=${perfil.nome} onAluna=${(a) => setAlunaAtual(a)}/>`;
   else if (base === 'alunas') tela = html`<${Alunas} ir=${ir}/>`;
   else if (base === 'checkins') tela = html`<${CheckinsCoach} ir=${ir}/>`;
   else if (base === 'leads') tela = html`<${Leads}/>`;
@@ -144,9 +145,9 @@ function Convite({ onFechar }) {
 // ============================================================
 // DETALHE DA ALUNA
 // ============================================================
-const ABAS_ALUNA = [['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['checkins', 'Oráculo'], ['dossie', 'Dossiê'], ['metas', 'Metas'], ['cardio', 'Cardio'], ['testes', 'Testes'],
+const ABAS_ALUNA = [['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['relatorio', 'Relatório'], ['checkins', 'Oráculo'], ['dossie', 'Dossiê'], ['metas', 'Metas'], ['cardio', 'Cardio'], ['testes', 'Testes'],
   ['avaliacoes', 'Avaliações'], ['anamnese', 'Alistamento'], ['financeiro', 'Financeiro'], ['dados', 'Dados']];
-function AlunaDetalhe({ id, aba, ir, onAluna }) {
+function AlunaDetalhe({ id, aba, ir, onAluna, coachNome }) {
   const e = useCarregar(async () => { const a = await api.um('profiles', { id }); if (a && onAluna) onAluna({ id: a.id, nome: a.nome }); return a; }, [id]);
   return html`<${Estado} e=${e}>${(a) => (!a ? html`<${Vazio} titulo="Aluna não encontrada"/>` : html`<div class="pilha">
     <button class="btn-texto" onClick=${() => ir('alunas')}>‹ Alunas</button>
@@ -156,6 +157,7 @@ function AlunaDetalhe({ id, aba, ir, onAluna }) {
     <${Abas} abas=${ABAS_ALUNA} atual=${aba} onMuda=${(k) => ir(`aluna/${id}/${k}`)}/>
     ${aba === 'ficha' && html`<${Ficha} aluna=${a}/>`}
     ${aba === 'evolucao' && html`<${Evolucao} alunaId=${a.id}/>`}
+    ${aba === 'relatorio' && html`<${Relatorio} aluna=${a} coachNome=${coachNome} podeEditar=${true}/>`}
     ${aba === 'checkins' && html`<${CheckinsDaAluna} aluna=${a}/>`}
     ${aba === 'dossie' && html`<${DossieAluna} aluna=${a}/>`}
     ${aba === 'metas' && html`<${MetasAluna} aluna=${a}/>`}
