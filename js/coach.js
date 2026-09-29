@@ -4,20 +4,23 @@ import { api } from './api.js';
 import { Acropole } from './comando.js';
 import { Selo, DossieAluna } from './dossie.js';
 import { Formularios, ModalEnvio } from './formularios.js';
-import { Agenda, CardioAluna, TestesAluna, MetasAluna } from './extras.js';
+import { CardioAluna, TestesAluna, MetasAluna } from './extras.js';
+import { Agenda } from './chronos.js';
 import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
 import { ResumoCheckin } from './aluna.js';
 import { Relatorio } from './relatorio.js';
 import { Icone } from './icones.js';
 import { Ficha } from './ficha.js';
 import { Modelos } from './modelos.js';
-import { MUSCULOS, GRUPOS_MUSC, musculosDe } from './musculos.js';
+import { Exercicios } from './biblioteca.js';
+import { Financeiro, FinanceiroAluna } from './tesouro.js';
+import { Radar, Score, carregarRadar, saudeDa } from './radar.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Abas, Barras, toast, num, brl, dataBR, hoje, segundaDe, somaDias,
   somaMeses, diasEntre, lerNum, relativo, linkWhats, copiar, mesNome, idadeDe } from './util.js';
 
 // menu lateral em grupos, como no painel: principal, ferramentas
 const NAV = [
-  [['', 'Acrópole', 'inicio'], ['alunas', 'Alunas', 'alunas'], ['agenda', 'Agenda', 'agenda'], ['financeiro', 'Financeiro', 'financeiro']],
+  [['', 'Acrópole', 'inicio'], ['alunas', 'Alunas', 'alunas'], ['agenda', 'Chronos', 'agenda'], ['financeiro', 'Tesouro', 'financeiro']],
   [['checkins', 'Oráculo', 'oraculo'], ['modelos', 'Modelos', 'forja'], ['exercicios', 'Exercícios', 'exercicios'], ['formularios', 'Formulários', 'formularios'], ['leads', 'Inscrições', 'inscricoes']],
 ];
 const NAV_BAIXO = ['', 'alunas', 'checkins', 'agenda', 'financeiro'];
@@ -64,7 +67,7 @@ export function AppCoach({ perfil, rota, ir }) {
         <details class="usuario"><summary><span class="avatar mini">${nome.slice(0, 1)}</span><b>${nome.toUpperCase()}</b><${Icone} nome="abaixo" tam=${16}/></summary>
           <div><a href="#/alunas">Alunas</a><a href="#/financeiro">Financeiro</a><button onClick=${() => api.sair()}>Sair</button></div></details>
       </header>
-      <main class=${'conteudo largo' + (aba === '' || aba === 'modelos' || (base === 'aluna' && (sub || 'ficha') === 'ficha') ? ' acropole' : '')}>${tela}</main>
+      <main class=${'conteudo largo' + (aba === '' || aba === 'modelos' || aba === 'agenda' || aba === 'financeiro' || (base === 'aluna' && (sub || 'ficha') === 'ficha') ? ' acropole' : '')}>${tela}</main>
     </div>
     <${Selo} alunaAtual=${alunaAtual}/>
     <nav class="nav-baixo">${NAV.flat().filter(([k]) => NAV_BAIXO.includes(k)).map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><${Icone} nome=${i} tam=${21}/>${r}</a>`)}</nav>
@@ -124,32 +127,38 @@ function Painel({ perfil, ir }) {
 // ============================================================
 // ALUNAS
 // ============================================================
+const ORDENS = [['nome', 'Nome (A–Z)'], ['engajamento', 'Menor engajamento'], ['progressao', 'Menor progressão'], ['risco', 'Maior risco de evasão']];
 function Alunas({ ir }) {
   const e = useCarregar(async () => {
-    const [alunas, sessoes, assinaturas] = await Promise.all([alunasAtivas(), api.q('sessoes', {}), api.q('assinaturas', {})]);
-    return { alunas, sessoes, assinaturas };
+    const [alunas, radar] = await Promise.all([alunasAtivas(), carregarRadar()]);
+    return { alunas, radar };
   }, []);
   const [busca, setBusca] = useState('');
+  const [ordem, setOrdem] = useState(() => { try { return localStorage.getItem('nemesis-ordem-alunas') || 'nome'; } catch (err) { return 'nome'; } });
   const [inativas, setInativas] = useState(false);
   const [convite, setConvite] = useState(false);
+  const mudaOrdem = (v) => { setOrdem(v); try { localStorage.setItem('nemesis-ordem-alunas', v); } catch (err) { /* */ } };
   return html`<div class="pilha">
     <div class="titulo-acoes"><h1 class="titulo">Alunas</h1><button class="btn primario" onClick=${() => setConvite(true)}>+ Convidar aluna</button></div>
-    <input class="input" type="search" placeholder="Buscar pelo nome" value=${busca} onInput=${(ev) => setBusca(ev.target.value)}/>
-    <${Estado} e=${e}>${({ alunas, sessoes, assinaturas }) => {
-      const lista = alunas.filter((a) => a.ativo !== inativas && a.nome.toLowerCase().includes(busca.toLowerCase()));
+    <${Estado} e=${e}>${({ alunas, radar }) => {
+      const ativas = alunas.filter((a) => a.ativo);
+      const saude = Object.fromEntries(alunas.map((a) => [a.id, saudeDa(a, radar)]));
+      const lista = alunas.filter((a) => a.ativo !== inativas && (a.nome || '').toLowerCase().includes(busca.toLowerCase()));
+      const chave = { engajamento: (a) => saude[a.id].engajamento, progressao: (a) => (saude[a.id].progressao == null ? 99 : saude[a.id].progressao), risco: (a) => -saude[a.id].risco };
+      if (chave[ordem]) lista.sort((x, y) => chave[ordem](x) - chave[ordem](y));
       const nInat = alunas.filter((a) => !a.ativo).length;
-      return html`${!lista.length ? html`<${Vazio} titulo=${alunas.length ? 'Ninguém encontrado' : 'Nenhuma aluna ainda'} texto=${alunas.length ? '' : 'Mande o link do app para a aluna criar a conta. Ela aparece aqui na hora.'}/>` : null}
-        ${lista.map((a) => {
-          const u = sessoes.filter((s) => s.aluna_id === a.id).map((s) => s.data).sort().pop();
-          const s = assinaturas.filter((x) => x.aluna_id === a.id).sort((x, y) => (x.fim < y.fim ? 1 : -1))[0];
-          const d = s ? diasEntre(hoje(), s.fim) : null;
+      return html`${ativas.length > 0 && !inativas && html`<${Radar} alunas=${ativas} saude=${saude} ir=${ir}/>`}
+        <div class="alunas-filtro"><input class="input" type="search" placeholder="Buscar pelo nome" value=${busca} onInput=${(ev) => setBusca(ev.target.value)}/>
+          <select class="input" aria-label="Ordenar" onChange=${(ev) => mudaOrdem(ev.target.value)}>${ORDENS.map(([k, r]) => html`<option value=${k} selected=${ordem === k}>${r}</option>`)}</select></div>
+        ${!lista.length ? html`<${Vazio} titulo=${alunas.length ? 'Ninguém encontrado' : 'Nenhuma aluna ainda'} texto=${alunas.length ? '' : 'Mande o link do app para a aluna criar a conta. Ela aparece aqui na hora.'}/>` : null}
+        ${lista.map((a) => { const sd = saude[a.id]; const s = sd.plano; const d = sd.planoDias;
           return html`<button class="card aluna" onClick=${() => ir('aluna/' + a.id)}>
             <span class="avatar">${(a.nome || '?').slice(0, 1)}</span>
-            <div class="aluna-info"><b>${a.nome || a.email}</b><small>Último treino: ${relativo(u)}${a.objetivo ? ' · ' + a.objetivo : ''}</small></div>
+            <div class="aluna-info"><b>${a.nome || a.email}</b><small>Último treino: ${relativo(sd.ultimo)}${a.objetivo ? ' · ' + a.objetivo : ''}</small></div>
+            <${Score} s=${sd} compacto=${true}/>
             <div class="treino-tags">${!a.anamnese_ok ? html`<span class="tag atencao">sem anamnese</span>` : null}
               ${s ? html`<span class=${'tag' + (d < 0 ? ' perigo' : d <= 10 ? ' atencao' : '')}>${s.plano_nome} · ${d < 0 ? 'vencido' : d + 'd'}</span>` : html`<span class="tag">sem plano</span>`}<span class="seta">›</span></div>
-          </button>`;
-        })}
+          </button>`; })}
         ${nInat > 0 && html`<button class="btn-texto" onClick=${() => setInativas(!inativas)}>${inativas ? 'Ver ativas' : `Ver inativas (${nInat})`}</button>`}`;
     }}<//>
     ${convite && html`<${Convite} onFechar=${() => setConvite(false)}/>`}
@@ -177,11 +186,13 @@ const ABAS_ALUNA = [['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['relatorio'
   ['avaliacoes', 'Avaliações'], ['anamnese', 'Alistamento'], ['financeiro', 'Financeiro'], ['dados', 'Dados']];
 function AlunaDetalhe({ id, aba, ir, onAluna, coachNome }) {
   const e = useCarregar(async () => { const a = await api.um('profiles', { id }); if (a && onAluna) onAluna({ id: a.id, nome: a.nome }); return a; }, [id]);
+  const r = useCarregar(() => carregarRadar(id), [id]);
   return html`<${Estado} e=${e}>${(a) => (!a ? html`<${Vazio} titulo="Aluna não encontrada"/>` : html`<div class="pilha">
     <button class="btn-texto" onClick=${() => ir('alunas')}>‹ Alunas</button>
     <div class="aluna-cab"><span class="avatar grande">${(a.nome || '?').slice(0, 1)}</span>
       <div><h1>${a.nome || a.email}</h1><p class="suave">${[idadeDe(a.nascimento) && idadeDe(a.nascimento) + ' anos', a.objetivo].filter(Boolean).join(' · ') || a.email}</p></div>
       ${a.telefone && html`<a class="btn" target="_blank" rel="noopener" href=${linkWhats(a.telefone)}>WhatsApp</a>`}</div>
+    ${r.dados && html`<${Score} s=${saudeDa(a, r.dados)}/>`}
     <${Abas} abas=${ABAS_ALUNA} atual=${aba} onMuda=${(k) => ir(`aluna/${id}/${k}`)}/>
     ${aba === 'ficha' && html`<${Ficha} aluna=${a}/>`}
     ${aba === 'evolucao' && html`<${Evolucao} alunaId=${a.id}/>`}
@@ -321,215 +332,3 @@ function Leads() {
       ${!leads.filter((l) => l.status === filtro).length && html`<${Vazio} titulo="Nada aqui" texto=${filtro === 'novo' ? 'Quando alguém preencher o formulário, aparece aqui.' : ''}/>`}`}<//>
   </div>`;
 }
-
-// ============================================================
-// FINANCEIRO
-// ============================================================
-function Financeiro({ ir }) {
-  const [mes, setMes] = useState(hoje().slice(0, 7));
-  const [modal, setModal] = useState(null);
-  const e = useCarregar(async () => {
-    const [lanc, alunas, assinaturas, planos] = await Promise.all([api.q('lancamentos', { order: 'vencimento' }), alunasAtivas(), api.q('assinaturas', {}), api.q('planos', { order: 'meses' })]);
-    return { lanc, alunas, assinaturas, planos };
-  }, []);
-  const navMes = (d) => setMes(somaMeses(mes + '-15', d).slice(0, 7));
-  const pagar = async (l) => { try { await api.upd('lancamentos', l.id, { pago_em: l.pago_em ? null : hoje() }); e.recarregar(); } catch (err) { toast(err.message, 'erro'); } };
-  return html`<div class="pilha">
-    <div class="titulo-acoes"><h1 class="titulo">Financeiro</h1><button class="btn primario" onClick=${() => setModal({ tipo: 'lanc' })}>+ Lançamento</button></div>
-    <${Estado} e=${e}>${({ lanc, alunas, assinaturas, planos }) => {
-      const doMes = lanc.filter((l) => l.vencimento.slice(0, 7) === mes);
-      const soma = (l) => l.reduce((t, x) => t + Number(x.valor), 0);
-      const recebido = soma(lanc.filter((l) => l.tipo === 'receita' && l.pago_em && l.pago_em.slice(0, 7) === mes));
-      const aReceber = soma(doMes.filter((l) => l.tipo === 'receita' && !l.pago_em));
-      const despesas = soma(lanc.filter((l) => l.tipo === 'despesa' && (l.pago_em || l.vencimento).slice(0, 7) === mes));
-      const atrasadas = lanc.filter((l) => l.tipo === 'receita' && !l.pago_em && l.vencimento < hoje());
-      const seis = [...Array(6)].map((_, i) => somaMeses(mes + '-15', i - 5).slice(0, 7)).map((m) => ({ x: mesNome(m).split(' ')[0], v: soma(lanc.filter((l) => l.tipo === 'receita' && l.pago_em && l.pago_em.slice(0, 7) === m)) }));
-      const ativas = alunas.filter((a) => a.ativo);
-      const vencendo = ativas.map((a) => ({ a, s: assinaturas.filter((x) => x.aluna_id === a.id).sort((x, y) => (x.fim < y.fim ? 1 : -1))[0] })).filter(({ s }) => !s || diasEntre(hoje(), s.fim) <= 15)
-        .sort((x, y) => ((x.s ? x.s.fim : '') < (y.s ? y.s.fim : '') ? -1 : 1));
-      return html`
-        <div class="mes-nav"><button class="icone" aria-label="Mês anterior" onClick=${() => navMes(-1)}>‹</button><b>${mesNome(mes)}</b><button class="icone" aria-label="Próximo mês" onClick=${() => navMes(1)}>›</button></div>
-        <div class="stats">
-          <div class="stat"><b>${brl(recebido)}</b><span>recebido</span></div>
-          <div class="stat"><b>${brl(aReceber)}</b><span>a receber no mês</span></div>
-          <div class="stat"><b>${brl(despesas)}</b><span>despesas</span></div>
-          <div class=${'stat' + (recebido - despesas < 0 ? ' neg' : '')}><b>${brl(recebido - despesas)}</b><span>saldo do mês</span></div>
-        </div>
-        <section class="card"><h3>Recebido nos últimos 6 meses</h3><${Barras} dados=${seis}/></section>
-        ${atrasadas.length > 0 && html`<section class="card alerta"><h3>Em atraso · ${brl(soma(atrasadas))}</h3><ul class="lista">${atrasadas.map((l) => html`<li class="linha"><div><b>${l.descricao}</b><small>venceu ${dataBR(l.vencimento)}</small></div>
-          <div class="mini-acoes"><span class="valor">${brl(l.valor)}</span><button class="btn-texto" onClick=${() => pagar(l)}>Recebido</button></div></li>`)}</ul></section>`}
-        ${vencendo.length > 0 && html`<section class="card"><h3>Renovações</h3><ul class="lista">${vencendo.map(({ a, s }) => { const d = s ? diasEntre(hoje(), s.fim) : null;
-          return html`<li class="linha"><div><b>${a.nome}</b><small>${s ? `${s.plano_nome} · ${d < 0 ? `venceu há ${-d} dias` : `vence em ${d} dias`}` : 'sem plano registrado'}</small></div>
-            <button class="btn-texto" onClick=${() => setModal({ tipo: 'plano', aluna: a })}>${s ? 'Renovar' : 'Registrar plano'}</button></li>`; })}</ul></section>`}
-        <section class="card"><div class="card-topo"><h3>Lançamentos de ${mesNome(mes)}</h3></div>
-          ${doMes.length ? html`<ul class="lista">${doMes.map((l) => html`<li class=${'linha lanc ' + l.tipo}>
-            <button class=${'check' + (l.pago_em ? ' on' : '')} aria-label=${l.pago_em ? 'Marcar como não pago' : 'Marcar como pago'} onClick=${() => pagar(l)}>✓</button>
-            <div class="lanc-info"><b>${l.descricao}</b><small>${l.categoria || (l.tipo === 'receita' ? 'Receita' : 'Despesa')} · vence ${dataBR(l.vencimento)}${l.pago_em ? ' · pago ' + dataBR(l.pago_em) : ''}</small></div>
-            <span class="valor">${l.tipo === 'despesa' ? '−' : ''}${brl(l.valor)}</span>
-            <button class="icone" aria-label="Editar" onClick=${() => setModal({ tipo: 'lanc', lanc: l })}>✎</button></li>`)}</ul>`
-            : html`<p class="suave">Nenhum lançamento neste mês.</p>`}
-        </section>
-        <section class="card"><div class="card-topo"><h3>Planos</h3><button class="btn-texto" onClick=${() => setModal({ tipo: 'planos' })}>Editar valores</button></div>
-          <div class="planos">${planos.filter((p) => p.ativo).map((p) => html`<div><b>${p.nome}</b><span>${p.meses} ${p.meses > 1 ? 'meses' : 'mês'} · ${brl(p.valor)}</span></div>`)}</div></section>
-        ${modal && modal.tipo === 'lanc' && html`<${ModalLancamento} lanc=${modal.lanc} alunas=${ativas} onFechar=${() => setModal(null)} onFeito=${() => { setModal(null); e.recarregar(); }}/>`}
-        ${modal && modal.tipo === 'plano' && html`<${NovaAssinatura} aluna=${modal.aluna} planos=${planos} anterior=${assinaturas.filter((x) => x.aluna_id === modal.aluna.id).sort((x, y) => (x.fim < y.fim ? 1 : -1))[0]} onFechar=${() => setModal(null)} onFeito=${() => { setModal(null); e.recarregar(); }}/>`}
-        ${modal && modal.tipo === 'planos' && html`<${ModalPlanos} planos=${planos} onFechar=${() => setModal(null)} onFeito=${() => { setModal(null); e.recarregar(); }}/>`}
-        `;
-    }}<//>
-  </div>`;
-}
-
-function ModalLancamento({ lanc, alunas, onFechar, onFeito }) {
-  const [f, setF] = useState(lanc ? { ...lanc, valor: String(lanc.valor).replace('.', ','), categoria: lanc.categoria || '', aluna_id: lanc.aluna_id || '', pago: !!lanc.pago_em }
-    : { tipo: 'despesa', descricao: '', categoria: '', valor: '', vencimento: hoje(), aluna_id: '', pago: true });
-  const salvar = async (ev) => {
-    ev.preventDefault();
-    const valor = lerNum(f.valor); if (!f.descricao.trim() || !valor) { toast('Preencha descrição e valor.', 'erro'); return; }
-    const linha = { tipo: f.tipo, descricao: f.descricao.trim(), categoria: f.categoria || null, valor, vencimento: f.vencimento, aluna_id: f.aluna_id || null, pago_em: f.pago ? (lanc && lanc.pago_em) || hoje() : null };
-    try { if (lanc) await api.upd('lancamentos', lanc.id, linha); else await api.ins('lancamentos', linha); onFeito(); } catch (err) { toast(err.message, 'erro'); }
-  };
-  const apagar = async () => { if (!confirm('Apagar este lançamento?')) return; await api.del('lancamentos', lanc.id); onFeito(); };
-  return html`<${Modal} titulo=${lanc ? 'Editar lançamento' : 'Novo lançamento'} onFechar=${onFechar}>
-    <form class="pilha" onSubmit=${salvar}>
-      <div class="chips">${[['receita', 'Receita'], ['despesa', 'Despesa']].map(([k, r]) => html`<button type="button" class=${f.tipo === k ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, tipo: k })}>${r}</button>`)}</div>
-      <${Campo} rotulo="Descrição"><input class="input" value=${f.descricao} onInput=${(ev) => setF({ ...f, descricao: ev.target.value })}/><//>
-      <div class="grade2">
-        <${Campo} rotulo="Valor (R$)"><input class="input" inputmode="decimal" value=${f.valor} onInput=${(ev) => setF({ ...f, valor: ev.target.value })}/><//>
-        <${Campo} rotulo="Vencimento"><input class="input" type="date" value=${f.vencimento} onInput=${(ev) => setF({ ...f, vencimento: ev.target.value })}/><//>
-      </div>
-      <${Campo} rotulo="Categoria" dica="Ex.: Consultoria, Marketing, Ferramentas, Presencial"><input class="input" value=${f.categoria} onInput=${(ev) => setF({ ...f, categoria: ev.target.value })}/><//>
-      <${Campo} rotulo="Aluna (opcional)"><select class="input" value=${f.aluna_id} onChange=${(ev) => setF({ ...f, aluna_id: ev.target.value })}><option value="">Nenhuma</option>${alunas.map((a) => html`<option value=${a.id}>${a.nome}</option>`)}</select><//>
-      <label class="toggle"><input type="checkbox" checked=${f.pago} onChange=${(ev) => setF({ ...f, pago: ev.target.checked })}/> Já foi pago</label>
-      <button class="btn primario grande">Salvar</button>
-      ${lanc && html`<button type="button" class="btn-texto perigo" onClick=${apagar}>Apagar</button>`}
-    </form><//>`;
-}
-
-function NovaAssinatura({ aluna, planos, anterior, onFechar, onFeito }) {
-  const inicio0 = anterior && anterior.fim >= somaDias(hoje(), -15) ? anterior.fim : hoje();
-  const [f, setF] = useState({ plano_id: (planos[0] || {}).id, inicio: inicio0, valor: planos[0] ? String(planos[0].valor) : '', parcelas: 1, forma: 'Pix', primeiraPaga: true });
-  const plano = planos.find((p) => p.id === f.plano_id) || {};
-  const escolhe = (id) => { const p = planos.find((x) => x.id === id); setF({ ...f, plano_id: id, valor: String(p.valor) }); };
-  const valor = lerNum(f.valor) || 0; const parcelas = Math.max(1, lerNum(f.parcelas) || 1);
-  const salvar = async (ev) => {
-    ev.preventDefault();
-    try {
-      const [a] = await api.ins('assinaturas', { aluna_id: aluna.id, plano_id: plano.id, plano_nome: plano.nome, inicio: f.inicio, fim: somaMeses(f.inicio, plano.meses), valor, forma_pagamento: parcelas > 1 ? `${f.forma} ${parcelas}x` : f.forma });
-      const vp = Math.round((valor / parcelas) * 100) / 100;
-      const linhas = [...Array(parcelas)].map((_, i) => ({ tipo: 'receita', descricao: `${plano.nome} · ${aluna.nome}${parcelas > 1 ? ` (${i + 1}/${parcelas})` : ''}`, categoria: 'Consultoria',
-        valor: i === parcelas - 1 ? Math.round((valor - vp * (parcelas - 1)) * 100) / 100 : vp, vencimento: somaMeses(f.inicio, i), pago_em: i === 0 && f.primeiraPaga ? hoje() : null, aluna_id: aluna.id, assinatura_id: a.id }));
-      await api.ins('lancamentos', linhas);
-      toast('Plano registrado', 'ok'); onFeito();
-    } catch (err) { toast(err.message, 'erro'); }
-  };
-  return html`<${Modal} titulo=${'Plano · ' + aluna.nome} onFechar=${onFechar}>
-    <form class="pilha" onSubmit=${salvar}>
-      <div class="chips">${planos.filter((p) => p.ativo).map((p) => html`<button type="button" class=${f.plano_id === p.id ? 'chip on' : 'chip'} onClick=${() => escolhe(p.id)}>${p.nome} · ${p.meses}m</button>`)}</div>
-      <div class="grade2">
-        <${Campo} rotulo="Início"><input class="input" type="date" value=${f.inicio} onInput=${(ev) => setF({ ...f, inicio: ev.target.value })}/><//>
-        <${Campo} rotulo="Valor total (R$)"><input class="input" inputmode="decimal" value=${f.valor} onInput=${(ev) => setF({ ...f, valor: ev.target.value })}/><//>
-        <${Campo} rotulo="Parcelas"><select class="input" value=${f.parcelas} onChange=${(ev) => setF({ ...f, parcelas: +ev.target.value })}>${[...Array(12)].map((_, i) => html`<option value=${i + 1}>${i + 1}x</option>`)}</select><//>
-        <${Campo} rotulo="Forma"><select class="input" value=${f.forma} onChange=${(ev) => setF({ ...f, forma: ev.target.value })}>${['Pix', 'Cartão', 'Boleto', 'Dinheiro'].map((o) => html`<option value=${o} selected=${f.forma === o}>${o}</option>`)}</select><//>
-      </div>
-      <p class="suave">Vai de ${dataBR(f.inicio)} até ${plano.meses ? dataBR(somaMeses(f.inicio, plano.meses)) : '·'}. ${parcelas > 1 ? `${parcelas} parcelas de ${brl(valor / parcelas)} lançadas mês a mês.` : ''}</p>
-      <label class="toggle"><input type="checkbox" checked=${f.primeiraPaga} onChange=${(ev) => setF({ ...f, primeiraPaga: ev.target.checked })}/> ${parcelas > 1 ? 'Primeira parcela já foi paga' : 'Já foi pago'}</label>
-      <button class="btn primario grande">Registrar plano</button>
-    </form><//>`;
-}
-
-function ModalPlanos({ planos, onFechar, onFeito }) {
-  const [l, setL] = useState(planos.map((p) => ({ ...p, valor: String(p.valor).replace('.', ',') })));
-  const salvar = async () => {
-    try { for (const p of l) await api.upd('planos', p.id, { nome: p.nome, meses: lerNum(p.meses), valor: lerNum(p.valor), ativo: p.ativo }); onFeito(); }
-    catch (err) { toast(err.message, 'erro'); }
-  };
-  const muda = (i, k, v) => setL(l.map((p, j) => (j === i ? { ...p, [k]: v } : p)));
-  return html`<${Modal} titulo="Planos" onFechar=${onFechar}><div class="pilha">
-    ${l.map((p, i) => html`<div class="grade3">
-      <${Campo} rotulo="Nome"><input class="input" value=${p.nome} onInput=${(ev) => muda(i, 'nome', ev.target.value)}/><//>
-      <${Campo} rotulo="Meses"><input class="input" inputmode="numeric" value=${p.meses} onInput=${(ev) => muda(i, 'meses', ev.target.value)}/><//>
-      <${Campo} rotulo="Valor"><input class="input" inputmode="decimal" value=${p.valor} onInput=${(ev) => muda(i, 'valor', ev.target.value)}/><//>
-    </div>`)}
-    <button class="btn primario grande" onClick=${salvar}>Salvar planos</button></div><//>`;
-}
-
-function FinanceiroAluna({ aluna }) {
-  const e = useCarregar(async () => {
-    const [ass, lanc, planos] = await Promise.all([api.q('assinaturas', { eq: { aluna_id: aluna.id }, order: 'inicio', asc: false }), api.q('lancamentos', { eq: { aluna_id: aluna.id }, order: 'vencimento' }), api.q('planos', { order: 'meses' })]);
-    return { ass, lanc, planos };
-  }, [aluna.id]);
-  const [novo, setNovo] = useState(false);
-  const pagar = async (l) => { await api.upd('lancamentos', l.id, { pago_em: l.pago_em ? null : hoje() }); e.recarregar(); };
-  return html`<${Estado} e=${e}>${({ ass, lanc, planos }) => { const total = lanc.filter((l) => l.pago_em).reduce((t, l) => t + Number(l.valor), 0);
-    return html`<div class="pilha">
-      <button class="btn primario" onClick=${() => setNovo(true)}>${ass.length ? 'Renovar plano' : '+ Registrar plano'}</button>
-      ${ass.length ? ass.map((a) => { const d = diasEntre(hoje(), a.fim); return html`<section class="card"><div class="card-topo"><h3>${a.plano_nome}</h3>
-        <span class=${'tag' + (d < 0 ? '' : d <= 10 ? ' atencao' : ' roxo')}>${d < 0 ? 'encerrado' : `${d} dias restantes`}</span></div>
-        <p class="suave">${dataBR(a.inicio)} a ${dataBR(a.fim)} · ${brl(a.valor)}${a.forma_pagamento ? ' · ' + a.forma_pagamento : ''}</p>
-        <ul class="lista">${lanc.filter((l) => l.assinatura_id === a.id).map((l) => html`<li class="linha lanc">
-          <button class=${'check' + (l.pago_em ? ' on' : '')} aria-label="Alternar pago" onClick=${() => pagar(l)}>✓</button>
-          <div class="lanc-info"><b>${brl(l.valor)}</b><small>vence ${dataBR(l.vencimento)}${l.pago_em ? ' · pago' : l.vencimento < hoje() ? ' · em atraso' : ''}</small></div></li>`)}</ul>
-        <button class="btn-texto perigo" onClick=${async () => { if (confirm('Apagar este plano e as parcelas dele?')) { await api.del('assinaturas', a.id); e.recarregar(); } }}>Apagar plano</button>
-      </section>`; }) : html`<${Vazio} titulo="Nenhum plano registrado"/>`}
-      ${total > 0 && html`<p class="suave">Total já recebido desta aluna: ${brl(total)}</p>`}
-      ${novo && html`<${NovaAssinatura} aluna=${aluna} planos=${planos} anterior=${ass[0]} onFechar=${() => setNovo(false)} onFeito=${() => { setNovo(false); e.recarregar(); }}/>`}
-    </div>`; }}<//>`;
-}
-
-// ============================================================
-// BIBLIOTECA DE EXERCÍCIOS
-// ============================================================
-function Exercicios() {
-  const e = useCarregar(() => api.q('exercicios', { order: 'nome' }), []);
-  const [busca, setBusca] = useState('');
-  const [edit, setEdit] = useState(null);
-  return html`<div class="pilha">
-    <div class="titulo-acoes"><h1 class="titulo">Exercícios</h1><button class="btn primario" onClick=${() => setEdit({})}>+ Exercício</button></div>
-    <p class="suave">Cole o link do seu vídeo (YouTube, Drive, Instagram) em cada exercício e a aluna vê o botão "Ver vídeo" na execução.</p>
-    <input class="input" type="search" placeholder="Buscar" value=${busca} onInput=${(ev) => setBusca(ev.target.value)}/>
-    <${Estado} e=${e}>${(lista) => {
-      const f = lista.filter((x) => (x.nome + ' ' + (x.grupo || '')).toLowerCase().includes(busca.toLowerCase()));
-      const grupos = [...new Set(f.map((x) => x.grupo || 'Sem grupo'))].sort();
-      return grupos.map((g) => html`<section class="card"><h3>${g}</h3><ul class="lista">${f.filter((x) => (x.grupo || 'Sem grupo') === g).map((x) => html`<li class="linha">
-        <button class="linha-botao" onClick=${() => setEdit(x)}><b>${x.nome}</b>${x.video_url ? html`<span class="tag roxo">vídeo</span>` : html`<span class="tag">sem vídeo</span>`}</button></li>`)}</ul></section>`);
-    }}<//>
-    ${edit && html`<${ModalExercicio} ex=${edit} onFechar=${() => setEdit(null)} onFeito=${() => { setEdit(null); e.recarregar(); }}/>`}
-  </div>`;
-}
-
-function ModalExercicio({ ex, onFechar, onFeito }) {
-  const [f, setF] = useState({ nome: ex.nome || '', grupo: ex.grupo || '', video_url: ex.video_url || '', instrucoes: ex.instrucoes || '' });
-  // músculos: começa pelo que o app deduz; só grava se o treinador mexer
-  const [mus, setMus] = useState(() => { const m = musculosDe(ex.id ? ex : null); return { primarios: m.primarios, secundarios: m.secundarios, mexeu: false }; });
-  const auto = musculosDe({ ...ex, ...f, musculos: null });
-  const papel = (k) => (mus.primarios.includes(k) ? 'p' : mus.secundarios.includes(k) ? 's' : '');
-  const alterna = (k) => {
-    const p = papel(k); const tira = (l) => l.filter((x) => x !== k);
-    setMus({ primarios: p === '' ? [...mus.primarios, k] : tira(mus.primarios), secundarios: p === 'p' ? [...mus.secundarios, k] : tira(mus.secundarios), mexeu: true });
-  };
-  const salvar = async (ev) => {
-    ev.preventDefault(); if (!f.nome.trim()) return;
-    const linha = { nome: f.nome.trim(), grupo: f.grupo || null, video_url: f.video_url || null, instrucoes: f.instrucoes || null };
-    if (mus.mexeu) linha.musculos = mus.primarios.length || mus.secundarios.length ? { primarios: mus.primarios, secundarios: mus.secundarios } : null;
-    try { if (ex.id) await api.upd('exercicios', ex.id, linha); else await api.ins('exercicios', linha); onFeito(); } catch (err) { toast(err.message, 'erro'); }
-  };
-  const apagar = async () => { if (!confirm(`Apagar "${ex.nome}" da biblioteca? Nas fichas que usam ele, vai aparecer "exercício removido".`)) return; await api.del('exercicios', ex.id); onFeito(); };
-  return html`<${Modal} titulo=${ex.id ? 'Editar exercício' : 'Novo exercício'} onFechar=${onFechar}>
-    <form class="pilha" onSubmit=${salvar}>
-      <${Campo} rotulo="Nome"><input class="input" value=${f.nome} onInput=${(ev) => setF({ ...f, nome: ev.target.value })}/><//>
-      <${Campo} rotulo="Grupo muscular"><input class="input" list="grupos" value=${f.grupo} onInput=${(ev) => setF({ ...f, grupo: ev.target.value })}/>
-        <datalist id="grupos">${['Glúteos', 'Quadríceps', 'Posteriores', 'Adutores', 'Panturrilha', 'Costas', 'Lombar', 'Peito', 'Ombros', 'Bíceps', 'Tríceps', 'Core', 'Cardio'].map((g) => html`<option value=${g}/>`)}</datalist><//>
-      <div class="campo"><span class="rotulo">Músculos (volume da ficha)</span>
-        <small>Toque uma vez para principal (conta 1 série), duas para auxiliar (0,5), três para tirar.</small>
-        ${GRUPOS_MUSC.map((g) => html`<div class="musc-grupo"><small>${g}</small><div class="chips">${Object.keys(MUSCULOS).filter((k) => MUSCULOS[k].grupo === g).map((k) => { const p = papel(k);
-          return html`<button type="button" class=${'chip musc ' + p} onClick=${() => alterna(k)}>${MUSCULOS[k].nome}${p === 'p' ? ' · principal' : p === 's' ? ' · auxiliar' : ''}</button>`; })}</div></div>`)}
-        ${mus.mexeu ? html`<button type="button" class="btn-texto" onClick=${() => setMus({ primarios: auto.primarios, secundarios: auto.secundarios, mexeu: true })}>Voltar para o automático</button>`
-          : html`<small>${musculosDe(ex.id ? ex : null).auto ? 'Automático pelo nome do exercício.' : 'Definido por você.'}</small>`}
-      </div>
-      <${Campo} rotulo="Link do vídeo"><input class="input" type="url" placeholder="https://" value=${f.video_url} onInput=${(ev) => setF({ ...f, video_url: ev.target.value })}/><//>
-      <${Campo} rotulo="Como executar (pontos de atenção)"><textarea class="input" rows="4" value=${f.instrucoes} onInput=${(ev) => setF({ ...f, instrucoes: ev.target.value })}></textarea><//>
-      <button class="btn primario grande">Salvar</button>
-      ${ex.id && html`<button type="button" class="btn-texto perigo" onClick=${apagar}>Apagar</button>`}
-    </form><//>`;
-}
-

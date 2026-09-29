@@ -770,3 +770,91 @@ select.cel-in { cursor: pointer; appearance: none; font-size: 13px; }
 .modelos-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .card.modelo { gap: 8px; }
 .modelo-treinos { display: flex; gap: 6px; flex-wrap: wrap; }
+.bib-nome { display: flex; flex-direction: column; min-width: 0; }
+.bib-nome small { font-size: 12px; }
+.bib-musculos { display: grid; grid-template-columns: 170px 1fr; gap: 16px; align-items: start; }
+.bib-mapa { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; background: var(--fundo); border: 1px solid var(--linha); border-radius: 12px; padding: 10px; }
+.bib-mapa .icone { position: absolute; right: 6px; top: 6px; }
+.mapa-corpo .corpo-musculo.clicavel { cursor: pointer; }
+.mapa-corpo .corpo-musculo.clicavel:hover { stroke: var(--roxo-claro); stroke-width: 2; }
+@media (max-width: 560px) { .bib-musculos { grid-template-columns: 1fr; } }
+.trocado { display: block; color: var(--atencao); font-size: 12px; }
+.troca-lista { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: var(--fundo); border: 1px dashed var(--linha); border-radius: 10px; padding: 10px; }
+.troca-lista small { width: 100%; }
+/* ============ Tesouro ============ */
+.kpis.tesouro { grid-template-columns: repeat(4, 1fr); }
+.kpi-t { background: var(--sup); border: 1px solid var(--linha); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.kpi-t span { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--suave); }
+.kpi-t b { font-size: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi-t small { font-size: 12px; }
+.kpi-t.destaque { border-color: var(--roxo-claro); background: linear-gradient(160deg, var(--roxo-fundo), var(--sup) 70%); }
+.kpi-t.atencao b { color: var(--atencao); }
+.paineis.dois { grid-template-columns: 1fr 1fr; }
+.paineis.dois .card { min-height: 0; }
+.planos-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.plano-card { gap: 6px; }
+.plano-valor { font-size: 24px; font-weight: 700; }
+.entregas { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: #cfcfcf; }
+.estimativa { border: 1px solid var(--linha); background: var(--fundo); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.estimativa > div { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; }
+.estimativa span { color: var(--suave); }
+.estimativa .neg { color: var(--perigo); }
+.estimativa .liq { border-top: 1px solid var(--linha); padding-top: 6px; }
+.estimativa .liq b { font-size: 17px; color: var(--ok); }
+.valor-mes { font-size: 18px; font-weight: 700; padding: 10px 0; }
+.toggle .input.curto { width: 56px; display: inline-block; margin: 0 4px; padding: 5px 8px; }
+@media (max-width: 900px) { .kpis.tesouro { grid-template-columns: 1fr 1fr; } .paineis.dois { grid-template-columns: 1fr; } }
+/* ============ Chronos ============ */
+.seg { display: inline-flex; border: 1px solid var(--linha); border-radius: 10px; overflow: hidden; }
+.seg button { background: var(--sup); border: 0; padding: 9px 14px; font-size: 13.5px; font-weight: 600; color: var(--suave); }
+.seg button + button { border-left: 1px solid var(--linha); }
+.seg button.on { background: var(--roxo); color: #fff; }
+.chronos-barra { display: flex; flex-direction: column; gap: 10px; }
+.chronos-barra .mes-nav { justify-content: flex-start; }
+.camadas { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.camada { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 99px; border: 1px solid var(--linha); background: transparent; color: var(--suave); font-size: 12.5px; }
+.camada i { width: 8px; height: 8px; border-radius: 50%; opacity: .35; }
+.camada.on { color: var(--texto); background: var(--sup); }
+.camada.on i { opacity: 1; }
+.camada-dia { font-size: 12.5px; color: var(--suave); display: inline-flex; gap: 6px; align-items: center; margin-left: 4px; }
+.camada-dia select { background: var(--sup2); color: var(--texto); border: 1px solid var(--linha); border-radius: 8px; padding: 4px 6px; font: inherit; font-size: 12.5px; }
+.semana-item { border-left: 3px solid var(--c, var(--linha)); }
+.semana-item span { color: var(--c, var(--roxo-claro)); }
+.mes-grade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.mes-cab { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); text-align: center; padding: 4px 0; }
+.mes-dia { background: var(--sup); border: 1px solid var(--linha); border-radius: 8px; min-height: 96px; padding: 5px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mes-dia.fora { opacity: .45; }
+.mes-dia.hoje { border-color: var(--roxo-claro); }
+.mes-n { font-size: 12px; font-weight: 700; color: var(--suave); }
+.mes-dia.hoje .mes-n { color: var(--roxo-claro); }
+.mes-item { background: var(--fundo); border: 0; border-left: 3px solid var(--c); border-radius: 4px; font-size: 11.5px; padding: 2px 5px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--texto); }
+.mes-item.feito { opacity: .5; text-decoration: line-through; }
+.fila { display: flex; flex-direction: column; gap: 10px; }
+.fila-dia h3 { text-transform: capitalize; }
+.fila-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--fundo); border-left: 3px solid var(--c); }
+.fila-item.feito { opacity: .5; }
+.fila-hora { width: 42px; font-size: 13px; color: var(--c); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.fila-txt { flex: 1; min-width: 0; background: none; border: 0; text-align: left; display: flex; flex-direction: column; padding: 0; }
+@media (max-width: 700px) { .mes-dia { min-height: 64px; } .mes-item { font-size: 0; padding: 0; height: 6px; } .seg button { padding: 8px 10px; } }
+/* ============ Radar e score ============ */
+.radar { gap: 12px; }
+.radar-grade { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.radar-col { background: var(--fundo); border: 1px solid var(--linha); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.radar-cab { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; }
+.radar-cab span { font-weight: 700; color: var(--roxo-claro); }
+.radar-item { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.radar-item button { background: none; border: 0; padding: 2px 0; text-align: left; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.radar-item button:hover { color: var(--roxo-claro); }
+.alunas-filtro { display: grid; grid-template-columns: 1fr 220px; gap: 8px; }
+.score { display: flex; gap: 8px; flex-wrap: wrap; }
+.score-item { display: flex; flex-direction: column; gap: 1px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--linha); background: var(--sup); min-width: 110px; }
+.score-item small { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+.score-item b { font-size: 16px; }
+.score-item.bom b { color: var(--ok); } .score-item.medio b { color: var(--atencao); } .score-item.ruim b { color: var(--perigo); }
+.score-item.risco.baixo b { color: var(--ok); } .score-item.risco.medio b { color: var(--atencao); } .score-item.risco.alto b { color: var(--perigo); }
+.score.compacto { gap: 4px; flex-wrap: nowrap; }
+.score.compacto .score-item { min-width: 0; padding: 3px 8px; border-radius: 99px; }
+.score.compacto .score-item b { font-size: 12px; white-space: nowrap; }
+@media (max-width: 900px) { .radar-grade { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .card.aluna .score.compacto { display: none; } .alunas-filtro { grid-template-columns: 1fr; } }
+.chronos-barra .mes-nav { text-transform: none; }

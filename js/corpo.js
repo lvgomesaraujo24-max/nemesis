@@ -51,12 +51,12 @@ const mistura = (t) => {
 };
 export const corVolume = (v) => (v > 0 ? mistura(Math.min(1, v / REF_VOLUME)) : 'var(--corpo-musculo)');
 
-export function MapaCorpo({ valores = {}, vista = 'frente', largura = 190 }) {
+export function MapaCorpo({ valores = {}, vista = 'frente', largura = 190, onMusculo }) {
   const lista = vista === 'frente' ? FRENTE : COSTAS;
   const lado = (espelho) => html`<g transform=${espelho ? 'translate(200 0) scale(-1 1)' : ''}>
     ${BASE.map((d) => html`<path d=${d} class="corpo-base"/>`)}
     ${lista.map(([k, d]) => { const v = valores[k] || 0;
-      return html`<path d=${d} fill=${corVolume(v)} class="corpo-musculo"><title>${MUSCULOS[k].nome}: ${String(Math.round(v * 10) / 10).replace('.', ',')} séries</title></path>`; })}
+      return html`<path d=${d} fill=${corVolume(v)} class=${'corpo-musculo' + (onMusculo ? ' clicavel' : '')} onClick=${onMusculo ? () => onMusculo(k) : undefined}><title>${MUSCULOS[k].nome}: ${String(Math.round(v * 10) / 10).replace('.', ',')} séries</title></path>`; })}
   </g>`;
   return html`<svg class="mapa-corpo" width=${largura} height=${largura * 1.95} viewBox="0 0 200 390" role="img" aria-label=${`Mapa muscular, vista ${vista === 'frente' ? 'frontal' : 'posterior'}`}>
     ${lado(false)}${lado(true)}

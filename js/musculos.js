@@ -77,6 +77,14 @@ export function musculosDe(ex) {
   return g ? { primarios: g[0], secundarios: g[1], auto: true } : { primarios: [], secundarios: [], auto: true };
 }
 
+// etiquetas do exercício (biblioteca)
+export const EQUIPAMENTOS = [['livre', 'Peso livre'], ['maquina', 'Máquina'], ['cabo', 'Cabo / polia'], ['peso_corpo', 'Peso do corpo'], ['elastico', 'Elástico']];
+export const ARTICULACOES = [['multi', 'Multiarticular'], ['mono', 'Monoarticular']];
+// perfil de resistência explicado em linguagem de aluna
+export const PERFIS = [['ascendente', 'Ascendente', 'Fica mais difícil no fim do movimento.'], ['descendente', 'Descendente', 'É mais difícil no começo e alivia no fim.'],
+  ['u_invertido', 'U invertido', 'O ponto mais difícil é no meio do movimento.'], ['constante', 'Constante', 'A dificuldade é parecida do começo ao fim.']];
+export const nomeDe = (lista, k) => (lista.find(([x]) => x === k) || [null, ''])[1];
+
 // tipos de exercício da ficha
 export const TIPOS = {
   aquecimento: { nome: 'Aquecimento', sub: 'Preparação física', cor: '#e08a3c' },

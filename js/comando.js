@@ -7,6 +7,7 @@ import { textoCiclo } from './motor.js';
 import { abrirSelo } from './dossie.js';
 import { Modal, Campo, toast, num, brl, dataBR, hoje, somaDias, diasEntre, linkWhats } from './util.js';
 import { Icone } from './icones.js';
+import { ModalCompromisso, dataLocal } from './chronos.js';
 
 const CACHE = 'nemesis-acropole';
 const PESO = { critica: 100, atencao: 60, tarefa: 40, gloria: 20 };
@@ -294,31 +295,4 @@ function AgendaHoje({ d, ir, onNovo, executar, recarregar }) {
         <button class="btn-texto" onClick=${onNovo}>+ Agendar novo</button></div>`
       : html`<div class="painel-vazio"><${Icone} nome="agenda" tam=${28}/><p>Nenhum compromisso hoje</p><button class="btn-texto" onClick=${onNovo}>Agendar novo</button></div>`}
   </section>`;
-}
-export const dataLocal = (d) => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); };
-
-export function ModalCompromisso({ inicial, onFechar, onFeito }) {
-  const [alunas, setAlunas] = useState([]);
-  useEffect(() => { api.q('profiles', { eq: { role: 'student', ativo: true }, order: 'nome' }).then(setAlunas).catch(() => {}); }, []);
-  const g = inicial || {};
-  const ini = g.inicio ? new Date(g.inicio) : null;
-  const [f, setF] = useState({ titulo: g.titulo || '', tipo: g.tipo || 'video', aluna_id: g.aluna_id || '', dia: ini ? dataLocal(ini) : (g.dia || hoje()), hora: ini ? ini.toTimeString().slice(0, 5) : '18:00', link: g.link || '' });
-  const salvar = async (ev) => {
-    ev.preventDefault(); if (!f.titulo.trim()) { toast('Dê um título.', 'erro'); return; }
-    const linha = { titulo: f.titulo.trim(), tipo: f.tipo, aluna_id: f.aluna_id || null, inicio: new Date(`${f.dia}T${f.hora || '00:00'}:00`).toISOString(), link: f.link || null };
-    try { if (g.id) await api.upd('agenda', g.id, linha); else await api.ins('agenda', linha); onFeito(); } catch (e) { toast(e.message, 'erro'); }
-  };
-  const apagar = async () => { if (!confirm('Apagar este compromisso?')) return; try { await api.del('agenda', g.id); onFeito(); } catch (e) { toast(e.message, 'erro'); } };
-  return html`<${Modal} titulo=${g.id ? 'Editar compromisso' : 'Novo compromisso'} onFechar=${onFechar}><form class="pilha" onSubmit=${salvar}>
-    <div class="chips">${[['video', 'Vídeo'], ['avaliacao', 'Avaliação'], ['outro', 'Outro']].map(([k, r]) => html`<button type="button" class=${f.tipo === k ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, tipo: k })}>${r}</button>`)}</div>
-    <${Campo} rotulo="Título"><input class="input" value=${f.titulo} placeholder="Ex.: Chamada de ajuste de ficha" onInput=${(ev) => setF({ ...f, titulo: ev.target.value })}/><//>
-    <${Campo} rotulo="Aluna (opcional)"><select class="input" value=${f.aluna_id} onChange=${(ev) => setF({ ...f, aluna_id: ev.target.value })}><option value="">Compromisso meu</option>${alunas.map((a) => html`<option value=${a.id}>${a.nome}</option>`)}</select><//>
-    <div class="grade2">
-      <${Campo} rotulo="Dia"><input class="input" type="date" value=${f.dia} onInput=${(ev) => setF({ ...f, dia: ev.target.value })}/><//>
-      <${Campo} rotulo="Hora"><input class="input" type="time" value=${f.hora} onInput=${(ev) => setF({ ...f, hora: ev.target.value })}/><//>
-    </div>
-    <${Campo} rotulo="Link (Meet, Zoom, WhatsApp)"><input class="input" type="url" placeholder="https://" value=${f.link} onInput=${(ev) => setF({ ...f, link: ev.target.value })}/><//>
-    <button class="btn primario grande">Salvar</button>
-    ${g.id && html`<button type="button" class="btn-texto perigo" onClick=${apagar}>Apagar</button>`}
-  </form><//>`;
 }

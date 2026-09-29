@@ -7,6 +7,12 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 ## O que tem
 
 **Treinador**
+- Radar da Guerreira: quem está sem check-in, sem treinar, com ficha velha ou plano vencendo, com WhatsApp pronto. Alunas ordenadas por engajamento, progressão ou risco de evasão, e score no perfil
+- Modelos (Forja): fichas prontas com nível, aplicadas em qualquer aluna; salvar a ficha de uma aluna como modelo
+- Mesociclo com progressão semanal (ex.: RIR 3 → 2 → 1 → deload) que a aluna vê na execução
+- Tesouro: MRR, alunas ativas, renovações em 15 dias, taxa de renovação, LTV, inadimplência, máscara de moeda, estimativa com taxas e parcelas. Cada plano é um pacote de entregas que monta a agenda do ciclo
+- Chronos: agenda em semana, mês e fila de trabalho, com camadas automáticas (check-in, avaliação a cada X semanas, fim de ficha, vencimento de plano, aniversário, metas), compromissos recorrentes e rituais num clique
+- Biblioteca: mapa do corpo clicável, livre/máquina, mono/multiarticular, perfil de resistência explicado para a aluna e grupo de substituição (a aluna troca se o aparelho estiver ocupado e você recebe o aviso)
 - Painel com o que precisa de atenção: check-ins sem resposta, planos vencendo, parcelas em atraso, alunas sem treinar há 7 dias, inscrições novas
 - Alunas: ficha de treino, copiar ficha de outra aluna, evolução, check-ins, avaliações, anamnese, financeiro e dados
 - Ficha: treinos em abas, exercício por tipo (aquecimento, aeróbico, musculação, crossfit), séries, séries de aquecimento, faixa de repetições, cadência, descanso exato/em faixa/livre, método (drop-set, rest-pause, bi-set...), RIR/RPE, tempo estimado do treino, "replicar valores" do 1º exercício e volume semanal por músculo com mapa do corpo (frente e costas)
@@ -63,7 +69,7 @@ A chave do `config.js` é pública por natureza. Quem protege os dados são as r
 Troque os arquivos no GitHub e mude o número em `sw.js` (`nemesis-v1` para `nemesis-v2`), para os celulares buscarem a versão nova.
 
 ## Atualizações do banco
-Quando vier um arquivo `supabase/atualizacao-N.sql` novo, rode ele no Supabase (**SQL Editor > New query**, cole tudo, **Run**). Pode rodar mais de uma vez sem problema. A `atualizacao-5.sql` liga a ficha completa (tipo de exercício, cadência, formato do descanso, método, RIR/RPE, aeróbico e músculos da biblioteca).
+Quando vier um arquivo `supabase/atualizacao-N.sql` novo, rode ele no Supabase (**SQL Editor > New query**, cole tudo, **Run**). Pode rodar mais de uma vez sem problema. A `atualizacao-5.sql` liga a ficha completa (tipo de exercício, cadência, formato do descanso, método, RIR/RPE, aeróbico e músculos da biblioteca). A `atualizacao-6.sql` liga modelos, presets, progressão do mesociclo, etiquetas e substituição de exercícios, pacote de entregas dos planos e os tipos novos da agenda.
 
 ## Estrutura
 ```
@@ -79,6 +85,11 @@ js/relatorio.js   relatório de evolução (métricas do período e PDF)
 js/ficha.js       editor da ficha (treinador)
 js/musculos.js    músculos, volume, tempo estimado e métodos
 js/corpo.js       mapa do corpo em SVG
+js/modelos.js     modelos de ficha
+js/biblioteca.js  biblioteca de exercícios
+js/tesouro.js     financeiro (Tesouro)
+js/chronos.js     agenda (Chronos)
+js/radar.js       Radar da Guerreira e score das alunas
 js/api.js         conexão com o Supabase
 js/demo.js        modo demonstração
 js/util.js        datas, números, gráficos, componentes

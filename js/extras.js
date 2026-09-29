@@ -1,49 +1,7 @@
 // Agenda semanal, validade da ficha (mesociclos), cardio, testes aeróbicos e metas.
 import { html, useState } from '../lib/preact-htm.js';
 import { api } from './api.js';
-import { ModalCompromisso, dataLocal } from './comando.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, toast, num, dataBR, hoje, somaDias, diasEntre, lerNum, idadeDe, linkWhats } from './util.js';
-
-// ============================================================
-// AGENDA (visão semanal)
-// ============================================================
-const SEM = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-const segunda = (s) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return dataLocal(d); };
-export function Agenda({ ir }) {
-  const [ini, setIni] = useState(segunda(hoje()));
-  const [modal, setModal] = useState(null);
-  const fim = somaDias(ini, 7);
-  const e = useCarregar(async () => {
-    const [ag, alunas, mesos, metas, ass] = await Promise.all([
-      api.q('agenda', { gte: { inicio: new Date(ini + 'T00:00:00').toISOString() }, lte: { inicio: new Date(fim + 'T00:00:00').toISOString() }, order: 'inicio' }),
-      api.q('profiles', { eq: { role: 'student', ativo: true } }), api.q('mesociclos', { eq: { status: 'ativo' } }),
-      api.q('metas', { eq: { status: 'ativa' } }), api.q('assinaturas', { gte: { fim: ini }, lte: { fim } })]);
-    return { ag, alunas, mesos, metas, ass };
-  }, [ini]);
-  return html`<div class="pilha">
-    <div class="titulo-acoes"><h1 class="titulo">Agenda de Chronos</h1><button class="btn primario" onClick=${() => setModal({})}>+ Compromisso</button></div>
-    <div class="mes-nav"><button class="icone" aria-label="Semana anterior" onClick=${() => setIni(somaDias(ini, -7))}>‹</button><b>${dataBR(ini).slice(0, 5)} a ${dataBR(somaDias(ini, 6)).slice(0, 5)}</b><button class="icone" aria-label="Próxima semana" onClick=${() => setIni(somaDias(ini, 7))}>›</button></div>
-    <${Estado} e=${e}>${({ ag, alunas, mesos, metas, ass }) => {
-      const nome = (id) => ((alunas.find((a) => a.id === id) || {}).nome || '').split(' ')[0];
-      const ativas = new Set(alunas.map((a) => a.id));
-      const dias = [...Array(7)].map((_, i) => somaDias(ini, i));
-      const doDia = (d) => [
-        ...ag.filter((g) => dataLocal(new Date(g.inicio)) === d).map((g) => ({ k: g.id, hora: new Date(g.inicio).toTimeString().slice(0, 5), txt: g.titulo, sub: nome(g.aluna_id), g, feito: g.feito })),
-        ...mesos.filter((m) => m.fim === d && ativas.has(m.aluna_id)).map((m) => ({ k: 'm' + m.id, hora: '★', txt: 'Ficha termina', sub: nome(m.aluna_id), aluna: m.aluna_id })),
-        ...metas.filter((m) => m.prazo === d && ativas.has(m.aluna_id)).map((m) => ({ k: 'mt' + m.id, hora: '★', txt: 'Prazo de meta', sub: nome(m.aluna_id), aluna: m.aluna_id })),
-        ...ass.filter((s) => s.fim === d && ativas.has(s.aluna_id)).map((s) => ({ k: 's' + s.id, hora: '◆', txt: 'Plano vence', sub: nome(s.aluna_id), aluna: s.aluna_id })),
-        ...alunas.filter((a) => a.nascimento && a.nascimento.slice(5) === d.slice(5)).map((a) => ({ k: 'n' + a.id, hora: '★', txt: 'Aniversário', sub: nome(a.id), aluna: a.id })),
-      ];
-      return html`<div class="semana-grade">${dias.map((d, i) => html`<div class=${'semana-dia' + (d === hoje() ? ' hoje' : '')}>
-        <h4>${SEM[i]} <small>${dataBR(d).slice(0, 5)}</small></h4>
-        ${doDia(d).map((x) => html`<button class=${'semana-item' + (x.feito ? ' feito' : '') + (x.g ? '' : ' marco')} onClick=${() => (x.g ? setModal(x.g) : ir('aluna/' + x.aluna))}>
-          <span>${x.hora}</span><b>${x.txt}</b>${x.sub && html`<small>${x.sub}</small>`}</button>`)}
-        <button class="btn-texto mini" onClick=${() => setModal({ dia: d })}>+</button></div>`)}</div>
-        <p class="suave">A fase do ciclo das alunas nunca aparece na agenda.</p>`;
-    }}<//>
-    ${modal && html`<${ModalCompromisso} inicial=${modal} onFechar=${() => setModal(null)} onFeito=${() => { setModal(null); e.recarregar(); }}/>`}
-  </div>`;
-}
 
 // ============================================================
 // VALIDADE DA FICHA (mesociclo)
