@@ -29,6 +29,11 @@ const P = {
   mais: html`<path d="M12 5v14M5 12h14"/>`,
   subir: html`<path d="m6 15 6-6 6 6"/>`,
   copiar: html`<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/>`,
+  forja: html`<path d="M4 9h12l4-3v7l-4-2H4z"/><path d="M8 13v3M12 13v3M6 20h8l-2-4H8z"/>`,
+  arrastar: html`<circle cx="9" cy="6" r="1.2"/><circle cx="15" cy="6" r="1.2"/><circle cx="9" cy="12" r="1.2"/><circle cx="15" cy="12" r="1.2"/><circle cx="9" cy="18" r="1.2"/><circle cx="15" cy="18" r="1.2"/>`,
+  preset: html`<path d="M6 3.5h12v17l-6-4-6 4z"/>`,
+  radar: html`<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12 18 6"/>`,
+  lista: html`<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>`,
   relatorio: html`<path d="M4 20.5h16"/><path d="M7 17V11M12 17V6M17 17v-4"/>`,
 };
 

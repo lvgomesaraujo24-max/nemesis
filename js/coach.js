@@ -10,6 +10,7 @@ import { ResumoCheckin } from './aluna.js';
 import { Relatorio } from './relatorio.js';
 import { Icone } from './icones.js';
 import { Ficha } from './ficha.js';
+import { Modelos } from './modelos.js';
 import { MUSCULOS, GRUPOS_MUSC, musculosDe } from './musculos.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Abas, Barras, toast, num, brl, dataBR, hoje, segundaDe, somaDias,
   somaMeses, diasEntre, lerNum, relativo, linkWhats, copiar, mesNome, idadeDe } from './util.js';
@@ -17,7 +18,7 @@ import { useCarregar, Estado, Vazio, Modal, Campo, Abas, Barras, toast, num, brl
 // menu lateral em grupos, como no painel: principal, ferramentas
 const NAV = [
   [['', 'Acrópole', 'inicio'], ['alunas', 'Alunas', 'alunas'], ['agenda', 'Agenda', 'agenda'], ['financeiro', 'Financeiro', 'financeiro']],
-  [['checkins', 'Oráculo', 'oraculo'], ['formularios', 'Formulários', 'formularios'], ['leads', 'Inscrições', 'inscricoes'], ['exercicios', 'Exercícios', 'exercicios']],
+  [['checkins', 'Oráculo', 'oraculo'], ['modelos', 'Modelos', 'forja'], ['exercicios', 'Exercícios', 'exercicios'], ['formularios', 'Formulários', 'formularios'], ['leads', 'Inscrições', 'inscricoes']],
 ];
 const NAV_BAIXO = ['', 'alunas', 'checkins', 'agenda', 'financeiro'];
 const CHAVE_MENU = 'nemesis-menu-recolhido';
@@ -31,6 +32,7 @@ export function AppCoach({ perfil, rota, ir }) {
   else if (base === 'leads') tela = html`<${Leads}/>`;
   else if (base === 'financeiro') tela = html`<${Financeiro} ir=${ir}/>`;
   else if (base === 'exercicios') tela = html`<${Exercicios}/>`;
+  else if (base === 'modelos') tela = html`<${Modelos} id=${id} ir=${ir}/>`;
   else if (base === 'agenda') tela = html`<${Agenda} ir=${ir}/>`;
   else if (base === 'formularios') tela = html`<${Formularios} id=${id} aba=${sub} ir=${ir}/>`;
   else if (base === 'painel') tela = html`<${Painel} perfil=${perfil} ir=${ir}/>`;
@@ -62,7 +64,7 @@ export function AppCoach({ perfil, rota, ir }) {
         <details class="usuario"><summary><span class="avatar mini">${nome.slice(0, 1)}</span><b>${nome.toUpperCase()}</b><${Icone} nome="abaixo" tam=${16}/></summary>
           <div><a href="#/alunas">Alunas</a><a href="#/financeiro">Financeiro</a><button onClick=${() => api.sair()}>Sair</button></div></details>
       </header>
-      <main class=${'conteudo largo' + (aba === '' || (base === 'aluna' && (sub || 'ficha') === 'ficha') ? ' acropole' : '')}>${tela}</main>
+      <main class=${'conteudo largo' + (aba === '' || aba === 'modelos' || (base === 'aluna' && (sub || 'ficha') === 'ficha') ? ' acropole' : '')}>${tela}</main>
     </div>
     <${Selo} alunaAtual=${alunaAtual}/>
     <nav class="nav-baixo">${NAV.flat().filter(([k]) => NAV_BAIXO.includes(k)).map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><${Icone} nome=${i} tam=${21}/>${r}</a>`)}</nav>

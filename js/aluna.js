@@ -3,7 +3,7 @@ import { html, useState, useEffect, useRef } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
 import { ResponderFormulario, pendenciasDaAluna } from './vivo.js';
-import { CardioAluna, TestesAluna, MetasAluna } from './extras.js';
+import { CardioAluna, TestesAluna, MetasAluna, semanaDoMeso } from './extras.js';
 import { Relatorio } from './relatorio.js';
 import { Icone } from './icones.js';
 import { nomeMetodo, textoDescanso, textoEsforco, TIPOS } from './musculos.js';
@@ -113,7 +113,13 @@ function Execucao({ perfil, treinoId, ir }) {
       api.q('series', { eq: { aluna_id: perfil.id }, order: 'created_at' }),
     ]);
     const aberta = sessoes.find((s) => s.data === hoje() && !s.concluida_em) || null;
-    return { treino, itens, exercicios, aberta, historico };
+    // semana do mesociclo: meta de RIR da semana e, no deload, metade das séries
+    const meso = (await api.q('mesociclos', { eq: { aluna_id: perfil.id, status: 'ativo' } }).catch(() => []))[0];
+    const semana = semanaDoMeso(meso);
+    const ajustados = !semana ? itens : itens.map((i) => (i.tipo && i.tipo !== 'musculacao' ? i
+      : semana.alvo.deload ? { ...i, series: Math.max(1, Math.ceil(i.series / 2)) }
+      : semana.alvo.rir != null ? { ...i, esforco_tipo: 'rir', esforco_alvo: semana.alvo.rir } : i));
+    return { treino, itens: ajustados, exercicios, aberta, historico, semana };
   }, [treinoId]);
   return html`<${Estado} e=${e}>${(d) => (d.treino ? html`<${ExecucaoCorpo} d=${d} perfil=${perfil} ir=${ir}/>` : html`<${Vazio} titulo="Treino não encontrado"/>`)}<//>`;
 }
@@ -186,6 +192,9 @@ function ExecucaoCorpo({ d, perfil, ir }) {
       <div class="progresso"><div style=${`width:${(feitas / Math.max(1, total)) * 100}%`}></div></div>
       <p class="suave">${feitas} de ${total} séries${treino.observacoes ? ' · ' + treino.observacoes : ''}</p>
     </div>
+    ${d.semana && html`<p class=${'semana-banner' + (d.semana.alvo.deload ? ' deload' : '')}><b>Semana ${d.semana.n} de ${d.semana.total}.</b> ${d.semana.alvo.deload
+      ? 'Semana de deload: metade das séries e carga uns 10% menor. É a semana que o corpo usa para crescer.'
+      : `Meta da semana: RIR ${d.semana.alvo.rir}, ou seja, terminar cada série sentindo que ainda sairiam ${d.semana.alvo.rir} repetição(ões).`}</p>`}
     ${itens.map((item, n) => {
       const ult = ultimaVez(historico, item.exercicio_id, sessao);
       return html`<section class="card exercicio">
