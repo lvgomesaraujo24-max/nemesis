@@ -7,11 +7,19 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 ## O que tem
 
 **Treinador**
+- Radar da Guerreira: quem está sem check-in, sem treinar, com ficha velha ou plano vencendo, com WhatsApp pronto. Alunas ordenadas por engajamento, progressão ou risco de evasão, e score no perfil
+- Modelos (Forja): fichas prontas com nível, aplicadas em qualquer aluna; salvar a ficha de uma aluna como modelo
+- Mesociclo com progressão semanal (ex.: RIR 3 → 2 → 1 → deload) que a aluna vê na execução
+- Tesouro: MRR, alunas ativas, renovações em 15 dias, taxa de renovação, LTV, inadimplência, máscara de moeda, estimativa com taxas e parcelas. Cada plano é um pacote de entregas que monta a agenda do ciclo
+- Chronos: agenda em semana, mês e fila de trabalho, com camadas automáticas (check-in, avaliação a cada X semanas, fim de ficha, vencimento de plano, aniversário, metas), compromissos recorrentes e rituais num clique
+- Biblioteca: mapa do corpo clicável, livre/máquina, mono/multiarticular, perfil de resistência explicado para a aluna e grupo de substituição (a aluna troca se o aparelho estiver ocupado e você recebe o aviso)
 - Painel com o que precisa de atenção: check-ins sem resposta, planos vencendo, parcelas em atraso, alunas sem treinar há 7 dias, inscrições novas
-- Alunas: ficha de treino (treinos A, B, C..., séries de aquecimento, reps, descanso, técnica, observação, treino opcional), copiar ficha de outra aluna, evolução, check-ins, avaliações, anamnese, financeiro e dados
+- Alunas: ficha de treino, copiar ficha de outra aluna, evolução, check-ins, avaliações, anamnese, financeiro e dados
+- Ficha: treinos em abas, exercício por tipo (aquecimento, aeróbico, musculação, crossfit), séries, séries de aquecimento, faixa de repetições, cadência, descanso exato/em faixa/livre, método (drop-set, rest-pause, bi-set...), RIR/RPE, tempo estimado do treino, "replicar valores" do 1º exercício e volume semanal por músculo com mapa do corpo (frente e costas)
 - Avaliação física com 7 dobras (Jackson & Pollock + Siri), circunferências e comparação com a anterior
 - Check-ins: responder pelo app ou mandar no WhatsApp, lembrete para quem não enviou
 - Inscrições do formulário da bio, com status (novo, contatado, fechado, perdido) e botão de WhatsApp
+- Relatório de evolução (mês, ficha ou período livre): resumo, carga e força estimada, recordes, volume por grupamento, frequência, corpo e bem-estar. Baixa em PDF e manda no WhatsApp
 - Financeiro: planos (Ágora, Delfos, Ítaca, Olimpo), parcelas geradas mês a mês, despesas, saldo do mês, atrasos e renovações
 - Biblioteca de exercícios com link de vídeo e instruções
 
@@ -19,6 +27,7 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 - Treinos da semana, com o próximo treino destacado
 - Execução: carga e reps por série, "última vez" de cada exercício, cronômetro de descanso, aviso de recorde
 - Evolução: gráfico de carga por exercício, recordes, peso, % de gordura, tonelagem acumulada
+- Relatório de evolução do mês, o mesmo que o treinador manda
 - Check-in semanal (peso, sono, energia, estresse, fome, dor, alimentação) e a sua resposta
 - Anamnese com PAR-Q no primeiro acesso
 
@@ -59,6 +68,9 @@ A chave do `config.js` é pública por natureza. Quem protege os dados são as r
 ## Publicar uma versão nova
 Troque os arquivos no GitHub e mude o número em `sw.js` (`nemesis-v1` para `nemesis-v2`), para os celulares buscarem a versão nova.
 
+## Atualizações do banco
+Quando vier um arquivo `supabase/atualizacao-N.sql` novo, rode ele no Supabase (**SQL Editor > New query**, cole tudo, **Run**). Pode rodar mais de uma vez sem problema. A `atualizacao-5.sql` liga a ficha completa (tipo de exercício, cadência, formato do descanso, método, RIR/RPE, aeróbico e músculos da biblioteca). A `atualizacao-6.sql` liga modelos, presets, progressão do mesociclo, etiquetas e substituição de exercícios, pacote de entregas dos planos e os tipos novos da agenda.
+
 ## Estrutura
 ```
 index.html        app (treinador e aluna)
@@ -69,6 +81,15 @@ js/app.js         entrada, login e rotas
 js/coach.js       telas do treinador
 js/aluna.js       telas da aluna
 js/comum.js       evolução, anamnese e avaliação (usadas pelos dois lados)
+js/relatorio.js   relatório de evolução (métricas do período e PDF)
+js/ficha.js       editor da ficha (treinador)
+js/musculos.js    músculos, volume, tempo estimado e métodos
+js/corpo.js       mapa do corpo em SVG
+js/modelos.js     modelos de ficha
+js/biblioteca.js  biblioteca de exercícios
+js/tesouro.js     financeiro (Tesouro)
+js/chronos.js     agenda (Chronos)
+js/radar.js       Radar da Guerreira e score das alunas
 js/api.js         conexão com o Supabase
 js/demo.js        modo demonstração
 js/util.js        datas, números, gráficos, componentes

@@ -5,6 +5,18 @@ import { useCarregar, Estado, Vazio, Linha, Modal, Campo, toast, num, dataBR, da
   recordes, sequenciaSemanas, equivalencia, DOBRAS, MEDIDAS, percentualJP7, idadeDe, relativo } from './util.js';
 
 // ============================================================
+// ESTADO VAZIO QUE ENSINA ("Como funciona" em passos)
+// ============================================================
+export function ComoFunciona({ titulo, texto, passos, children }) {
+  return html`<section class="card como-funciona">
+    <div><h3>${titulo}</h3>${texto && html`<p class="suave">${texto}</p>`}</div>
+    <p class="cf-sobre">Como funciona</p>
+    <ol class="cf-passos">${passos.map(([t, d], i) => html`<li><span class="cf-n">${i + 1}</span><div><b>${t}</b><small>${d}</small></div></li>`)}</ol>
+    ${children && html`<div class="acoes">${children}</div>`}
+  </section>`;
+}
+
+// ============================================================
 // EVOLUÇÃO E RECORDES
 // ============================================================
 export function Evolucao({ alunaId }) {

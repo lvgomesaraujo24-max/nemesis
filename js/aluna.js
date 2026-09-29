@@ -3,7 +3,10 @@ import { html, useState, useEffect, useRef } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
 import { ResponderFormulario, pendenciasDaAluna } from './vivo.js';
-import { CardioAluna, TestesAluna, MetasAluna } from './extras.js';
+import { CardioAluna, TestesAluna, MetasAluna, semanaDoMeso } from './extras.js';
+import { Relatorio } from './relatorio.js';
+import { Icone } from './icones.js';
+import { nomeMetodo, textoDescanso, textoEsforco, TIPOS, PERFIS } from './musculos.js';
 import { DEMO } from './api.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Escala, toast, num, dataBR, hoje, segundaDe, lerNum, relativo, diasEntre } from './util.js';
 
@@ -33,16 +36,19 @@ export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
     <h1 class="titulo">${((pend.dados || []).find((p) => p.formulario.id === id) || { formulario: { titulo: 'Formulário' } }).formulario.titulo}</h1>
     <${ResponderFormulario} formularioId=${id} atribuicaoId=${sub || null} onEnviado=${() => { pend.recarregar(); ir(''); }}/></div>`;
   else if (base === 'cardio') tela = html`<h1 class="titulo">Cardio</h1><${CardioAluna} aluna=${perfil} podeEditar=${false}/>`;
-  else if (base === 'evolucao') tela = html`<h1 class="titulo">Evolução</h1><${Evolucao} alunaId=${perfil.id}/>`;
+  else if (base === 'evolucao') tela = html`<div class="pilha"><h1 class="titulo">Evolução</h1>
+    <a class="card pendencia" href="#/relatorio"><b>Relatório de evolução</b><span>Seu resumo do mês: treinos, força, recordes e frequência</span></a>
+    <${Evolucao} alunaId=${perfil.id}/></div>`;
+  else if (base === 'relatorio') tela = html`<div class="pilha"><button class="btn-texto" onClick=${() => ir('evolucao')}>‹ Evolução</button><h1 class="titulo">Relatório</h1><${Relatorio} aluna=${perfil}/></div>`;
   else if (base === 'checkin') tela = html`<${CheckinAluna} perfil=${perfil}/>`;
   else if (base === 'perfil') tela = html`<${PerfilAluna} perfil=${perfil} recarregarPerfil=${recarregarPerfil}/>`;
   else tela = html`<${InicioAluna} perfil=${perfil} ir=${ir} pendentes=${(pend.dados || []).filter((p) => p.formulario.tipo !== 'oraculo')}/>`;
-  const aba = base === 'treino' ? '' : base || '';
+  const aba = base === 'treino' ? '' : base === 'relatorio' ? 'evolucao' : base || '';
   return html`<div class="tela com-nav">
     <header class="topo"><span class="marca">NEMESIS</span></header>
     <main class="conteudo">${tela}</main>
     ${base !== 'treino' && html`<nav class="nav-baixo">
-      ${[['', 'Treinos', '◆'], ['evolucao', 'Evolução', '↗'], ['checkin', 'Oráculo', '✓'], ['perfil', 'Perfil', '●']].map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><span class="nav-i">${i}</span>${r}</a>`)}
+      ${[['', 'Treinos', 'exercicios'], ['evolucao', 'Evolução', 'relatorio'], ['checkin', 'Oráculo', 'oraculo'], ['perfil', 'Perfil', 'alunas']].map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><${Icone} nome=${i} tam=${21}/>${r}</a>`)}
     </nav>`}
   </div>`;
 }
@@ -107,9 +113,24 @@ function Execucao({ perfil, treinoId, ir }) {
       api.q('series', { eq: { aluna_id: perfil.id }, order: 'created_at' }),
     ]);
     const aberta = sessoes.find((s) => s.data === hoje() && !s.concluida_em) || null;
-    return { treino, itens, exercicios, aberta, historico };
+    // semana do mesociclo: meta de RIR da semana e, no deload, metade das séries
+    const meso = (await api.q('mesociclos', { eq: { aluna_id: perfil.id, status: 'ativo' } }).catch(() => []))[0];
+    const semana = semanaDoMeso(meso);
+    const ajustados = !semana ? itens : itens.map((i) => (i.tipo && i.tipo !== 'musculacao' ? i
+      : semana.alvo.deload ? { ...i, series: Math.max(1, Math.ceil(i.series / 2)) }
+      : semana.alvo.rir != null ? { ...i, esforco_tipo: 'rir', esforco_alvo: semana.alvo.rir } : i));
+    return { treino, itens: ajustados, exercicios, aberta, historico, semana };
   }, [treinoId]);
   return html`<${Estado} e=${e}>${(d) => (d.treino ? html`<${ExecucaoCorpo} d=${d} perfil=${perfil} ir=${ir}/>` : html`<${Vazio} titulo="Treino não encontrado"/>`)}<//>`;
+}
+
+// linha de prescrição: "3 × 8-12 · descanso 90s · Drop-set · cadência 3-1s · RIR 2"
+function resumoItem(it) {
+  if (it.tipo === 'aerobico') return [TIPOS.aerobico.nome, it.duracao ? `${it.duracao} min` : null, it.intensidade, nomeMetodo(it.metodo || 'continuo')].filter(Boolean).join(' · ');
+  return [`${it.aquecimento ? it.aquecimento + ' aquec. + ' : ''}${it.series} × ${it.reps || '·'}`, textoDescanso(it),
+    it.metodo && it.metodo !== 'padrao' ? nomeMetodo(it.metodo) : null, it.tecnica,
+    it.cadencia_exc != null || it.cadencia_con != null ? `cadência ${it.cadencia_exc ?? 2}s descida / ${it.cadencia_con ?? 0}s subida` : null,
+    textoEsforco(it), it.tipo && it.tipo !== 'musculacao' ? TIPOS[it.tipo].nome : null].filter(Boolean).join(' · ');
 }
 
 function ExecucaoCorpo({ d, perfil, ir }) {
@@ -122,6 +143,19 @@ function ExecucaoCorpo({ d, perfil, ir }) {
   const exNome = (id) => (exercicios.find((x) => x.id === id) || {}).nome || 'Exercício';
   const exVideo = (id) => (exercicios.find((x) => x.id === id) || {}).video_url;
   const exInstr = (id) => (exercicios.find((x) => x.id === id) || {}).instrucoes;
+  const exDe = (id) => exercicios.find((x) => x.id === id) || {};
+  // troca de exercício (aparelho ocupado): vale só para esta sessão e avisa o treinador
+  const [trocas, setTrocas] = useState({});
+  const [trocando, setTrocando] = useState(null);
+  const exAtual = (item) => trocas[item.id] || item.exercicio_id;
+  const trocar = async (item, novoId) => {
+    setTrocas((t) => ({ ...t, [item.id]: novoId === item.exercicio_id ? undefined : novoId })); setTrocando(null);
+    // a carga sugerida era do exercício original: limpa o que ainda não foi feito
+    setLinhas((ls) => ({ ...ls, [item.id]: ls[item.id].map((x) => (x.id ? x : { ...x, carga: '' })) }));
+    if (novoId === item.exercicio_id) return;
+    try { await api.ins('alertas_coach', { aluna_id: perfil.id, titulo: 'Troca de exercício', texto: `Trocou ${exNome(item.exercicio_id)} por ${exNome(novoId)} no ${treino.nome}.`, severidade: 'info' }); }
+    catch (e) { /* aviso é opcional */ }
+  };
 
   const feitas = Object.values(linhas).flat().filter((l) => l.id && !l.aquecimento).length;
   const total = itens.reduce((t, i) => t + i.series, 0);
@@ -144,13 +178,13 @@ function ExecucaoCorpo({ d, perfil, ir }) {
     const carga = lerNum(l.carga); const reps = lerNum(l.reps);
     try {
       const s = await garantirSessao();
-      const [salva] = await api.ins('series', { sessao_id: s.id, aluna_id: perfil.id, treino_item_id: item.id, exercicio_id: item.exercicio_id, numero: l.numero, carga, reps: reps == null ? null : Math.round(reps), aquecimento: l.aquecimento });
-      const antes = historico.filter((h) => h.exercicio_id === item.exercicio_id && !h.aquecimento && h.carga != null);
+      const [salva] = await api.ins('series', { sessao_id: s.id, aluna_id: perfil.id, treino_item_id: item.id, exercicio_id: exAtual(item), numero: l.numero, carga, reps: reps == null ? null : Math.round(reps), aquecimento: l.aquecimento });
+      const antes = historico.filter((h) => h.exercicio_id === exAtual(item) && !h.aquecimento && h.carga != null);
       const maxAntes = antes.length ? Math.max(...antes.map((h) => h.carga)) : null;
       setHistorico([...historico, salva]);
       setLinhas((ls) => ({ ...ls, [item.id]: ls[item.id].map((x, i) => (i === idx ? { ...x, id: salva.id } : x)) }));
-      if (!l.aquecimento && carga != null && maxAntes != null && carga > maxAntes) toast(`Novo recorde em ${exNome(item.exercicio_id)}: ${num(carga, 1)} kg`, 'recorde');
-      const seg = l.aquecimento ? Math.min(60, item.descanso) : item.descanso;
+      if (!l.aquecimento && carga != null && maxAntes != null && carga > maxAntes) toast(`Novo recorde em ${exNome(exAtual(item))}: ${num(carga, 1)} kg`, 'recorde');
+      const seg = item.descanso_tipo === 'livre' ? 0 : l.aquecimento ? Math.min(60, item.descanso) : item.descanso;
       if (seg > 0) setDescanso({ fim: Date.now() + seg * 1000, total: seg });
     } catch (err) { toast(err.message, 'erro'); }
   };
@@ -171,21 +205,29 @@ function ExecucaoCorpo({ d, perfil, ir }) {
       <div class="progresso"><div style=${`width:${(feitas / Math.max(1, total)) * 100}%`}></div></div>
       <p class="suave">${feitas} de ${total} séries${treino.observacoes ? ' · ' + treino.observacoes : ''}</p>
     </div>
+    ${d.semana && html`<p class=${'semana-banner' + (d.semana.alvo.deload ? ' deload' : '')}><b>Semana ${d.semana.n} de ${d.semana.total}.</b> ${d.semana.alvo.deload
+      ? 'Semana de deload: metade das séries e carga uns 10% menor. É a semana que o corpo usa para crescer.'
+      : `Meta da semana: RIR ${d.semana.alvo.rir}, ou seja, terminar cada série sentindo que ainda sairiam ${d.semana.alvo.rir} repetição(ões).`}</p>`}
     ${itens.map((item, n) => {
-      const ult = ultimaVez(historico, item.exercicio_id, sessao);
+      const exId = exAtual(item); const subs = (exDe(item.exercicio_id).substitutos || []).filter((id) => exercicios.some((x) => x.id === id));
+      const perfilR = PERFIS.find(([k]) => k === exDe(exId).perfil_resistencia);
+      const ult = ultimaVez(historico, exId, sessao);
       return html`<section class="card exercicio">
-        <div class="ex-cab"><span class="ex-n">${n + 1}</span><div><h3>${exNome(item.exercicio_id)}</h3>
-          <small>${item.series} × ${item.reps} · descanso ${fmtSeg(item.descanso)}${item.tecnica ? ' · ' + item.tecnica : ''}</small></div></div>
+        <div class="ex-cab"><span class="ex-n">${n + 1}</span><div><h3>${exNome(exId)}</h3>${exId !== item.exercicio_id && html`<small class="trocado">no lugar de ${exNome(item.exercicio_id)}</small>`}
+          <small>${resumoItem(item)}</small></div></div>
         ${item.obs && html`<p class="nota">${item.obs}</p>`}
-        ${exInstr(item.exercicio_id) && html`<details class="instr"><summary>Como executar</summary><p>${exInstr(item.exercicio_id)}</p></details>`}
-        ${exVideo(item.exercicio_id) && html`<a class="btn-texto" href=${exVideo(item.exercicio_id)} target="_blank" rel="noopener">▶ Ver vídeo</a>`}
+        ${(exInstr(exId) || perfilR) && html`<details class="instr"><summary>Como executar</summary>${exInstr(exId) && html`<p>${exInstr(exId)}</p>`}${perfilR && html`<p><b>${perfilR[1]}:</b> ${perfilR[2].toLowerCase()}</p>`}</details>`}
+        <div class="acoes">${exVideo(exId) && html`<a class="btn-texto" href=${exVideo(exId)} target="_blank" rel="noopener">▶ Ver vídeo</a>`}
+          ${subs.length > 0 && html`<button class="btn-texto" onClick=${() => setTrocando(trocando === item.id ? null : item.id)}>⇄ Aparelho ocupado? Trocar</button>`}</div>
+        ${trocando === item.id && html`<div class="troca-lista"><small>Escolha um equivalente. Seu treinador fica sabendo.</small>
+          ${[item.exercicio_id, ...subs].map((id) => html`<button class=${'chip' + (exId === id ? ' on' : '')} onClick=${() => trocar(item, id)}>${exNome(id)}${id === item.exercicio_id ? ' (original)' : ''}</button>`)}</div>`}
         ${ult && html`<p class="ultima">Última vez: ${ult}</p>`}
         <div class="series">
           <div class="serie cab"><span>Série</span><span>kg</span><span>reps</span><span></span></div>
           ${linhas[item.id].map((l, idx) => html`<div class=${'serie' + (l.id ? ' feita' : '') + (l.aquecimento ? ' aquec' : '')}>
             <span class="s-n">${l.aquecimento ? 'Aquec.' : l.numero}</span>
-            <input class="input" inputmode="decimal" placeholder="sem peso" value=${l.carga} disabled=${!!l.id} onInput=${(ev) => muda(item, idx, 'carga', ev.target.value)} aria-label="Carga em kg"/>
-            <input class="input" inputmode="numeric" placeholder=${item.reps} value=${l.reps} disabled=${!!l.id} onInput=${(ev) => muda(item, idx, 'reps', ev.target.value)} aria-label="Repetições"/>
+            <input class="input" inputmode="decimal" placeholder=${item.tipo === 'aerobico' ? '—' : 'sem peso'} value=${l.carga} disabled=${!!l.id || item.tipo === 'aerobico'} onInput=${(ev) => muda(item, idx, 'carga', ev.target.value)} aria-label="Carga em kg"/>
+            <input class="input" inputmode="numeric" placeholder=${item.tipo === 'aerobico' ? 'min' : item.reps} value=${l.reps} disabled=${!!l.id} onInput=${(ev) => muda(item, idx, 'reps', ev.target.value)} aria-label="Repetições"/>
             ${l.id ? html`<button class="check on" aria-label="Desfazer série" onClick=${() => desfazer(item, idx)}>✓</button>`
               : html`<button class="check" aria-label="Concluir série" onClick=${() => concluir(item, idx)}>✓</button>`}
           </div>`)}
@@ -199,7 +241,6 @@ function ExecucaoCorpo({ d, perfil, ir }) {
   </div>`;
 }
 const l0 = (ls) => ls.some((l) => l.aquecimento);
-const fmtSeg = (s) => (s >= 60 ? `${Math.floor(s / 60)}min${s % 60 ? ' ' + (s % 60) + 's' : ''}` : `${s}s`);
 
 function montarLinhas(itens, historico, aberta) {
   const out = {};

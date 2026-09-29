@@ -1,6 +1,6 @@
 // MODO DEMONSTRAÇÃO: imita o Supabase com dados de exemplo guardados no navegador.
 // Serve para ver e testar o app antes de ligar o banco de verdade.
-const CHAVE = 'nemesis-demo-v1';
+const CHAVE = 'nemesis-demo-v2';
 let memoria = null;
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
@@ -103,6 +103,19 @@ function semear() {
   db.leads.push(
     { id: uid(), nome: 'Juliana Rocha', whatsapp: '11988887777', instagram: '@ju.rocha', idade: 29, objetivo: 'Glúteo e perna', experiencia: 'Menos de 6 meses', dias_semana: '3', local_treino: 'Academia completa', plano_interesse: 'Delfos', mensagem: 'Nunca sei se estou fazendo certo.', status: 'novo', created_at: diasAtras(1).toISOString() },
     { id: uid(), nome: 'Marina Alves', whatsapp: '11977776666', instagram: '@mari.alves', idade: 34, objetivo: 'Emagrecer', experiencia: 'Voltando depois de uma pausa', dias_semana: '4', local_treino: 'Academia de condomínio', plano_interesse: 'Ainda não sei', mensagem: '', status: 'contatado', created_at: diasAtras(5).toISOString() });
+  // presets de linha e um modelo pronto (cópia dos treinos da Ana)
+  db.presets_linha = [
+    { id: uid(), nome: 'Glúteo força', dados: { series: 4, reps: '6-8', reps_tipo: 'faixa', esforco_tipo: 'rir', esforco_alvo: 2, cadencia_exc: 2, cadencia_con: 0, descanso: 120, descanso_tipo: 'exato', metodo: 'padrao', aquecimento: 1 } },
+    { id: uid(), nome: 'Hipertrofia padrão', dados: { series: 3, reps: '8-12', reps_tipo: 'faixa', esforco_tipo: 'rir', esforco_alvo: 2, cadencia_exc: 2, cadencia_con: 0, descanso: 90, descanso_tipo: 'exato', metodo: 'padrao', aquecimento: 0 } },
+    { id: uid(), nome: 'Metabólico', dados: { series: 3, reps: '15-20', reps_tipo: 'faixa', esforco_tipo: 'rir', esforco_alvo: 1, cadencia_exc: 1, cadencia_con: 0, descanso: 45, descanso_tipo: 'exato', metodo: 'padrao', aquecimento: 0 } },
+  ];
+  const modelo = { id: uid(), nome: 'Glúteo 3x · intermediária', nivel: 'intermediaria', descricao: 'Inferior posterior, superior e inferior anterior.', created_at: new Date().toISOString() };
+  db.modelos = [modelo];
+  db.treinos.filter((t) => t.aluna_id === 'aluna-ana').forEach((t) => {
+    const nt = { ...t, id: uid(), aluna_id: null, modelo_id: modelo.id };
+    db.treinos.push(nt);
+    db.treino_itens.filter((i) => i.treino_id === t.id).forEach((i) => db.treino_itens.push({ ...i, id: uid(), treino_id: nt.id, aluna_id: null, modelo_id: modelo.id }));
+  });
   return db;
 }
 
@@ -164,6 +177,7 @@ export function criarDemo() {
       if (tabela === 'treinos') m.db.treino_itens = m.db.treino_itens.filter((r) => r.treino_id !== id);
       if (tabela === 'sessoes') m.db.series = m.db.series.filter((r) => r.sessao_id !== id);
       if (tabela === 'assinaturas') m.db.lancamentos = m.db.lancamentos.filter((r) => r.assinatura_id !== id);
+      if (tabela === 'modelos') { m.db.treinos = m.db.treinos.filter((r) => r.modelo_id !== id); m.db.treino_itens = m.db.treino_itens.filter((r) => r.modelo_id !== id); }
       salvar();
     },
     async rpc() { throw new Error('Esta parte (Acrópole, formulários vivos) só funciona com o banco ligado.'); },

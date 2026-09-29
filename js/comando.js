@@ -1,17 +1,18 @@
 // ACRÓPOLE · Centro de Comando do treinador
 // Uma chamada ao banco (rpc centro_de_comando) e o resto é apresentação:
 // moldes de frase, prioridade e ordem do feed.
-import { html, useState, useEffect, useRef } from '../lib/preact-htm.js';
+import { html, useState, useEffect } from '../lib/preact-htm.js';
 import { api, DEMO } from './api.js';
 import { textoCiclo } from './motor.js';
 import { abrirSelo } from './dossie.js';
-import { Modal, Campo, Vazio, toast, num, brl, dataBR, hoje, somaDias, diasEntre, linkWhats } from './util.js';
+import { Modal, Campo, toast, num, brl, dataBR, hoje, somaDias, diasEntre, linkWhats } from './util.js';
+import { Icone } from './icones.js';
+import { ModalCompromisso, dataLocal } from './chronos.js';
 
 const CACHE = 'nemesis-acropole';
 const PESO = { critica: 100, atencao: 60, tarefa: 40, gloria: 20 };
 const SINAL = { critica: '▲', atencao: '●', tarefa: '◆', gloria: '★' };
 const FILTROS = [['todas', 'Todas'], ['critica', 'Críticas'], ['atencao', 'Atenção'], ['tarefa', 'Tarefas'], ['gloria', 'Façanhas']];
-const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 const pn = (n) => (n || '').split(' ')[0];
 const dia10 = (s) => String(s || '').slice(0, 10);
 
@@ -158,34 +159,36 @@ function msgParabens(m) {
 }
 
 // ---------- tela ----------
-export function Acropole({ perfil, ir }) {
-  const { d, erro, carregando, recarregar } = useComando();
-  const [filtro, setFiltro] = useState('todas');
-  const [novoComp, setNovoComp] = useState(false);
-  const refVisoes = useRef();
+const FERRAMENTAS = [['exercicios', 'exercicios', 'Exercícios', 'Biblioteca de exercícios e vídeos'], ['formularios', 'formularios', 'Formulários', 'Criar e vincular formulários'],
+  ['checkins', 'oraculo', 'Oráculo', 'Check-ins da semana'], ['leads', 'inscricoes', 'Inscrições', 'Formulário da bio'], ['financeiro', 'financeiro', 'Financeiro', 'Planos, parcelas e despesas']];
+const CHAVE_OCULTO = 'nemesis-valor-oculto';
 
-  if (DEMO) return html`<div class="pilha"><h1 class="titulo">Acrópole</h1><${Vazio} titulo="Disponível com o banco ligado" texto="O Centro de Comando lê os dados direto do Supabase."/></div>`;
-  if (!d && erro) return html`<div class="pilha"><h1 class="titulo">Acrópole</h1><div class="card vazio"><p>Não consegui carregar: ${erro}</p><p class="suave">Confira se a atualizacao-3.sql foi rodada no Supabase.</p><button class="btn" onClick=${recarregar}>Tentar de novo</button></div></div>`;
+export function Acropole({ perfil, ir }) {
+  const { d: dRpc, erro, carregando, recarregar } = useComando();
+  const [filtro, setFiltro] = useState('todas');
+  const [verFiltros, setVerFiltros] = useState(false);
+  const [novoComp, setNovoComp] = useState(false);
+  const [oculto, setOculto] = useState(() => { try { return localStorage.getItem(CHAVE_OCULTO) === '1'; } catch (e) { return false; } });
+  const [extra, setExtra] = useState(null);
+  useEffect(() => {
+    const desde = somaDias(hoje(), -30);
+    Promise.all([api.q('profiles', { eq: { role: 'student', ativo: true } }), api.q('lancamentos', { eq: { tipo: 'receita' }, gte: { pago_em: desde } }),
+      api.q('checkins', { eq: { resposta: null } })])
+      .then(([alunas, receitas, checkins]) => setExtra({ alunas: alunas.length, receita: receitas.reduce((t, l) => t + Number(l.valor), 0), checkins: checkins.length }))
+      .catch(() => setExtra({ alunas: null, receita: null, checkins: 0 }));
+  }, []);
+
+  // sem banco (demonstração) a Acrópole abre com os blocos vazios
+  const d = dRpc || (DEMO || erro ? {} : null);
   if (!d) return html`<div class="carregando"><span class="spin"></span></div>`;
 
   const visoes = montarVisoes(d);
   const criticas = visoes.filter((v) => v.nivel === 'critica' && v.aluna_id);
   const nomesCrit = [...new Set(criticas.map((v) => pn(v.nome)))];
-  const alunasCrit = new Set(criticas.map((v) => v.aluna_id)).size;
   document.title = nomesCrit.length ? `(${nomesCrit.length}) Nemesis` : 'Nemesis';
-
-  const oraculos = d.oraculos || [];
-  const maisAntigo = oraculos.length ? oraculos.reduce((a, b) => (a.desde < b.desde ? a : b)) : null;
-  const fichas = d.fichas || [];
-  const vencidas = fichas.filter((f) => f.dias < 0).length;
-  const glorias = visoes.filter((v) => v.nivel === 'gloria').length;
-  const dt = new Date();
-  const resumo = [DIAS_SEMANA[dt.getDay()] + ', ' + dataBR(hoje()).slice(0, 5),
-    nomesCrit.length ? `${nomesCrit.length} chamado(s) de Asclépio` : null, oraculos.length ? `${oraculos.length} Oráculo(s) a ler` : null,
-    glorias ? `${glorias} façanha(s) para celebrar` : null].filter(Boolean).join(' · ');
-
+  const oraculos = dRpc ? (d.oraculos || []).length : extra ? extra.checkins : 0;
   const lista = filtro === 'todas' ? visoes : visoes.filter((v) => v.nivel === filtro);
-  const irFiltro = (f) => { setFiltro(f); setTimeout(() => refVisoes.current && refVisoes.current.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30); };
+  const alternarOculto = (ev) => { ev.stopPropagation(); const v = !oculto; setOculto(v); try { localStorage.setItem(CHAVE_OCULTO, v ? '1' : '0'); } catch (e) { /* */ } };
 
   const executar = async (acao, v) => {
     try {
@@ -206,37 +209,43 @@ export function Acropole({ perfil, ir }) {
   };
 
   return html`<div class="comando">
-    <div class="ola"><p class="sobre">Acrópole</p><h1>Olá, ${pn(perfil.nome) || 'treinador'}</h1><p class="suave">${resumo}${carregando ? ' · atualizando…' : d._em ? '' : ''}</p></div>
-
-    ${nomesCrit.length > 0 && html`<button class="lacre" onClick=${() => irFiltro('critica')}>
+    ${nomesCrit.length > 0 && html`<button class="lacre" onClick=${() => { setFiltro('critica'); setVerFiltros(true); }}>
       <span class="lacre-ponto" aria-hidden="true"></span>
       <span><b>Chamado de Asclépio</b> · ${criticas.length} caso(s) crítico(s): ${nomesCrit.join(', ')}</span><span class="lacre-ver">Ver</span></button>`}
+    ${erro && !DEMO && html`<p class="suave">Não consegui atualizar as notificações: ${erro}</p>`}
 
-    <section class="barra-acao">
-      <${Metrica} rotulo="Oráculos a ler" n=${oraculos.length} tom="ouro" sub=${maisAntigo ? `o mais antigo há ${Math.max(0, diasEntre(dia10(maisAntigo.desde), hoje()))} dia(s)` : 'Oráculo em dia'} onClick=${() => ir('checkins')}/>
-      <${Metrica} rotulo="Fichas no limite" n=${fichas.length} tom="ouro" sub=${fichas.length ? `${vencidas} vencida(s) · ${fichas.length - vencidas} vencem em 7 dias` : d.sem_ficha ? `${d.sem_ficha} aluna(s) sem validade de ficha` : 'Nenhuma ficha vencendo'} onClick=${() => irFiltro('tarefa')}/>
-      <${Metrica} rotulo="Alertas clínicos" n=${alunasCrit} tom="vermelho" sub=${alunasCrit ? 'alunas com sinal crítico' : 'Em dia'} onClick=${() => irFiltro('critica')}/>
+    <section class="kpis">
+      <${Kpi} n=${extra && extra.alunas != null ? extra.alunas : '·'} rotulo="Alunas" icone="alunas" onClick=${() => ir('alunas')}/>
+      <${Kpi} n=${oraculos} rotulo="Oráculos a ler" icone="oraculo" onClick=${() => ir('checkins')}/>
+      <${Kpi} n=${extra && extra.receita != null ? (oculto ? 'R$ •••' : brl(extra.receita)) : '·'} icone="financeiro" onClick=${() => ir('financeiro')}
+        rotulo=${html`30 dias <span class="kpi-olho" role="button" tabindex="0" aria-label=${oculto ? 'Mostrar valor' : 'Esconder valor'} onClick=${alternarOculto}><${Icone} nome=${oculto ? 'olhoOff' : 'olho'} tam=${15}/></span>`}/>
     </section>
 
-    <div class="comando-grade">
-      <section class="card visoes" ref=${refVisoes}>
-        <div class="card-topo"><h2 class="bloco">Visões do Oráculo</h2></div>
-        <div class="chips">${FILTROS.map(([k, r]) => html`<button class=${filtro === k ? 'chip on' : 'chip'} onClick=${() => setFiltro(k)}>${r}${k !== 'todas' ? ` (${visoes.filter((v) => v.nivel === k).length})` : ''}</button>`)}</div>
-        ${lista.length ? lista.map((v) => html`<${Visao} key=${v.chave} v=${v} executar=${executar}/>`)
-          : html`<p class="suave vazio-texto">Nenhuma visão pendente. A pólis está em ordem.</p>`}
+    <div class="paineis">
+      <section class="painel">
+        <div class="painel-topo"><h2 class="bloco">Ferramentas de Consultoria</h2></div>
+        <div class="ferramentas">${FERRAMENTAS.map(([rota, ic, t, sub]) => html`<a class="ferramenta" href=${'#/' + rota}>
+          <span class="ferramenta-ico"><${Icone} nome=${ic} tam=${18}/></span><span class="ferramenta-txt"><b>${t}</b><small>${sub}</small></span><${Icone} nome="seta" tam=${16} class="suave-ico"/></a>`)}</div>
       </section>
-      <aside class="comando-lado">
-        <${AgendaDeChronos} d=${d} ir=${ir} onNovo=${() => setNovoComp(true)} executar=${executar} recarregar=${recarregar}/>
-        <${Termometro} d=${d}/>
-      </aside>
+
+      <section class="painel">
+        <div class="painel-topo"><div><h2 class="bloco">Notificações</h2><small>${visoes.length ? `${visoes.length} pendente(s)${carregando && dRpc ? ' · atualizando…' : ''}` : 'Tudo resolvido'}</small></div>
+          <button class=${'icone redondo' + (verFiltros ? ' on' : '')} aria-label="Filtrar" onClick=${() => { setVerFiltros(!verFiltros); if (verFiltros) setFiltro('todas'); }}><${Icone} nome="filtro" tam=${17}/></button></div>
+        ${verFiltros && html`<div class="chips">${FILTROS.map(([k, r]) => html`<button class=${filtro === k ? 'chip on' : 'chip'} onClick=${() => setFiltro(k)}>${r}${k !== 'todas' ? ` (${visoes.filter((v) => v.nivel === k).length})` : ''}</button>`)}</div>`}
+        ${lista.length ? html`<div class="notificacoes">${lista.map((v) => html`<${Visao} key=${v.chave} v=${v} executar=${executar}/>`)}</div>`
+          : html`<div class="painel-vazio"><${Icone} nome="sino" tam=${26}/><p>Sem notificações!</p></div>`}
+      </section>
+
+      <${AgendaHoje} d=${d} ir=${ir} onNovo=${() => setNovoComp(true)} executar=${executar} recarregar=${recarregar}/>
     </div>
     ${novoComp && html`<${ModalCompromisso} onFechar=${() => setNovoComp(false)} onFeito=${() => { setNovoComp(false); recarregar(); }}/>`}
   </div>`;
 }
 
-function Metrica({ rotulo, n, tom, sub, onClick }) {
-  const cls = 'metrica' + (n > 0 ? ' ' + tom : ' zero');
-  return html`<button class=${cls} onClick=${onClick}><b>${n > 0 ? n : '·'}</b><span class="metrica-rot">${rotulo}</span><small>${sub}</small></button>`;
+function Kpi({ n, rotulo, icone, onClick }) {
+  return html`<button class="kpi" onClick=${onClick}>
+    <span class="kpi-txt"><b>${n}</b><span class="kpi-rot">${rotulo}</span></span>
+    <${Icone} nome=${icone} tam=${34} class="kpi-ico"/><${Icone} nome="seta" tam=${18} class="suave-ico"/></button>`;
 }
 
 const ROTULO = { cronica: 'Abrir aluna', ficha: 'Ajustar ficha', selar: 'Selar no Dossiê', selar_rec: 'Registrar no Dossiê', whats: 'WhatsApp', whats_falta: 'WhatsApp',
@@ -261,103 +270,29 @@ function Visao({ v, executar }) {
   </article>`;
 }
 
-// ---------- agenda ----------
-function AgendaDeChronos({ d, ir, onNovo, executar, recarregar }) {
-  const hj = hoje(); const am = somaDias(hj, 1);
+// ---------- agenda de hoje ----------
+function AgendaHoje({ d, ir, onNovo, executar, recarregar }) {
+  const hj = hoje();
   const itens = [];
   for (const g of d.agenda || []) {
-    const dia = new Date(g.inicio); const k = dataLocal(dia);
-    itens.push({ tipo: 'comp', dia: k, hora: dia.toTimeString().slice(0, 5), g });
+    const dia = new Date(g.inicio);
+    if (dataLocal(dia) === hj) itens.push({ tipo: 'comp', hora: dia.toTimeString().slice(0, 5), g });
   }
   for (const m of d.marcos || []) {
-    if (m.tipo === 'plano_vence' || tratada(d.estados, m.chave)) continue;
-    itens.push({ tipo: 'marco', dia: m.dia < hj ? hj : m.dia, hora: '', m });
+    if (m.tipo === 'plano_vence' || tratada(d.estados, m.chave) || m.dia > hj) continue;
+    itens.push({ tipo: 'marco', hora: '', m });
   }
-  itens.sort((a, b) => (a.dia + a.hora < b.dia + b.hora ? -1 : 1));
+  itens.sort((a, b) => (a.hora < b.hora ? -1 : 1));
   const feito = async (g) => { try { await api.upd('agenda', g.id, { feito: !g.feito }); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
-  const bloco = (dia, titulo) => {
-    const l = itens.filter((i) => i.dia === dia);
-    return html`<div class="agenda-dia"><h4>${titulo}</h4>${l.length ? l.map((i) => (i.tipo === 'comp'
+  return html`<section class="painel">
+    <div class="painel-topo"><h2 class="bloco com-ico"><${Icone} nome="agenda" tam=${18}/>Agenda de Hoje</h2><button class="btn-texto" onClick=${() => ir('agenda')}>Ver calendário →</button></div>
+    ${itens.length ? html`<div class="agenda-dia">${itens.map((i) => (i.tipo === 'comp'
       ? html`<div class=${'agenda-item' + (i.g.feito ? ' feito' : '')}><span class="agenda-hora">${i.hora}</span><div><b>${i.g.titulo}</b>${i.g.nome ? html`<small>${i.g.nome}</small>` : null}</div>
           <div class="mini-acoes">${i.g.link && html`<a class="btn-texto" href=${i.g.link} target="_blank" rel="noopener">Link</a>`}<button class="check pequeno${i.g.feito ? ' on' : ''}" aria-label="Feito" onClick=${() => feito(i.g)}>✓</button></div></div>`
       : html`<div class="agenda-item marco"><span class="agenda-hora">★</span><div><b>${pn(i.m.nome)}</b><small>${textoMarco(i.m)}</small></div>
           <div class="mini-acoes">${i.m.telefone && html`<a class="btn-texto" target="_blank" rel="noopener" href=${linkWhats(i.m.telefone, msgParabens(i.m))}>WhatsApp</a>`}
-          <button class="check pequeno" aria-label="Marcar como feito" onClick=${() => executar('feito', { chave: i.m.chave })}>✓</button></div></div>`))
-      : html`<p class="suave">Nada marcado.</p>`}</div>`;
-  };
-  return html`<section class="card agenda">
-    <div class="card-topo"><h2 class="bloco">Agenda de Chronos</h2><button class="btn-texto" onClick=${onNovo}>+ Compromisso</button></div>
-    ${bloco(hj, 'Hoje')}${bloco(am, 'Amanhã')}
-    <button class="btn-texto" onClick=${() => ir('agenda')}>Ver calendário ›</button>
+          <button class="check pequeno" aria-label="Marcar como feito" onClick=${() => executar('feito', { chave: i.m.chave })}>✓</button></div></div>`))}
+        <button class="btn-texto" onClick=${onNovo}>+ Agendar novo</button></div>`
+      : html`<div class="painel-vazio"><${Icone} nome="agenda" tam=${28}/><p>Nenhum compromisso hoje</p><button class="btn-texto" onClick=${onNovo}>Agendar novo</button></div>`}
   </section>`;
-}
-export const dataLocal = (d) => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); };
-
-export function ModalCompromisso({ inicial, onFechar, onFeito }) {
-  const [alunas, setAlunas] = useState([]);
-  useEffect(() => { api.q('profiles', { eq: { role: 'student', ativo: true }, order: 'nome' }).then(setAlunas).catch(() => {}); }, []);
-  const g = inicial || {};
-  const ini = g.inicio ? new Date(g.inicio) : null;
-  const [f, setF] = useState({ titulo: g.titulo || '', tipo: g.tipo || 'video', aluna_id: g.aluna_id || '', dia: ini ? dataLocal(ini) : (g.dia || hoje()), hora: ini ? ini.toTimeString().slice(0, 5) : '18:00', link: g.link || '' });
-  const salvar = async (ev) => {
-    ev.preventDefault(); if (!f.titulo.trim()) { toast('Dê um título.', 'erro'); return; }
-    const linha = { titulo: f.titulo.trim(), tipo: f.tipo, aluna_id: f.aluna_id || null, inicio: new Date(`${f.dia}T${f.hora || '00:00'}:00`).toISOString(), link: f.link || null };
-    try { if (g.id) await api.upd('agenda', g.id, linha); else await api.ins('agenda', linha); onFeito(); } catch (e) { toast(e.message, 'erro'); }
-  };
-  const apagar = async () => { if (!confirm('Apagar este compromisso?')) return; try { await api.del('agenda', g.id); onFeito(); } catch (e) { toast(e.message, 'erro'); } };
-  return html`<${Modal} titulo=${g.id ? 'Editar compromisso' : 'Novo compromisso'} onFechar=${onFechar}><form class="pilha" onSubmit=${salvar}>
-    <div class="chips">${[['video', 'Vídeo'], ['avaliacao', 'Avaliação'], ['outro', 'Outro']].map(([k, r]) => html`<button type="button" class=${f.tipo === k ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, tipo: k })}>${r}</button>`)}</div>
-    <${Campo} rotulo="Título"><input class="input" value=${f.titulo} placeholder="Ex.: Chamada de ajuste de ficha" onInput=${(ev) => setF({ ...f, titulo: ev.target.value })}/><//>
-    <${Campo} rotulo="Aluna (opcional)"><select class="input" value=${f.aluna_id} onChange=${(ev) => setF({ ...f, aluna_id: ev.target.value })}><option value="">Compromisso meu</option>${alunas.map((a) => html`<option value=${a.id}>${a.nome}</option>`)}</select><//>
-    <div class="grade2">
-      <${Campo} rotulo="Dia"><input class="input" type="date" value=${f.dia} onInput=${(ev) => setF({ ...f, dia: ev.target.value })}/><//>
-      <${Campo} rotulo="Hora"><input class="input" type="time" value=${f.hora} onInput=${(ev) => setF({ ...f, hora: ev.target.value })}/><//>
-    </div>
-    <${Campo} rotulo="Link (Meet, Zoom, WhatsApp)"><input class="input" type="url" placeholder="https://" value=${f.link} onInput=${(ev) => setF({ ...f, link: ev.target.value })}/><//>
-    <button class="btn primario grande">Salvar</button>
-    ${g.id && html`<button type="button" class="btn-texto perigo" onClick=${apagar}>Apagar</button>`}
-  </form><//>`;
-}
-
-// ---------- termômetro ----------
-function Termometro({ d }) {
-  const semanas = d.adesao || [];
-  const atual = semanas[semanas.length - 1];
-  const fechadas = semanas.slice(0, -1).filter((x) => x.pct != null && x.alunas > 0);
-  const ult = fechadas[fechadas.length - 1];
-  const alunas = (d.adesao_alunas || []).filter((a) => a.media4 != null);
-  const coroa = [...alunas].filter((a) => a.media4 >= 70).sort((a, b) => b.media4 - a.media4 || b.sequencia - a.sequencia).slice(0, 3);
-  const precisam = [...alunas].sort((a, b) => a.media4 - b.media4).filter((a) => a.media4 < 85 && !coroa.includes(a)).slice(0, 3);
-  if (!ult) return html`<section class="card termometro"><h2 class="bloco">Termômetro da Pólis</h2><p class="suave">Ainda sem semana fechada para medir.</p></section>`;
-  const pct = Number(ult.pct);
-  const tom = pct >= 85 ? 'ouro' : pct >= 70 ? 'neutro' : 'ambar';
-  return html`<section class="card termometro">
-    <h2 class="bloco">Termômetro da Pólis</h2>
-    <div class="gauge-linha"><${Gauge} pct=${pct} tom=${tom}/>
-      <div><small>última semana fechada</small>${atual && atual.esperado_pct != null && html`<p class="ritmo">No ritmo desta semana: <b>${num(atual.esperado_pct, 0)}%</b></p>`}
-        <small>${ult.alunas} aluna(s) na conta</small></div></div>
-    <${Sparkline} valores=${fechadas.slice(-8).map((x) => Number(x.pct))}/>
-    ${pct < 70 && precisam.length > 0 && html`<p class="suave">Puxaram para baixo: ${precisam.map((a) => pn(a.nome)).join(', ')}</p>`}
-    ${coroa.length > 0 && html`<div class="coroa"><h4>Coroa de Louros</h4>${coroa.map((a) => html`<div class="coroa-linha"><span>${pn(a.nome)}</span><small>${num(a.media4, 0)}% · ${a.sequencia} sem. seguidas</small>
-      ${a.telefone && html`<a class="btn-texto" target="_blank" rel="noopener" href=${linkWhats(a.telefone, `${pn(a.nome)}, olhei a sua constância nas últimas semanas e preciso dizer: você está entre as mais firmes do time. Orgulho!`)}>Parabenizar</a>`}</div>`)}</div>`}
-    ${precisam.length > 0 && html`<div class="coroa"><h4>Precisam de você</h4>${precisam.map((a) => html`<div class="coroa-linha"><span>${pn(a.nome)}</span><small>${num(a.media4, 0)}% nas 4 últimas semanas</small></div>`)}</div>`}
-  </section>`;
-}
-
-function Gauge({ pct, tom }) {
-  const r = 34, c = Math.PI * r; const p = Math.max(0, Math.min(100, pct)) / 100;
-  return html`<svg class=${'gauge ' + tom} width="96" height="60" viewBox="0 0 96 60" role="img" aria-label=${`Adesão ${num(pct, 0)}%`}>
-    <path d="M14 52 A34 34 0 0 1 82 52" class="gauge-fundo"/>
-    <path d="M14 52 A34 34 0 0 1 82 52" class="gauge-valor" stroke-dasharray=${`${c * p} ${c}`}/>
-    <text x="48" y="50" text-anchor="middle">${num(pct, 0)}%</text></svg>`;
-}
-
-export function Sparkline({ valores, largura = 220, altura = 36 }) {
-  if (!valores || valores.length < 2) return null;
-  const mn = Math.min(...valores), mx = Math.max(...valores); const amp = mx - mn || 1;
-  const X = (i) => 3 + (i * (largura - 6)) / (valores.length - 1);
-  const Y = (v) => altura - 4 - ((v - mn) / amp) * (altura - 8);
-  const d = valores.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
-  return html`<svg class="sparkline" width="100%" height=${altura} viewBox=${`0 0 ${largura} ${altura}`} preserveAspectRatio="none" aria-hidden="true">
-    <path d=${d} fill="none" vector-effect="non-scaling-stroke"/><circle cx=${X(valores.length - 1)} cy=${Y(valores[valores.length - 1])} r="3"/></svg>`;
 }

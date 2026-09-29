@@ -1,79 +1,61 @@
 // Agenda semanal, validade da ficha (mesociclos), cardio, testes aeróbicos e metas.
 import { html, useState } from '../lib/preact-htm.js';
 import { api } from './api.js';
-import { ModalCompromisso, dataLocal } from './comando.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, toast, num, dataBR, hoje, somaDias, diasEntre, lerNum, idadeDe, linkWhats } from './util.js';
-
-// ============================================================
-// AGENDA (visão semanal)
-// ============================================================
-const SEM = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-const segunda = (s) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return dataLocal(d); };
-export function Agenda({ ir }) {
-  const [ini, setIni] = useState(segunda(hoje()));
-  const [modal, setModal] = useState(null);
-  const fim = somaDias(ini, 7);
-  const e = useCarregar(async () => {
-    const [ag, alunas, mesos, metas, ass] = await Promise.all([
-      api.q('agenda', { gte: { inicio: new Date(ini + 'T00:00:00').toISOString() }, lte: { inicio: new Date(fim + 'T00:00:00').toISOString() }, order: 'inicio' }),
-      api.q('profiles', { eq: { role: 'student', ativo: true } }), api.q('mesociclos', { eq: { status: 'ativo' } }),
-      api.q('metas', { eq: { status: 'ativa' } }), api.q('assinaturas', { gte: { fim: ini }, lte: { fim } })]);
-    return { ag, alunas, mesos, metas, ass };
-  }, [ini]);
-  return html`<div class="pilha">
-    <div class="titulo-acoes"><h1 class="titulo">Agenda de Chronos</h1><button class="btn primario" onClick=${() => setModal({})}>+ Compromisso</button></div>
-    <div class="mes-nav"><button class="icone" aria-label="Semana anterior" onClick=${() => setIni(somaDias(ini, -7))}>‹</button><b>${dataBR(ini).slice(0, 5)} a ${dataBR(somaDias(ini, 6)).slice(0, 5)}</b><button class="icone" aria-label="Próxima semana" onClick=${() => setIni(somaDias(ini, 7))}>›</button></div>
-    <${Estado} e=${e}>${({ ag, alunas, mesos, metas, ass }) => {
-      const nome = (id) => ((alunas.find((a) => a.id === id) || {}).nome || '').split(' ')[0];
-      const ativas = new Set(alunas.map((a) => a.id));
-      const dias = [...Array(7)].map((_, i) => somaDias(ini, i));
-      const doDia = (d) => [
-        ...ag.filter((g) => dataLocal(new Date(g.inicio)) === d).map((g) => ({ k: g.id, hora: new Date(g.inicio).toTimeString().slice(0, 5), txt: g.titulo, sub: nome(g.aluna_id), g, feito: g.feito })),
-        ...mesos.filter((m) => m.fim === d && ativas.has(m.aluna_id)).map((m) => ({ k: 'm' + m.id, hora: '★', txt: 'Ficha termina', sub: nome(m.aluna_id), aluna: m.aluna_id })),
-        ...metas.filter((m) => m.prazo === d && ativas.has(m.aluna_id)).map((m) => ({ k: 'mt' + m.id, hora: '★', txt: 'Prazo de meta', sub: nome(m.aluna_id), aluna: m.aluna_id })),
-        ...ass.filter((s) => s.fim === d && ativas.has(s.aluna_id)).map((s) => ({ k: 's' + s.id, hora: '◆', txt: 'Plano vence', sub: nome(s.aluna_id), aluna: s.aluna_id })),
-        ...alunas.filter((a) => a.nascimento && a.nascimento.slice(5) === d.slice(5)).map((a) => ({ k: 'n' + a.id, hora: '★', txt: 'Aniversário', sub: nome(a.id), aluna: a.id })),
-      ];
-      return html`<div class="semana-grade">${dias.map((d, i) => html`<div class=${'semana-dia' + (d === hoje() ? ' hoje' : '')}>
-        <h4>${SEM[i]} <small>${dataBR(d).slice(0, 5)}</small></h4>
-        ${doDia(d).map((x) => html`<button class=${'semana-item' + (x.feito ? ' feito' : '') + (x.g ? '' : ' marco')} onClick=${() => (x.g ? setModal(x.g) : ir('aluna/' + x.aluna))}>
-          <span>${x.hora}</span><b>${x.txt}</b>${x.sub && html`<small>${x.sub}</small>`}</button>`)}
-        <button class="btn-texto mini" onClick=${() => setModal({ dia: d })}>+</button></div>`)}</div>
-        <p class="suave">A fase do ciclo das alunas nunca aparece na agenda.</p>`;
-    }}<//>
-    ${modal && html`<${ModalCompromisso} inicial=${modal} onFechar=${() => setModal(null)} onFeito=${() => { setModal(null); e.recarregar(); }}/>`}
-  </div>`;
-}
 
 // ============================================================
 // VALIDADE DA FICHA (mesociclo)
 // ============================================================
+// progressão semanal do mesociclo: a meta de esforço muda sozinha a cada semana
+export const PROGRESSOES = [
+  ['nenhuma', 'Sem progressão automática', []],
+  ['rir4', '4 semanas · RIR 3 → 2 → 1 → deload', [{ rir: 3 }, { rir: 2 }, { rir: 1 }, { deload: true }]],
+  ['rir5', '5 semanas · RIR 3 → 2 → 2 → 1 → deload', [{ rir: 3 }, { rir: 2 }, { rir: 2 }, { rir: 1 }, { deload: true }]],
+  ['rir6', '6 semanas · RIR 3 → 3 → 2 → 2 → 1 → deload', [{ rir: 3 }, { rir: 3 }, { rir: 2 }, { rir: 2 }, { rir: 1 }, { deload: true }]],
+];
+// semana do mesociclo em que a data cai: { n, total, alvo } ou null
+export function semanaDoMeso(m, dia = hoje()) {
+  if (!m || !m.progressao || !m.progressao.length || dia < m.inicio || dia > m.fim) return null;
+  const idx = Math.min(m.progressao.length - 1, Math.floor(diasEntre(m.inicio, dia) / 7));
+  return { n: idx + 1, total: m.progressao.length, alvo: m.progressao[idx] };
+}
+export const textoSemana = (s) => (s.alvo.deload ? 'Deload' : s.alvo.rir != null ? `RIR ${s.alvo.rir}` : 'Livre');
+
 export function Mesociclo({ aluna }) {
   const e = useCarregar(() => api.q('mesociclos', { eq: { aluna_id: aluna.id }, order: 'inicio', asc: false }), [aluna.id]);
   const [modal, setModal] = useState(null);
   return html`<${Estado} e=${e}>${(l) => {
     const atual = l.find((m) => m.status === 'ativo');
     const d = atual ? diasEntre(hoje(), atual.fim) : null;
+    const sem = semanaDoMeso(atual);
     return html`<section class=${'card meso' + (d != null && d <= 7 ? ' limite' : '')}>
       <div class="card-topo"><div><h3>${atual ? atual.nome || 'Ficha atual' : 'Ficha sem validade'}</h3>
         <small>${atual ? `${dataBR(atual.inicio)} a ${dataBR(atual.fim)} · ${d < 0 ? `venceu há ${-d} dia(s)` : d === 0 ? 'vence hoje' : `vence em ${d} dia(s)`}` : 'Defina a validade para ela entrar em "Fichas no limite".'}</small></div>
         <div class="mini-acoes">${atual && html`<button class="btn-texto" onClick=${() => setModal({ m: atual })}>Editar</button>`}
           <button class="btn mini" onClick=${() => setModal({ novo: true, anterior: atual })}>${atual ? 'Nova ficha' : 'Definir validade'}</button></div></div>
+      ${atual && atual.progressao && atual.progressao.length > 0 && html`<div class="meso-semanas">${atual.progressao.map((w, i) => html`<div class=${'meso-sem' + (sem && sem.n === i + 1 ? ' on' : '') + (w.deload ? ' deload' : '')}>
+        <small>S${i + 1}</small><b>${w.deload ? 'Deload' : `RIR ${w.rir}`}</b></div>`)}</div>
+        <small>${sem ? `Semana ${sem.n} de ${sem.total}. A aluna vê a meta da semana e, no deload, metade das séries.` : 'A progressão vale entre o início e o fim da ficha.'}</small>`}
       ${l.filter((m) => m.status === 'encerrado').length > 0 && html`<small>${l.filter((m) => m.status === 'encerrado').length} mesociclo(s) anterior(es)</small>`}
       ${modal && html`<${ModalMeso} aluna=${aluna} m=${modal.m} novo=${modal.novo} anterior=${modal.anterior} onFechar=${() => setModal(null)} onFeito=${() => { setModal(null); e.recarregar(); }}/>`}
     </section>`;
   }}<//>`;
 }
 function ModalMeso({ aluna, m, novo, anterior, onFechar, onFeito }) {
-  const [f, setF] = useState({ nome: m ? m.nome || '' : '', inicio: m ? m.inicio : hoje(), semanas: m ? Math.round(diasEntre(m.inicio, m.fim) / 7) : 6, fim: m ? m.fim : somaDias(hoje(), 42) });
+  const [f, setF] = useState({ nome: m ? m.nome || '' : '', inicio: m ? m.inicio : hoje(), semanas: m ? Math.round(diasEntre(m.inicio, m.fim) / 7) : 6, fim: m ? m.fim : somaDias(hoje(), 42),
+    progressao: m && m.progressao ? m.progressao : [] });
   const muda = (k, v) => { const n = { ...f, [k]: v }; if (k !== 'fim') n.fim = somaDias(n.inicio, (Number(n.semanas) || 6) * 7); setF(n); };
+  const usarPreset = (lista) => { const n = { ...f, progressao: lista.map((w) => ({ ...w })) }; if (lista.length) { n.semanas = lista.length; n.fim = somaDias(n.inicio, lista.length * 7); } setF(n); };
+  const mudaSemana = (i, v) => setF({ ...f, progressao: f.progressao.map((w, j) => (j === i ? (v === 'deload' ? { deload: true } : { rir: Number(v) }) : w)) });
   const salvar = async (ev) => {
     ev.preventDefault();
+    const base = { nome: f.nome || null, inicio: f.inicio, fim: f.fim };
+    if (f.progressao.length || (m && m.progressao)) base.progressao = f.progressao.length ? f.progressao : null;
     try {
-      if (m) await api.upd('mesociclos', m.id, { nome: f.nome || null, inicio: f.inicio, fim: f.fim });
+      if (m) await api.upd('mesociclos', m.id, base);
       else {
         if (anterior) await api.upd('mesociclos', anterior.id, { status: 'encerrado' });
-        await api.ins('mesociclos', { aluna_id: aluna.id, nome: f.nome || null, inicio: f.inicio, fim: f.fim, status: 'ativo' });
+        await api.ins('mesociclos', { aluna_id: aluna.id, ...base, status: 'ativo' });
       }
       onFeito();
     } catch (e) { toast(e.message, 'erro'); }
@@ -86,6 +68,12 @@ function ModalMeso({ aluna, m, novo, anterior, onFechar, onFeito }) {
       <${Campo} rotulo="Semanas"><input class="input" inputmode="numeric" value=${f.semanas} onInput=${(ev) => muda('semanas', ev.target.value)}/><//>
     </div>
     <${Campo} rotulo="Vale até"><input class="input" type="date" value=${f.fim} onInput=${(ev) => muda('fim', ev.target.value)}/><//>
+    <div class="campo"><span class="rotulo">Progressão semanal</span>
+      <div class="chips">${PROGRESSOES.map(([k, r, lista]) => html`<button type="button" class=${JSON.stringify(f.progressao) === JSON.stringify(lista) ? 'chip on' : 'chip'} onClick=${() => usarPreset(lista)}>${r}</button>`)}</div>
+      ${f.progressao.length > 0 && html`<div class="meso-semanas editar">${f.progressao.map((w, i) => html`<label class="meso-sem"><small>S${i + 1}</small>
+        <select onChange=${(ev) => mudaSemana(i, ev.target.value)}>${[0, 1, 2, 3, 4].map((r) => html`<option value=${r} selected=${!w.deload && w.rir === r}>RIR ${r}</option>`)}<option value="deload" selected=${!!w.deload}>Deload</option></select></label>`)}</div>
+        <small>A meta de RIR de cada semana vale para todos os exercícios de musculação. No deload a aluna faz metade das séries.</small>`}
+    </div>
     <button class="btn primario grande">Salvar</button></form><//>`;
 }
 
