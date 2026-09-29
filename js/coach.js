@@ -4,11 +4,13 @@ import { api } from './api.js';
 import { Acropole } from './comando.js';
 import { Selo, DossieAluna } from './dossie.js';
 import { Formularios, ModalEnvio } from './formularios.js';
-import { Agenda, Mesociclo, CardioAluna, TestesAluna, MetasAluna } from './extras.js';
+import { Agenda, CardioAluna, TestesAluna, MetasAluna } from './extras.js';
 import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
 import { ResumoCheckin } from './aluna.js';
 import { Relatorio } from './relatorio.js';
 import { Icone } from './icones.js';
+import { Ficha } from './ficha.js';
+import { MUSCULOS, GRUPOS_MUSC, musculosDe } from './musculos.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Abas, Barras, toast, num, brl, dataBR, hoje, segundaDe, somaDias,
   somaMeses, diasEntre, lerNum, relativo, linkWhats, copiar, mesNome, idadeDe } from './util.js';
 
@@ -60,7 +62,7 @@ export function AppCoach({ perfil, rota, ir }) {
         <details class="usuario"><summary><span class="avatar mini">${nome.slice(0, 1)}</span><b>${nome.toUpperCase()}</b><${Icone} nome="abaixo" tam=${16}/></summary>
           <div><a href="#/alunas">Alunas</a><a href="#/financeiro">Financeiro</a><button onClick=${() => api.sair()}>Sair</button></div></details>
       </header>
-      <main class=${'conteudo largo' + (aba === '' ? ' acropole' : '')}>${tela}</main>
+      <main class=${'conteudo largo' + (aba === '' || (base === 'aluna' && (sub || 'ficha') === 'ficha') ? ' acropole' : '')}>${tela}</main>
     </div>
     <${Selo} alunaAtual=${alunaAtual}/>
     <nav class="nav-baixo">${NAV.flat().filter(([k]) => NAV_BAIXO.includes(k)).map(([k, r, i]) => html`<a href=${'#/' + k} class=${aba === k ? 'on' : ''}><${Icone} nome=${i} tam=${21}/>${r}</a>`)}</nav>
@@ -219,137 +221,6 @@ function DadosAluna({ aluna, onSalvo }) {
     <p class="suave">E-mail de acesso: ${aluna.email}</p>
     <button class="btn primario">Salvar</button>
   </form>`;
-}
-
-// ---------- ficha ----------
-function Ficha({ aluna }) {
-  const e = useCarregar(async () => {
-    const [treinos, itens, exercicios] = await Promise.all([
-      api.q('treinos', { eq: { aluna_id: aluna.id }, order: 'ordem' }),
-      api.q('treino_itens', { eq: { aluna_id: aluna.id }, order: 'ordem' }),
-      api.q('exercicios', { order: 'nome' }),
-    ]);
-    return { treinos, itens, exercicios };
-  }, [aluna.id]);
-  const [modal, setModal] = useState(null);
-  const acao = async (fn) => { try { await fn(); e.recarregar(); } catch (err) { toast(err.message, 'erro'); } };
-
-  return html`<${Estado} e=${e}>${({ treinos, itens, exercicios }) => {
-    const nomeEx = (id) => (exercicios.find((x) => x.id === id) || {}).nome || '(exercício removido)';
-    const mover = (lista, i, dir, tabela) => acao(async () => {
-      const j = i + dir; if (j < 0 || j >= lista.length) return;
-      await api.upd(tabela, lista[i].id, { ordem: j }); await api.upd(tabela, lista[j].id, { ordem: i });
-    });
-    const totalSeries = (t) => itens.filter((i) => i.treino_id === t.id).reduce((s, i) => s + i.series, 0);
-    return html`<div class="pilha">
-      <${Mesociclo} aluna=${aluna}/>
-      <div class="acoes">
-        <button class="btn primario" onClick=${() => setModal({ tipo: 'treino' })}>+ Novo treino</button>
-        <button class="btn" onClick=${() => setModal({ tipo: 'copiar' })}>Copiar ficha de outra aluna</button>
-      </div>
-      ${!treinos.length && html`<${Vazio} titulo="Ficha vazia" texto="Crie os treinos (A, B, C...) e adicione os exercícios de cada um."/>`}
-      ${treinos.map((t, ti) => { const its = itens.filter((i) => i.treino_id === t.id).sort((a, b) => a.ordem - b.ordem);
-        return html`<section class=${'card ficha-treino' + (t.ativo ? '' : ' apagado')}>
-          <div class="card-topo"><div><h3>${t.nome}</h3><small class="suave">${its.length} exercícios · ${totalSeries(t)} séries${t.opcional ? ' · opcional' : ''}${t.ativo ? '' : ' · oculto da aluna'}</small></div>
-            <div class="mini-acoes"><button class="icone" aria-label="Subir" onClick=${() => mover(treinos, ti, -1, 'treinos')}>↑</button><button class="icone" aria-label="Descer" onClick=${() => mover(treinos, ti, 1, 'treinos')}>↓</button>
-              <button class="btn-texto" onClick=${() => setModal({ tipo: 'treino', treino: t })}>Editar</button></div></div>
-          ${t.observacoes && html`<p class="nota">${t.observacoes}</p>`}
-          <ol class="itens">${its.map((it, ii) => html`<li>
-            <div class="item-info"><b>${nomeEx(it.exercicio_id)}</b>
-              <small>${it.aquecimento ? `${it.aquecimento} aquec. + ` : ''}${it.series} × ${it.reps} · ${it.descanso}s${it.tecnica ? ' · ' + it.tecnica : ''}${it.obs ? ' · ' + it.obs : ''}</small></div>
-            <div class="mini-acoes"><button class="icone" aria-label="Subir" onClick=${() => mover(its, ii, -1, 'treino_itens')}>↑</button><button class="icone" aria-label="Descer" onClick=${() => mover(its, ii, 1, 'treino_itens')}>↓</button>
-              <button class="btn-texto" onClick=${() => setModal({ tipo: 'item', treino: t, item: it })}>Editar</button></div></li>`)}</ol>
-          <button class="btn-texto" onClick=${() => setModal({ tipo: 'item', treino: t, ordem: its.length })}>+ Adicionar exercício</button>
-        </section>`; })}
-      ${modal && modal.tipo === 'treino' && html`<${ModalTreino} aluna=${aluna} treino=${modal.treino} ordem=${treinos.length} onFechar=${() => setModal(null)} onFeito=${() => { setModal(null); e.recarregar(); }}/>`}
-      ${modal && modal.tipo === 'item' && html`<${ModalItem} aluna=${aluna} treino=${modal.treino} item=${modal.item} ordem=${modal.ordem} exercicios=${exercicios} onFechar=${() => setModal(null)} onFeito=${() => { setModal(null); e.recarregar(); }}/>`}
-      ${modal && modal.tipo === 'copiar' && html`<${ModalCopiar} aluna=${aluna} ordemInicial=${treinos.length} onFechar=${() => setModal(null)} onFeito=${() => { setModal(null); e.recarregar(); }}/>`}
-    </div>`;
-  }}<//>`;
-}
-
-function ModalTreino({ aluna, treino, ordem, onFechar, onFeito }) {
-  const [f, setF] = useState({ nome: treino ? treino.nome : String.fromCharCode(65 + ordem) + ' · ', opcional: treino ? treino.opcional : false, observacoes: treino ? treino.observacoes || '' : '', ativo: treino ? treino.ativo : true });
-  const salvar = async (ev) => {
-    ev.preventDefault(); if (!f.nome.trim()) return;
-    try {
-      if (treino) await api.upd('treinos', treino.id, f); else await api.ins('treinos', { ...f, aluna_id: aluna.id, ordem });
-      onFeito();
-    } catch (err) { toast(err.message, 'erro'); }
-  };
-  const apagar = async () => { if (!confirm(`Apagar o treino "${treino.nome}" e todos os exercícios dele? O histórico de cargas da aluna continua salvo.`)) return; try { await api.del('treinos', treino.id); onFeito(); } catch (err) { toast(err.message, 'erro'); } };
-  return html`<${Modal} titulo=${treino ? 'Editar treino' : 'Novo treino'} onFechar=${onFechar}>
-    <form class="pilha" onSubmit=${salvar}>
-      <${Campo} rotulo="Nome" dica="Ex.: A · Inferior posterior"><input class="input" value=${f.nome} onInput=${(ev) => setF({ ...f, nome: ev.target.value })}/><//>
-      <${Campo} rotulo="Observação para a aluna"><textarea class="input" rows="2" value=${f.observacoes} onInput=${(ev) => setF({ ...f, observacoes: ev.target.value })}></textarea><//>
-      <label class="toggle"><input type="checkbox" checked=${f.opcional} onChange=${(ev) => setF({ ...f, opcional: ev.target.checked })}/> Treino opcional (não conta para fechar a semana)</label>
-      <label class="toggle"><input type="checkbox" checked=${f.ativo} onChange=${(ev) => setF({ ...f, ativo: ev.target.checked })}/> Visível para a aluna</label>
-      <button class="btn primario grande">Salvar</button>
-      ${treino && html`<button type="button" class="btn-texto perigo" onClick=${apagar}>Apagar treino</button>`}
-    </form><//>`;
-}
-
-function ModalItem({ aluna, treino, item, ordem, exercicios, onFechar, onFeito }) {
-  const [f, setF] = useState(item ? { ...item, tecnica: item.tecnica || '', obs: item.obs || '' } : { exercicio_id: null, aquecimento: 0, series: 3, reps: '8-12', descanso: 90, tecnica: '', obs: '' });
-  const [busca, setBusca] = useState('');
-  const escolhido = exercicios.find((x) => x.id === f.exercicio_id);
-  const achados = busca ? exercicios.filter((x) => (x.nome + ' ' + (x.grupo || '')).toLowerCase().includes(busca.toLowerCase())).slice(0, 8) : [];
-  const criarEx = async () => { try { const [n] = await api.ins('exercicios', { nome: busca.trim() }); exercicios.push(n); setF({ ...f, exercicio_id: n.id }); setBusca(''); } catch (err) { toast(err.message, 'erro'); } };
-  const salvar = async (ev) => {
-    ev.preventDefault();
-    if (!f.exercicio_id) { toast('Escolha o exercício.', 'erro'); return; }
-    const linha = { exercicio_id: f.exercicio_id, aquecimento: lerNum(f.aquecimento) || 0, series: lerNum(f.series) || 1, reps: String(f.reps || ''), descanso: lerNum(f.descanso) || 0, tecnica: f.tecnica || null, obs: f.obs || null };
-    try {
-      if (item) await api.upd('treino_itens', item.id, linha); else await api.ins('treino_itens', { ...linha, treino_id: treino.id, aluna_id: aluna.id, ordem });
-      onFeito();
-    } catch (err) { toast(err.message, 'erro'); }
-  };
-  const apagar = async () => { try { await api.del('treino_itens', item.id); onFeito(); } catch (err) { toast(err.message, 'erro'); } };
-  const n = (k) => html`<input class="input" inputmode="numeric" value=${f[k]} onInput=${(ev) => setF({ ...f, [k]: ev.target.value })}/>`;
-  return html`<${Modal} titulo=${(item ? 'Editar exercício · ' : 'Adicionar em ') + treino.nome} onFechar=${onFechar}>
-    <form class="pilha" onSubmit=${salvar}>
-      <${Campo} rotulo="Exercício">
-        ${escolhido ? html`<div class="escolhido"><b>${escolhido.nome}</b><button type="button" class="btn-texto" onClick=${() => setF({ ...f, exercicio_id: null })}>Trocar</button></div>`
-          : html`<input class="input" placeholder="Buscar na biblioteca" value=${busca} onInput=${(ev) => setBusca(ev.target.value)} autofocus/>
-            <div class="sugestoes">${achados.map((x) => html`<button type="button" onClick=${() => { setF({ ...f, exercicio_id: x.id }); setBusca(''); }}>${x.nome}<small>${x.grupo || ''}</small></button>`)}
-              ${busca.trim() && !exercicios.some((x) => x.nome.toLowerCase() === busca.trim().toLowerCase()) && html`<button type="button" class="criar" onClick=${criarEx}>+ Criar "${busca.trim()}" na biblioteca</button>`}</div>`}
-      <//>
-      <div class="grade2">
-        <${Campo} rotulo="Séries de aquecimento">${n('aquecimento')}<//>
-        <${Campo} rotulo="Séries válidas">${n('series')}<//>
-        <${Campo} rotulo="Repetições" dica="Ex.: 8-12, 15, 30s"><input class="input" value=${f.reps} onInput=${(ev) => setF({ ...f, reps: ev.target.value })}/><//>
-        <${Campo} rotulo="Descanso (segundos)">${n('descanso')}<//>
-      </div>
-      <${Campo} rotulo="Técnica" dica="Ex.: bi-set com o próximo, drop-set na última, 3s na descida"><input class="input" value=${f.tecnica} onInput=${(ev) => setF({ ...f, tecnica: ev.target.value })}/><//>
-      <${Campo} rotulo="Observação para a aluna"><textarea class="input" rows="2" value=${f.obs} onInput=${(ev) => setF({ ...f, obs: ev.target.value })}></textarea><//>
-      <button class="btn primario grande">Salvar</button>
-      ${item && html`<button type="button" class="btn-texto perigo" onClick=${apagar}>Remover da ficha</button>`}
-    </form><//>`;
-}
-
-function ModalCopiar({ aluna, ordemInicial, onFechar, onFeito }) {
-  const e = useCarregar(async () => (await alunasAtivas()).filter((a) => a.id !== aluna.id), []);
-  const [origem, setOrigem] = useState('');
-  const [copiando, setCopiando] = useState(false);
-  const copiarFicha = async () => {
-    setCopiando(true);
-    try {
-      const [ts, its] = await Promise.all([api.q('treinos', { eq: { aluna_id: origem }, order: 'ordem' }), api.q('treino_itens', { eq: { aluna_id: origem } })]);
-      if (!ts.length) { toast('Essa aluna não tem treinos.', 'erro'); setCopiando(false); return; }
-      for (const [k, t] of ts.entries()) {
-        const [novo] = await api.ins('treinos', { aluna_id: aluna.id, nome: t.nome, ordem: ordemInicial + k, opcional: t.opcional, observacoes: t.observacoes, ativo: t.ativo });
-        const linhas = its.filter((i) => i.treino_id === t.id).map(({ id, treino_id, aluna_id, ...r }) => ({ ...r, treino_id: novo.id, aluna_id: aluna.id }));
-        if (linhas.length) await api.ins('treino_itens', linhas);
-      }
-      toast(`${ts.length} treino(s) copiado(s)`, 'ok'); onFeito();
-    } catch (err) { toast(err.message, 'erro'); setCopiando(false); }
-  };
-  return html`<${Modal} titulo="Copiar ficha" onFechar=${onFechar}>
-    <${Estado} e=${e}>${(lista) => html`<div class="pilha">
-      <p class="suave">Os treinos da outra aluna são adicionados à ficha de ${aluna.nome}. Depois você ajusta o que precisar.</p>
-      <select class="input" value=${origem} onChange=${(ev) => setOrigem(ev.target.value)}><option value="">Escolha a aluna</option>${lista.map((a) => html`<option value=${a.id}>${a.nome}</option>`)}</select>
-      <button class="btn primario grande" disabled=${!origem || copiando} onClick=${copiarFicha}>${copiando ? 'Copiando...' : 'Copiar treinos'}</button>
-    </div>`}<//><//>`;
 }
 
 // ============================================================
@@ -626,9 +497,18 @@ function Exercicios() {
 
 function ModalExercicio({ ex, onFechar, onFeito }) {
   const [f, setF] = useState({ nome: ex.nome || '', grupo: ex.grupo || '', video_url: ex.video_url || '', instrucoes: ex.instrucoes || '' });
+  // músculos: começa pelo que o app deduz; só grava se o treinador mexer
+  const [mus, setMus] = useState(() => { const m = musculosDe(ex.id ? ex : null); return { primarios: m.primarios, secundarios: m.secundarios, mexeu: false }; });
+  const auto = musculosDe({ ...ex, ...f, musculos: null });
+  const papel = (k) => (mus.primarios.includes(k) ? 'p' : mus.secundarios.includes(k) ? 's' : '');
+  const alterna = (k) => {
+    const p = papel(k); const tira = (l) => l.filter((x) => x !== k);
+    setMus({ primarios: p === '' ? [...mus.primarios, k] : tira(mus.primarios), secundarios: p === 'p' ? [...mus.secundarios, k] : tira(mus.secundarios), mexeu: true });
+  };
   const salvar = async (ev) => {
     ev.preventDefault(); if (!f.nome.trim()) return;
     const linha = { nome: f.nome.trim(), grupo: f.grupo || null, video_url: f.video_url || null, instrucoes: f.instrucoes || null };
+    if (mus.mexeu) linha.musculos = mus.primarios.length || mus.secundarios.length ? { primarios: mus.primarios, secundarios: mus.secundarios } : null;
     try { if (ex.id) await api.upd('exercicios', ex.id, linha); else await api.ins('exercicios', linha); onFeito(); } catch (err) { toast(err.message, 'erro'); }
   };
   const apagar = async () => { if (!confirm(`Apagar "${ex.nome}" da biblioteca? Nas fichas que usam ele, vai aparecer "exercício removido".`)) return; await api.del('exercicios', ex.id); onFeito(); };
@@ -637,6 +517,13 @@ function ModalExercicio({ ex, onFechar, onFeito }) {
       <${Campo} rotulo="Nome"><input class="input" value=${f.nome} onInput=${(ev) => setF({ ...f, nome: ev.target.value })}/><//>
       <${Campo} rotulo="Grupo muscular"><input class="input" list="grupos" value=${f.grupo} onInput=${(ev) => setF({ ...f, grupo: ev.target.value })}/>
         <datalist id="grupos">${['Glúteos', 'Quadríceps', 'Posteriores', 'Adutores', 'Panturrilha', 'Costas', 'Lombar', 'Peito', 'Ombros', 'Bíceps', 'Tríceps', 'Core', 'Cardio'].map((g) => html`<option value=${g}/>`)}</datalist><//>
+      <div class="campo"><span class="rotulo">Músculos (volume da ficha)</span>
+        <small>Toque uma vez para principal (conta 1 série), duas para auxiliar (0,5), três para tirar.</small>
+        ${GRUPOS_MUSC.map((g) => html`<div class="musc-grupo"><small>${g}</small><div class="chips">${Object.keys(MUSCULOS).filter((k) => MUSCULOS[k].grupo === g).map((k) => { const p = papel(k);
+          return html`<button type="button" class=${'chip musc ' + p} onClick=${() => alterna(k)}>${MUSCULOS[k].nome}${p === 'p' ? ' · principal' : p === 's' ? ' · auxiliar' : ''}</button>`; })}</div></div>`)}
+        ${mus.mexeu ? html`<button type="button" class="btn-texto" onClick=${() => setMus({ primarios: auto.primarios, secundarios: auto.secundarios, mexeu: true })}>Voltar para o automático</button>`
+          : html`<small>${musculosDe(ex.id ? ex : null).auto ? 'Automático pelo nome do exercício.' : 'Definido por você.'}</small>`}
+      </div>
       <${Campo} rotulo="Link do vídeo"><input class="input" type="url" placeholder="https://" value=${f.video_url} onInput=${(ev) => setF({ ...f, video_url: ev.target.value })}/><//>
       <${Campo} rotulo="Como executar (pontos de atenção)"><textarea class="input" rows="4" value=${f.instrucoes} onInput=${(ev) => setF({ ...f, instrucoes: ev.target.value })}></textarea><//>
       <button class="btn primario grande">Salvar</button>

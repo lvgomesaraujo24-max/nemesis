@@ -8,7 +8,8 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 
 **Treinador**
 - Painel com o que precisa de atenção: check-ins sem resposta, planos vencendo, parcelas em atraso, alunas sem treinar há 7 dias, inscrições novas
-- Alunas: ficha de treino (treinos A, B, C..., séries de aquecimento, reps, descanso, técnica, observação, treino opcional), copiar ficha de outra aluna, evolução, check-ins, avaliações, anamnese, financeiro e dados
+- Alunas: ficha de treino, copiar ficha de outra aluna, evolução, check-ins, avaliações, anamnese, financeiro e dados
+- Ficha: treinos em abas, exercício por tipo (aquecimento, aeróbico, musculação, crossfit), séries, séries de aquecimento, faixa de repetições, cadência, descanso exato/em faixa/livre, método (drop-set, rest-pause, bi-set...), RIR/RPE, tempo estimado do treino, "replicar valores" do 1º exercício e volume semanal por músculo com mapa do corpo (frente e costas)
 - Avaliação física com 7 dobras (Jackson & Pollock + Siri), circunferências e comparação com a anterior
 - Check-ins: responder pelo app ou mandar no WhatsApp, lembrete para quem não enviou
 - Inscrições do formulário da bio, com status (novo, contatado, fechado, perdido) e botão de WhatsApp
@@ -61,6 +62,9 @@ A chave do `config.js` é pública por natureza. Quem protege os dados são as r
 ## Publicar uma versão nova
 Troque os arquivos no GitHub e mude o número em `sw.js` (`nemesis-v1` para `nemesis-v2`), para os celulares buscarem a versão nova.
 
+## Atualizações do banco
+Quando vier um arquivo `supabase/atualizacao-N.sql` novo, rode ele no Supabase (**SQL Editor > New query**, cole tudo, **Run**). Pode rodar mais de uma vez sem problema. A `atualizacao-5.sql` liga a ficha completa (tipo de exercício, cadência, formato do descanso, método, RIR/RPE, aeróbico e músculos da biblioteca).
+
 ## Estrutura
 ```
 index.html        app (treinador e aluna)
@@ -72,6 +76,9 @@ js/coach.js       telas do treinador
 js/aluna.js       telas da aluna
 js/comum.js       evolução, anamnese e avaliação (usadas pelos dois lados)
 js/relatorio.js   relatório de evolução (métricas do período e PDF)
+js/ficha.js       editor da ficha (treinador)
+js/musculos.js    músculos, volume, tempo estimado e métodos
+js/corpo.js       mapa do corpo em SVG
 js/api.js         conexão com o Supabase
 js/demo.js        modo demonstração
 js/util.js        datas, números, gráficos, componentes

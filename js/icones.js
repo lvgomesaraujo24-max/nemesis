@@ -18,6 +18,17 @@ const P = {
   filtro: html`<path d="M3.5 5h17l-6.5 8v6l-4 1.5V13z"/>`,
   olho: html`<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>`,
   olhoOff: html`<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/>`,
+  raio: html`<path d="M13 2.5 4.5 13.5H12l-1 8 8.5-11H12z"/>`,
+  relogio: html`<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2.5h5"/>`,
+  trocar: html`<circle cx="10.5" cy="10.5" r="6"/><path d="m20.5 20.5-5.5-5.5"/><path d="M8 10.5h5M11 8.5l2 2-2 2"/>`,
+  comentario: html`<path d="M4 4.5h16v11.5H9.5L4 20z"/><path d="M8 9h8M8 12.5h5"/>`,
+  video: html`<rect x="2.5" y="5.5" width="19" height="13" rx="3"/><path d="m10 9 5 3-5 3z"/>`,
+  lixeira: html`<path d="M4 6.5h16M9.5 6.5V4h5v2.5M6 6.5l1 14h10l1-14"/><path d="M10 10.5v6M14 10.5v6"/>`,
+  grafico: html`<path d="M5 20V11M12 20V5M19 20v-7"/>`,
+  girar: html`<path d="M4 8h13l-3-3M20 16H7l3 3"/>`,
+  mais: html`<path d="M12 5v14M5 12h14"/>`,
+  subir: html`<path d="m6 15 6-6 6 6"/>`,
+  copiar: html`<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/>`,
   relatorio: html`<path d="M4 20.5h16"/><path d="M7 17V11M12 17V6M17 17v-4"/>`,
 };
 

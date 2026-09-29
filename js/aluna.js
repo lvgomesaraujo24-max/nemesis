@@ -6,6 +6,7 @@ import { ResponderFormulario, pendenciasDaAluna } from './vivo.js';
 import { CardioAluna, TestesAluna, MetasAluna } from './extras.js';
 import { Relatorio } from './relatorio.js';
 import { Icone } from './icones.js';
+import { nomeMetodo, textoDescanso, textoEsforco, TIPOS } from './musculos.js';
 import { DEMO } from './api.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Escala, toast, num, dataBR, hoje, segundaDe, lerNum, relativo, diasEntre } from './util.js';
 
@@ -117,6 +118,15 @@ function Execucao({ perfil, treinoId, ir }) {
   return html`<${Estado} e=${e}>${(d) => (d.treino ? html`<${ExecucaoCorpo} d=${d} perfil=${perfil} ir=${ir}/>` : html`<${Vazio} titulo="Treino não encontrado"/>`)}<//>`;
 }
 
+// linha de prescrição: "3 × 8-12 · descanso 90s · Drop-set · cadência 3-1s · RIR 2"
+function resumoItem(it) {
+  if (it.tipo === 'aerobico') return [TIPOS.aerobico.nome, it.duracao ? `${it.duracao} min` : null, it.intensidade, nomeMetodo(it.metodo || 'continuo')].filter(Boolean).join(' · ');
+  return [`${it.aquecimento ? it.aquecimento + ' aquec. + ' : ''}${it.series} × ${it.reps || '·'}`, textoDescanso(it),
+    it.metodo && it.metodo !== 'padrao' ? nomeMetodo(it.metodo) : null, it.tecnica,
+    it.cadencia_exc != null || it.cadencia_con != null ? `cadência ${it.cadencia_exc ?? 2}s descida / ${it.cadencia_con ?? 0}s subida` : null,
+    textoEsforco(it), it.tipo && it.tipo !== 'musculacao' ? TIPOS[it.tipo].nome : null].filter(Boolean).join(' · ');
+}
+
 function ExecucaoCorpo({ d, perfil, ir }) {
   const { treino, itens, exercicios } = d;
   const [sessao, setSessao] = useState(d.aberta);
@@ -155,7 +165,7 @@ function ExecucaoCorpo({ d, perfil, ir }) {
       setHistorico([...historico, salva]);
       setLinhas((ls) => ({ ...ls, [item.id]: ls[item.id].map((x, i) => (i === idx ? { ...x, id: salva.id } : x)) }));
       if (!l.aquecimento && carga != null && maxAntes != null && carga > maxAntes) toast(`Novo recorde em ${exNome(item.exercicio_id)}: ${num(carga, 1)} kg`, 'recorde');
-      const seg = l.aquecimento ? Math.min(60, item.descanso) : item.descanso;
+      const seg = item.descanso_tipo === 'livre' ? 0 : l.aquecimento ? Math.min(60, item.descanso) : item.descanso;
       if (seg > 0) setDescanso({ fim: Date.now() + seg * 1000, total: seg });
     } catch (err) { toast(err.message, 'erro'); }
   };
@@ -180,7 +190,7 @@ function ExecucaoCorpo({ d, perfil, ir }) {
       const ult = ultimaVez(historico, item.exercicio_id, sessao);
       return html`<section class="card exercicio">
         <div class="ex-cab"><span class="ex-n">${n + 1}</span><div><h3>${exNome(item.exercicio_id)}</h3>
-          <small>${item.series} × ${item.reps} · descanso ${fmtSeg(item.descanso)}${item.tecnica ? ' · ' + item.tecnica : ''}</small></div></div>
+          <small>${resumoItem(item)}</small></div></div>
         ${item.obs && html`<p class="nota">${item.obs}</p>`}
         ${exInstr(item.exercicio_id) && html`<details class="instr"><summary>Como executar</summary><p>${exInstr(item.exercicio_id)}</p></details>`}
         ${exVideo(item.exercicio_id) && html`<a class="btn-texto" href=${exVideo(item.exercicio_id)} target="_blank" rel="noopener">▶ Ver vídeo</a>`}
@@ -189,8 +199,8 @@ function ExecucaoCorpo({ d, perfil, ir }) {
           <div class="serie cab"><span>Série</span><span>kg</span><span>reps</span><span></span></div>
           ${linhas[item.id].map((l, idx) => html`<div class=${'serie' + (l.id ? ' feita' : '') + (l.aquecimento ? ' aquec' : '')}>
             <span class="s-n">${l.aquecimento ? 'Aquec.' : l.numero}</span>
-            <input class="input" inputmode="decimal" placeholder="sem peso" value=${l.carga} disabled=${!!l.id} onInput=${(ev) => muda(item, idx, 'carga', ev.target.value)} aria-label="Carga em kg"/>
-            <input class="input" inputmode="numeric" placeholder=${item.reps} value=${l.reps} disabled=${!!l.id} onInput=${(ev) => muda(item, idx, 'reps', ev.target.value)} aria-label="Repetições"/>
+            <input class="input" inputmode="decimal" placeholder=${item.tipo === 'aerobico' ? '—' : 'sem peso'} value=${l.carga} disabled=${!!l.id || item.tipo === 'aerobico'} onInput=${(ev) => muda(item, idx, 'carga', ev.target.value)} aria-label="Carga em kg"/>
+            <input class="input" inputmode="numeric" placeholder=${item.tipo === 'aerobico' ? 'min' : item.reps} value=${l.reps} disabled=${!!l.id} onInput=${(ev) => muda(item, idx, 'reps', ev.target.value)} aria-label="Repetições"/>
             ${l.id ? html`<button class="check on" aria-label="Desfazer série" onClick=${() => desfazer(item, idx)}>✓</button>`
               : html`<button class="check" aria-label="Concluir série" onClick=${() => concluir(item, idx)}>✓</button>`}
           </div>`)}
@@ -204,7 +214,6 @@ function ExecucaoCorpo({ d, perfil, ir }) {
   </div>`;
 }
 const l0 = (ls) => ls.some((l) => l.aquecimento);
-const fmtSeg = (s) => (s >= 60 ? `${Math.floor(s / 60)}min${s % 60 ? ' ' + (s % 60) + 's' : ''}` : `${s}s`);
 
 function montarLinhas(itens, historico, aberta) {
   const out = {};
