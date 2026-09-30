@@ -16,7 +16,8 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 - Painel com o que precisa de atenção: check-ins sem resposta, planos vencendo, parcelas em atraso, alunas sem treinar há 7 dias, inscrições novas
 - Alunas: ficha de treino, copiar ficha de outra aluna, evolução, check-ins, avaliações, anamnese, financeiro e dados
 - Ficha: treinos em abas, exercício por tipo (aquecimento, aeróbico, musculação, crossfit), séries, séries de aquecimento, faixa de repetições, cadência, descanso exato/em faixa/livre, método (drop-set, rest-pause, bi-set...), RIR/RPE, tempo estimado do treino, "replicar valores" do 1º exercício e volume semanal por músculo com mapa do corpo (frente e costas)
-- Avaliação física com 7 dobras (Jackson & Pollock + Siri), circunferências e comparação com a anterior
+- Avaliação física com Pollock 3 ou 7 dobras + Siri, circunferências e diâmetros ósseos; composição corporal automática (massa gorda, magra, óssea e muscular), comparação de várias avaliações lado a lado e gráficos
+- Ficha 360 da aluna: engajamento, progressão e risco no topo, status, "aluna desde", copiar link de acesso, formulários atribuídos com status (pendente, respondido, atrasado) e respostas, arquivos (fotos de evolução, exames, PDFs), feed de atividades e progressão geral de carga
 - Check-ins: responder pelo app ou mandar no WhatsApp, lembrete para quem não enviou
 - Inscrições do formulário da bio, com status (novo, contatado, fechado, perdido) e botão de WhatsApp
 - Relatório de evolução (mês, ficha ou período livre): resumo, carga e força estimada, recordes, volume por grupamento, frequência, corpo e bem-estar. Baixa em PDF e manda no WhatsApp
@@ -69,7 +70,7 @@ A chave do `config.js` é pública por natureza. Quem protege os dados são as r
 Troque os arquivos no GitHub e mude o número em `sw.js` (`nemesis-v1` para `nemesis-v2`), para os celulares buscarem a versão nova.
 
 ## Atualizações do banco
-Quando vier um arquivo `supabase/atualizacao-N.sql` novo, rode ele no Supabase (**SQL Editor > New query**, cole tudo, **Run**). Pode rodar mais de uma vez sem problema. A `atualizacao-5.sql` liga a ficha completa (tipo de exercício, cadência, formato do descanso, método, RIR/RPE, aeróbico e músculos da biblioteca). A `atualizacao-6.sql` liga modelos, presets, progressão do mesociclo, etiquetas e substituição de exercícios, pacote de entregas dos planos e os tipos novos da agenda.
+Quando vier um arquivo `supabase/atualizacao-N.sql` novo, rode ele no Supabase (**SQL Editor > New query**, cole tudo, **Run**). Pode rodar mais de uma vez sem problema. A `atualizacao-5.sql` liga a ficha completa (tipo de exercício, cadência, formato do descanso, método, RIR/RPE, aeróbico e músculos da biblioteca). A `atualizacao-7.sql` liga os arquivos da aluna (cria a pasta privada no Storage) e o protocolo/diâmetros da avaliação. A `atualizacao-6.sql` liga modelos, presets, progressão do mesociclo, etiquetas e substituição de exercícios, pacote de entregas dos planos e os tipos novos da agenda.
 
 ## Estrutura
 ```
@@ -90,6 +91,7 @@ js/biblioteca.js  biblioteca de exercícios
 js/tesouro.js     financeiro (Tesouro)
 js/chronos.js     agenda (Chronos)
 js/radar.js       Radar da Guerreira e score das alunas
+js/aluna360.js    formulários, arquivos e atividades da aluna
 js/api.js         conexão com o Supabase
 js/demo.js        modo demonstração
 js/util.js        datas, números, gráficos, componentes

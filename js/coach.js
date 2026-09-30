@@ -15,6 +15,7 @@ import { Modelos } from './modelos.js';
 import { Exercicios } from './biblioteca.js';
 import { Financeiro, FinanceiroAluna } from './tesouro.js';
 import { Radar, Score, carregarRadar, saudeDa } from './radar.js';
+import { FormulariosAluna, ArquivosAluna, AtividadesAluna } from './aluna360.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Abas, Barras, toast, num, brl, dataBR, hoje, segundaDe, somaDias,
   somaMeses, diasEntre, lerNum, relativo, linkWhats, copiar, mesNome, idadeDe } from './util.js';
 
@@ -182,16 +183,21 @@ function Convite({ onFechar }) {
 // ============================================================
 // DETALHE DA ALUNA
 // ============================================================
-const ABAS_ALUNA = [['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['relatorio', 'Relatório'], ['checkins', 'Oráculo'], ['dossie', 'Dossiê'], ['metas', 'Metas'], ['cardio', 'Cardio'], ['testes', 'Testes'],
-  ['avaliacoes', 'Avaliações'], ['anamnese', 'Alistamento'], ['financeiro', 'Financeiro'], ['dados', 'Dados']];
+const ABAS_ALUNA = [['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['relatorio', 'Relatório'], ['avaliacoes', 'Avaliações'], ['checkins', 'Oráculo'], ['formularios', 'Formulários'],
+  ['atividades', 'Atividades'], ['dossie', 'Dossiê'], ['arquivos', 'Arquivos'], ['metas', 'Metas'], ['cardio', 'Cardio'], ['testes', 'Testes'],
+  ['anamnese', 'Alistamento'], ['financeiro', 'Financeiro'], ['dados', 'Dados']];
+// mensagem com o link de acesso da aluna ao app
+const linkAcesso = (a) => `Oi, ${(a.nome || '').split(' ')[0]}! Este é o seu acesso ao Nemesis: ${location.origin + location.pathname}\n\nEntre com o e-mail ${a.email || 'que você cadastrou'}. Se esquecer a senha, toque em "Esqueci a senha" na tela de entrada. No celular, use "Adicionar à tela de início" para ele virar um app.`;
 function AlunaDetalhe({ id, aba, ir, onAluna, coachNome }) {
   const e = useCarregar(async () => { const a = await api.um('profiles', { id }); if (a && onAluna) onAluna({ id: a.id, nome: a.nome }); return a; }, [id]);
   const r = useCarregar(() => carregarRadar(id), [id]);
   return html`<${Estado} e=${e}>${(a) => (!a ? html`<${Vazio} titulo="Aluna não encontrada"/>` : html`<div class="pilha">
     <button class="btn-texto" onClick=${() => ir('alunas')}>‹ Alunas</button>
     <div class="aluna-cab"><span class="avatar grande">${(a.nome || '?').slice(0, 1)}</span>
-      <div><h1>${a.nome || a.email}</h1><p class="suave">${[idadeDe(a.nascimento) && idadeDe(a.nascimento) + ' anos', a.objetivo].filter(Boolean).join(' · ') || a.email}</p></div>
-      ${a.telefone && html`<a class="btn" target="_blank" rel="noopener" href=${linkWhats(a.telefone)}>WhatsApp</a>`}</div>
+      <div><h1>${a.nome || a.email}</h1><p class="suave">${[idadeDe(a.nascimento) && idadeDe(a.nascimento) + ' anos', a.objetivo].filter(Boolean).join(' · ') || a.email}</p>
+        <p class="aluna-meta"><span class=${'tag ' + (a.ativo ? 'ok' : '')}>${a.ativo ? 'Ativa' : 'Pausada'}</span><small>Aluna desde ${dataBR(a.alistada_em || String(a.created_at || '').slice(0, 10))}</small></p></div>
+      <div class="acoes"><button class="btn" onClick=${() => copiar(linkAcesso(a))}><${Icone} nome="copiar" tam=${16}/>Copiar link</button>
+        ${a.telefone && html`<a class="btn" target="_blank" rel="noopener" href=${linkWhats(a.telefone)}>WhatsApp</a>`}</div></div>
     ${r.dados && html`<${Score} s=${saudeDa(a, r.dados)}/>`}
     <${Abas} abas=${ABAS_ALUNA} atual=${aba} onMuda=${(k) => ir(`aluna/${id}/${k}`)}/>
     ${aba === 'ficha' && html`<${Ficha} aluna=${a}/>`}
@@ -199,6 +205,9 @@ function AlunaDetalhe({ id, aba, ir, onAluna, coachNome }) {
     ${aba === 'relatorio' && html`<${Relatorio} aluna=${a} coachNome=${coachNome} podeEditar=${true}/>`}
     ${aba === 'checkins' && html`<${CheckinsDaAluna} aluna=${a}/>`}
     ${aba === 'dossie' && html`<${DossieAluna} aluna=${a}/>`}
+    ${aba === 'formularios' && html`<${FormulariosAluna} aluna=${a}/>`}
+    ${aba === 'atividades' && html`<${AtividadesAluna} aluna=${a}/>`}
+    ${aba === 'arquivos' && html`<${ArquivosAluna} aluna=${a}/>`}
     ${aba === 'metas' && html`<${MetasAluna} aluna=${a}/>`}
     ${aba === 'cardio' && html`<${CardioAluna} aluna=${a}/>`}
     ${aba === 'testes' && html`<${TestesAluna} aluna=${a}/>`}

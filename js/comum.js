@@ -2,7 +2,7 @@
 import { html, useState, useMemo } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { useCarregar, Estado, Vazio, Linha, Modal, Campo, toast, num, dataBR, dataCurta, hoje, lerNum, tonelagem,
-  recordes, sequenciaSemanas, equivalencia, DOBRAS, MEDIDAS, percentualJP7, idadeDe, relativo } from './util.js';
+  recordes, sequenciaSemanas, equivalencia, DOBRAS, MEDIDAS, percentualJP7, percentualJP3, DOBRAS_JP3, DIAMETROS, composicao, idadeDe, relativo } from './util.js';
 
 // ============================================================
 // ESTADO VAZIO QUE ENSINA ("Como funciona" em passos)
@@ -89,6 +89,8 @@ function EvolucaoCorpo({ d }) {
       <${Linha} pontos=${pontosCarga} sufixo=" kg"/>
     </section>`}
 
+    ${comCarga.length > 0 && html`<${ProgressaoGeral} sessoes=${sessoes} series=${series} exercicios=${exercicios} onVer=${setExSel}/>`}
+
     <section class="card">
       <div class="card-topo"><h3>Olimpo · recordes</h3><span class="tag">${recs.length}</span></div>
       ${recs.length ? html`<ul class="lista">${(verTodos ? recs : recs.slice(0, 6)).map((r) => html`<li class="linha">
@@ -106,6 +108,36 @@ function EvolucaoCorpo({ d }) {
         <div><b>${s.treino_nome || 'Treino'}</b><small>${dataBR(s.data)}${s.comentario ? ' · ' + s.comentario : ''}</small></div>
         ${s.esforco ? html`<span class="tag">esforço ${s.esforco}/10</span>` : null}</li>`)}</ul></section>`}
   </div>`;
+}
+
+// progressão geral: todos os exercícios lado a lado, com filtro por treino
+const e1rm = (x) => (x.carga == null ? 0 : x.carga * (1 + Math.min(x.reps || 1, 12) / 30));
+function ProgressaoGeral({ sessoes, series, exercicios, onVer }) {
+  const [treino, setTreino] = useState('');
+  const nomes = [...new Set(sessoes.map((x) => x.treino_nome).filter(Boolean))].sort();
+  const dataDe = {}; sessoes.forEach((x) => { dataDe[x.id] = x; });
+  const validas = series.filter((x) => !x.aquecimento && x.carga != null && dataDe[x.sessao_id] && (!treino || dataDe[x.sessao_id].treino_nome === treino));
+  const porEx = {};
+  validas.forEach((x) => { (porEx[x.exercicio_id] = porEx[x.exercicio_id] || []).push(x); });
+  const linhas = Object.entries(porEx).map(([id, l]) => {
+    const ord = l.slice().sort((a, b) => (dataDe[a.sessao_id].data < dataDe[b.sessao_id].data ? -1 : 1));
+    const d0 = dataDe[ord[0].sessao_id].data;
+    const primeira = ord.filter((x) => dataDe[x.sessao_id].data === d0).reduce((m, x) => (e1rm(x) > e1rm(m) ? x : m));
+    const melhor = ord.reduce((m, x) => (e1rm(x) > e1rm(m) ? x : m));
+    const sess = new Set(ord.map((x) => x.sessao_id)).size;
+    return { id, nome: (exercicios.find((e) => e.id === id) || {}).nome || 'Exercício', primeira, melhor, sess, ganho: sess > 1 ? e1rm(melhor) / e1rm(primeira) - 1 : null };
+  }).sort((a, b) => (b.ganho ?? -9) - (a.ganho ?? -9));
+  const media = linhas.filter((x) => x.ganho != null);
+  const txt = (x) => `${num(x.carga, 1)} kg × ${x.reps || '·'}`;
+  return html`<section class="card">
+    <div class="card-topo"><h3>Progressão geral</h3>${media.length > 0 && html`<span class="tag roxo">média ${media.reduce((t, x) => t + x.ganho, 0) / media.length >= 0 ? '+' : ''}${num((media.reduce((t, x) => t + x.ganho, 0) / media.length) * 100, 0)}%</span>`}</div>
+    ${nomes.length > 1 && html`<div class="chips">${['', ...nomes].map((n) => html`<button class=${treino === n ? 'chip on' : 'chip'} onClick=${() => setTreino(n)}>${n || 'Todos os treinos'}</button>`)}</div>`}
+    <div class="tabela-rolagem"><table class="tabela">
+      <thead><tr><th>Exercício</th><th>Primeira</th><th>Melhor</th><th>Força est.</th></tr></thead>
+      <tbody>${linhas.map((x) => html`<tr onClick=${() => onVer(x.id)} class="clicavel"><td>${x.nome}<small> · ${x.sess} sessão(ões)</small></td><td>${txt(x.primeira)}</td><td>${txt(x.melhor)}</td>
+        <td class=${x.ganho > 0.005 ? 'positivo' : x.ganho < -0.005 ? 'negativo' : ''}>${x.ganho == null ? '·' : `${x.ganho > 0 ? '+' : ''}${num(x.ganho * 100, 0)}%`}</td></tr>`)}</tbody></table></div>
+    <small>Força estimada pela fórmula de Epley. Toque num exercício para ver a curva dele acima.</small>
+  </section>`;
 }
 
 // ============================================================
@@ -205,41 +237,97 @@ function AnamneseForm({ alunaId, inicial, onSalvo }) {
 export function Avaliacoes({ aluna, podeEditar }) {
   const e = useCarregar(() => api.q('avaliacoes', { eq: { aluna_id: aluna.id }, order: 'data', asc: false }), [aluna.id]);
   const [nova, setNova] = useState(false);
+  const [comparando, setComparando] = useState(false);
+  const [sel, setSel] = useState([]);
   return html`<div class="pilha">
-    ${podeEditar && html`<button class="btn primario" onClick=${() => setNova(true)}>+ Nova avaliação</button>`}
-    <${Estado} e=${e}>${(lista) => (lista.length ? lista.map((a, i) => html`<${CartaoAvaliacao} a=${a} anterior=${lista[i + 1]} podeEditar=${podeEditar} onApagar=${async () => { if (confirm('Apagar esta avaliação?')) { await api.del('avaliacoes', a.id); e.recarregar(); } }}/>`)
-      : html`<${Vazio} titulo="Nenhuma avaliação ainda" texto=${podeEditar ? 'Registre dobras e medidas para acompanhar a composição corporal.' : 'Seu treinador registra as avaliações aqui.'}/>`)}<//>
+    <div class="acoes">${podeEditar && html`<button class="btn primario" onClick=${() => setNova(true)}>+ Nova avaliação</button>`}
+      ${(e.dados || []).length > 1 && html`<button class=${'btn' + (comparando ? ' on' : '')} onClick=${() => { setComparando(!comparando); setSel(comparando ? [] : (e.dados || []).slice(0, 2).map((x) => x.id)); }}>${comparando ? 'Fechar comparação' : 'Comparar avaliações'}</button>`}</div>
+    <${Estado} e=${e}>${(lista) => {
+      if (!lista.length) return html`<${ComoFunciona} titulo="Nenhuma avaliação ainda" passos=${[
+        ['Registre a avaliação', 'Peso, altura, dobras (Pollock 3 ou 7), circunferências e diâmetros ósseos.'],
+        ['A composição sai sozinha', '% de gordura, massa gorda, magra, óssea e muscular.'],
+        ['Compare as datas', 'Escolha duas ou mais e veja as diferenças lado a lado.'],
+        ['Acompanhe nos gráficos', 'Peso, gordura e massa magra ao longo do tempo.']]}/>`;
+      const asc = lista.slice().reverse();
+      return html`${asc.length > 1 && html`<${GraficosAvaliacao} lista=${asc} sexo=${aluna.sexo}/>`}
+        ${comparando && html`<${ComparaAvaliacoes} lista=${asc.filter((x) => sel.includes(x.id))} sexo=${aluna.sexo}/>`}
+        ${lista.map((a, i) => html`<div class=${comparando ? 'aval-sel' : ''}>
+          ${comparando && html`<label class="toggle"><input type="checkbox" checked=${sel.includes(a.id)} onChange=${() => setSel(sel.includes(a.id) ? sel.filter((x) => x !== a.id) : [...sel, a.id])}/> Comparar ${dataBR(a.data)}</label>`}
+          <${CartaoAvaliacao} a=${a} anterior=${lista[i + 1]} sexo=${aluna.sexo} podeEditar=${podeEditar} onApagar=${async () => { if (confirm('Apagar esta avaliação?')) { await api.del('avaliacoes', a.id); e.recarregar(); } }}/></div>`)}`;
+    }}<//>
     ${nova && html`<${NovaAvaliacao} aluna=${aluna} onFechar=${() => setNova(false)} onSalvo=${() => { setNova(false); e.recarregar(); }}/>`}
   </div>`;
 }
 
-function CartaoAvaliacao({ a, anterior, podeEditar, onApagar }) {
-  const dif = (k, obj) => { if (!anterior) return null; const v = obj === 'm' ? (a.medidas || {})[k] : a[k]; const p = obj === 'm' ? (anterior.medidas || {})[k] : anterior[k]; if (v == null || p == null) return null; const d = v - p; return d === 0 ? null : html`<small class=${d < 0 ? 'baixa' : 'alta'}>${d > 0 ? '+' : ''}${num(d, 1)}</small>`; };
+// linhas da comparação: [rótulo, função que lê o valor, unidade, casas]
+const somaDobras = (a) => { const v = Object.values(a.dobras || {}).map(Number).filter((x) => !isNaN(x)); return v.length ? v.reduce((x, y) => x + y, 0) : null; };
+function linhasComparacao(sexo) {
+  const c = (k) => (a) => composicao(a, sexo)[k];
+  return [['Peso', (a) => a.peso, 'kg', 1], ['% de gordura', (a) => a.percentual_gordura, '%', 1], ['Massa gorda', c('gorda'), 'kg', 1], ['Massa magra', c('magra'), 'kg', 1],
+    ['Massa muscular', c('muscular'), 'kg', 1], ['Massa óssea', c('ossea'), 'kg', 1], ['IMC', c('imc'), '', 1], ['Relação cintura/quadril', c('rcq'), '', 2], ['Soma das dobras', somaDobras, 'mm', 0],
+    ...MEDIDAS.map(([k, r]) => [r, (a) => (a.medidas || {})[k], 'cm', 1])];
+}
+function ComparaAvaliacoes({ lista, sexo }) {
+  if (lista.length < 2) return html`<p class="nota">Marque pelo menos duas avaliações abaixo para comparar.</p>`;
+  // soma de dobras só compara avaliações do mesmo protocolo
+  const mesmoProtocolo = new Set(lista.map((a) => a.protocolo || 'jp7')).size === 1;
+  const linhas = linhasComparacao(sexo).filter(([r, f]) => lista.some((a) => f(a) != null) && (mesmoProtocolo || r !== 'Soma das dobras'));
+  return html`<section class="card"><h3>Comparação</h3><div class="tabela-rolagem"><table class="tabela">
+    <thead><tr><th></th>${lista.map((a) => html`<th>${dataBR(a.data)}</th>`)}<th>Diferença</th></tr></thead>
+    <tbody>${linhas.map(([r, f, u, cs]) => { const v0 = f(lista[0]), v1 = f(lista[lista.length - 1]); const d = v0 != null && v1 != null ? Number(v1) - Number(v0) : null;
+      return html`<tr><td>${r}</td>${lista.map((a) => html`<td>${f(a) != null ? `${num(f(a), cs)}${u ? ' ' + u : ''}` : '·'}</td>`)}
+        <td class=${d == null || Math.abs(d) < 0.05 ? '' : d < 0 ? 'baixa' : 'alta'}>${d == null ? '·' : `${d > 0 ? '+' : ''}${num(d, cs)}${u ? ' ' + u : ''}`}</td></tr>`; })}</tbody></table></div></section>`;
+}
+function GraficosAvaliacao({ lista, sexo }) {
+  const [serie, setSerie] = useState('Peso');
+  const ops = linhasComparacao(sexo).filter(([, f]) => lista.filter((a) => f(a) != null).length > 1);
+  const [r, f, u] = ops.find(([x]) => x === serie) || ops[0] || [];
+  if (!f) return null;
+  const pontos = lista.filter((a) => f(a) != null).map((a) => ({ x: dataCurta(a.data), y: Number(f(a)) }));
+  return html`<section class="card"><div class="card-topo"><h3>Evolução nas avaliações</h3>
+      <select class="input curto" aria-label="Medida do gráfico" onChange=${(ev) => setSerie(ev.target.value)}>${ops.map(([x]) => html`<option value=${x} selected=${x === r}>${x}</option>`)}</select></div>
+    <${Linha} pontos=${pontos} sufixo=${u ? ' ' + u : ''}/></section>`;
+}
+
+function CartaoAvaliacao({ a, anterior, sexo, podeEditar, onApagar }) {
+  const dif = (atual, antes) => { if (atual == null || antes == null) return null; const d = atual - antes; return Math.abs(d) < 0.05 ? null : html`<small class=${d < 0 ? 'baixa' : 'alta'}>${d > 0 ? '+' : ''}${num(d, 1)}</small>`; };
+  const c = composicao(a, sexo); const ca = anterior ? composicao(anterior, sexo) : {};
   return html`<section class="card">
-    <div class="card-topo"><h3>${dataBR(a.data)}</h3>${podeEditar && html`<button class="btn-texto perigo" onClick=${onApagar}>Apagar</button>`}</div>
+    <div class="card-topo"><div><h3>${dataBR(a.data)}</h3><small>${a.protocolo === 'jp3' ? 'Pollock 3 dobras' : Object.keys(a.dobras || {}).length ? 'Pollock 7 dobras' : 'Sem dobras'}</small></div>
+      ${podeEditar && html`<button class="btn-texto perigo" onClick=${onApagar}>Apagar</button>`}</div>
     <div class="stats">
-      <div class="stat"><b>${num(a.peso, 1)} kg</b><span>peso ${dif('peso')}</span></div>
-      <div class="stat"><b>${a.percentual_gordura != null ? num(a.percentual_gordura, 1) + '%' : '·'}</b><span>gordura ${dif('percentual_gordura')}</span></div>
-      ${a.peso && a.percentual_gordura != null ? html`<div class="stat"><b>${num(a.peso * (1 - a.percentual_gordura / 100), 1)} kg</b><span>massa magra</span></div>` : null}
-      ${a.peso && a.altura ? html`<div class="stat"><b>${num(a.peso / (a.altura / 100) ** 2, 1)}</b><span>IMC</span></div>` : null}
+      <div class="stat"><b>${num(a.peso, 1)} kg</b><span>peso ${dif(a.peso, anterior && anterior.peso)}</span></div>
+      <div class="stat"><b>${a.percentual_gordura != null ? num(a.percentual_gordura, 1) + '%' : '·'}</b><span>gordura ${dif(a.percentual_gordura, anterior && anterior.percentual_gordura)}</span></div>
+      ${c.magra != null && html`<div class="stat"><b>${num(c.magra, 1)} kg</b><span>massa magra ${dif(c.magra, ca.magra)}</span></div>`}
+      ${c.gorda != null && html`<div class="stat"><b>${num(c.gorda, 1)} kg</b><span>massa gorda ${dif(c.gorda, ca.gorda)}</span></div>`}
+      ${c.muscular != null && html`<div class="stat"><b>${num(c.muscular, 1)} kg</b><span>massa muscular ${dif(c.muscular, ca.muscular)}</span></div>`}
+      ${c.ossea != null && html`<div class="stat"><b>${num(c.ossea, 1)} kg</b><span>massa óssea</span></div>`}
+      ${c.imc != null && html`<div class="stat"><b>${num(c.imc, 1)}</b><span>IMC</span></div>`}
+      ${c.rcq != null && html`<div class="stat"><b>${num(c.rcq, 2)}</b><span>cintura/quadril</span></div>`}
     </div>
-    ${Object.keys(a.medidas || {}).length > 0 && html`<dl class="grade-medidas">${MEDIDAS.filter(([k]) => (a.medidas || {})[k] != null).map(([k, r]) => html`<div><dt>${r}</dt><dd>${num(a.medidas[k], 1)} cm ${dif(k, 'm')}</dd></div>`)}</dl>`}
+    ${Object.keys(a.medidas || {}).length > 0 && html`<dl class="grade-medidas">${MEDIDAS.filter(([k]) => (a.medidas || {})[k] != null).map(([k, r]) => html`<div><dt>${r}</dt><dd>${num(a.medidas[k], 1)} cm ${dif(a.medidas[k], anterior && (anterior.medidas || {})[k])}</dd></div>`)}</dl>`}
     ${a.obs && html`<p class="nota">${a.obs}</p>`}
   </section>`;
 }
 
 function NovaAvaliacao({ aluna, onFechar, onSalvo }) {
   const [f, setF] = useState({ data: hoje(), idade: idadeDe(aluna.nascimento) || '', peso: '', altura: '', obs: '' });
+  const [protocolo, setProtocolo] = useState('jp7');
   const [dobras, setDobras] = useState({});
   const [medidas, setMedidas] = useState({});
-  const pct = percentualJP7(dobras, lerNum(f.idade), aluna.sexo);
+  const [diametros, setDiametros] = useState({});
+  const sexo = aluna.sexo === 'M' ? 'M' : 'F';
+  const pct = protocolo === 'jp3' ? percentualJP3(dobras, lerNum(f.idade), sexo) : percentualJP7(dobras, lerNum(f.idade), sexo);
+  const limpa = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, lerNum(v)]).filter(([, v]) => v != null));
+  const previa = composicao({ peso: f.peso, altura: f.altura, percentual_gordura: pct, diametros: limpa(diametros), medidas: limpa(medidas) }, sexo);
+  const campos = protocolo === 'jp3' ? DOBRAS.filter(([k]) => DOBRAS_JP3[sexo].includes(k)) : DOBRAS;
   const salvar = async (ev) => {
     ev.preventDefault();
-    const limpa = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, lerNum(v)]).filter(([, v]) => v != null));
-    try {
-      await api.ins('avaliacoes', { aluna_id: aluna.id, data: f.data, idade: lerNum(f.idade), peso: lerNum(f.peso), altura: lerNum(f.altura), dobras: limpa(dobras), medidas: limpa(medidas), percentual_gordura: pct, obs: f.obs || null });
-      toast('Avaliação salva', 'ok'); onSalvo();
-    } catch (err) { toast(err.message, 'erro'); }
+    const dobrasUsadas = Object.fromEntries(Object.entries(limpa(dobras)).filter(([k]) => campos.some(([c]) => c === k)));
+    const linha = { aluna_id: aluna.id, data: f.data, idade: lerNum(f.idade), peso: lerNum(f.peso), altura: lerNum(f.altura), dobras: dobrasUsadas, medidas: limpa(medidas), percentual_gordura: pct, obs: f.obs || null };
+    if (protocolo !== 'jp7') linha.protocolo = protocolo;
+    if (Object.keys(limpa(diametros)).length) linha.diametros = limpa(diametros);
+    try { await api.ins('avaliacoes', linha); toast('Avaliação salva', 'ok'); onSalvo(); } catch (err) { toast(err.message, 'erro'); }
   };
   const inp = (obj, set, k) => html`<input class="input" inputmode="decimal" value=${obj[k] || ''} onInput=${(ev) => set({ ...obj, [k]: ev.target.value })}/>`;
   return html`<${Modal} titulo=${'Avaliação · ' + aluna.nome} onFechar=${onFechar} largo>
@@ -248,13 +336,20 @@ function NovaAvaliacao({ aluna, onFechar, onSalvo }) {
         <${Campo} rotulo="Data"><input class="input" type="date" value=${f.data} onInput=${(ev) => setF({ ...f, data: ev.target.value })}/><//>
         <${Campo} rotulo="Idade">${inp(f, setF, 'idade')}<//>
         <${Campo} rotulo="Peso (kg)">${inp(f, setF, 'peso')}<//>
-        <${Campo} rotulo="Altura (cm)">${inp(f, setF, 'altura')}<//>
+        <${Campo} rotulo="Estatura (cm)">${inp(f, setF, 'altura')}<//>
       </div>
-      <h3>Dobras cutâneas (mm) · Jackson & Pollock 7</h3>
-      <div class="grade2">${DOBRAS.map(([k, r]) => html`<${Campo} rotulo=${r}>${inp(dobras, setDobras, k)}<//>`)}</div>
-      <div class="destaque">${pct != null ? html`<span>% de gordura estimado</span><b>${num(pct, 1)}%</b>` : html`<span>Preencha as 7 dobras e a idade para calcular o % de gordura.</span>`}</div>
+      <div class="card-topo"><h3>Dobras cutâneas (mm)</h3><div class="chips">${[['jp7', 'Pollock 7'], ['jp3', 'Pollock 3']].map(([k, r]) => html`<button type="button" class=${protocolo === k ? 'chip on' : 'chip'} onClick=${() => setProtocolo(k)}>${r}</button>`)}</div></div>
+      <div class="grade2">${campos.map(([k, r]) => html`<${Campo} rotulo=${r}>${inp(dobras, setDobras, k)}<//>`)}</div>
       <h3>Circunferências (cm)</h3>
       <div class="grade2">${MEDIDAS.map(([k, r]) => html`<${Campo} rotulo=${r}>${inp(medidas, setMedidas, k)}<//>`)}</div>
+      <h3>Diâmetros ósseos (cm) <small>opcional, para a massa óssea</small></h3>
+      <div class="grade2">${DIAMETROS.map(([k, r]) => html`<${Campo} rotulo=${r}>${inp(diametros, setDiametros, k)}<//>`)}</div>
+      <div class="destaque composicao">${pct != null ? html`<div><span>% de gordura</span><b>${num(pct, 1)}%</b></div>
+          ${previa.gorda != null && html`<div><span>Massa gorda</span><b>${num(previa.gorda, 1)} kg</b></div>`}
+          ${previa.magra != null && html`<div><span>Massa magra</span><b>${num(previa.magra, 1)} kg</b></div>`}
+          ${previa.ossea != null && html`<div><span>Massa óssea</span><b>${num(previa.ossea, 1)} kg</b></div>`}
+          ${previa.muscular != null && html`<div><span>Massa muscular</span><b>${num(previa.muscular, 1)} kg</b></div>`}`
+        : html`<span>Preencha as ${protocolo === 'jp3' ? '3' : '7'} dobras, a idade e o peso para calcular a composição corporal.</span>`}</div>
       <${Campo} rotulo="Observações"><textarea class="input" rows="2" value=${f.obs} onInput=${(ev) => setF({ ...f, obs: ev.target.value })}></textarea><//>
       <button class="btn primario grande">Salvar avaliação</button>
     </form><//>`;

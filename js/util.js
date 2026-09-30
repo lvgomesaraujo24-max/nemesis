@@ -44,6 +44,32 @@ export function percentualJP7(dobras, idade, sexo = 'F') {
   return Math.round((495 / D - 450) * 10) / 10;
 }
 
+// Jackson & Pollock 3 dobras + Siri (mulher: tríceps, suprailíaca, coxa; homem: peitoral, abdominal, coxa)
+export const DOBRAS_JP3 = { F: ['triceps', 'suprailiaca', 'coxa'], M: ['peitoral', 'abdominal', 'coxa'] };
+export function percentualJP3(dobras, idade, sexo = 'F') {
+  const vals = DOBRAS_JP3[sexo === 'M' ? 'M' : 'F'].map((k) => lerNum(dobras[k]));
+  if (vals.some((v) => v == null) || !idade) return null;
+  const S = vals.reduce((a, b) => a + b, 0);
+  const D = sexo === 'M' ? 1.10938 - 0.0008267 * S + 0.0000016 * S * S - 0.0002574 * idade
+    : 1.0994921 - 0.0009929 * S + 0.0000023 * S * S - 0.0001392 * idade;
+  return Math.round((495 / D - 450) * 10) / 10;
+}
+// diâmetros ósseos (cm) para a massa óssea
+export const DIAMETROS = [['punho', 'Biestiloide (punho)'], ['umero', 'Biepicondiliano do úmero'], ['femur', 'Biepicondiliano do fêmur']];
+// composição em 4 componentes: gordura (Siri), óssea (Von Döbeln/Rocha), residual (Würch) e muscular (o que sobra)
+export function composicao(a, sexo = 'F') {
+  const peso = lerNum(a.peso); const pct = a.percentual_gordura != null ? Number(a.percentual_gordura) : null;
+  if (!peso) return {};
+  const gorda = pct != null ? (peso * pct) / 100 : null;
+  const d = a.diametros || {}; const h = lerNum(a.altura); const r = lerNum(d.punho); const f = lerNum(d.femur);
+  const ossea = h && r && f ? 3.02 * Math.pow((h / 100) ** 2 * (r / 100) * (f / 100) * 400, 0.712) : null;
+  const residual = peso * (sexo === 'M' ? 0.241 : 0.209);
+  const muscular = gorda != null && ossea != null ? peso - gorda - ossea - residual : null;
+  const m = a.medidas || {};
+  return { gorda, magra: gorda != null ? peso - gorda : null, ossea, residual, muscular,
+    imc: h ? peso / (h / 100) ** 2 : null, rcq: m.cintura && m.quadril ? Number(m.cintura) / Number(m.quadril) : null };
+}
+
 // ---------- treino ----------
 export const tonelagem = (series) => series.reduce((t, s) => t + (s.aquecimento || s.carga == null || s.reps == null ? 0 : s.carga * s.reps), 0);
 export function recordes(series, exercicios) {

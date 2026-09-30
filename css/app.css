@@ -858,3 +858,42 @@ select.cel-in { cursor: pointer; appearance: none; font-size: 13px; }
 @media (max-width: 900px) { .radar-grade { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .card.aluna .score.compacto { display: none; } .alunas-filtro { grid-template-columns: 1fr; } }
 .chronos-barra .mes-nav { text-transform: none; }
+/* ============ ficha 360: avaliações, progressão, arquivos, atividades ============ */
+.aluna-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.tag.ok { background: rgba(95, 212, 160, .14); color: var(--ok); }
+.tag.perigo { background: rgba(255, 107, 129, .14); color: var(--perigo); }
+.tabela-rolagem { overflow-x: auto; }
+.tabela { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tabela th { text-align: left; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--suave); padding: 8px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+.tabela td { padding: 8px; border-bottom: 1px solid var(--linha); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tabela td:first-child { white-space: normal; }
+.tabela tr.clicavel { cursor: pointer; }
+.tabela tr.clicavel:hover td { background: var(--sup2); }
+.tabela .positivo, .tabela .baixa { color: var(--ok); }
+.tabela .negativo { color: var(--perigo); }
+.tabela .alta { color: var(--atencao); }
+.btn.on { border-color: var(--roxo-claro); color: var(--roxo-claro); }
+.aval-sel { display: flex; flex-direction: column; gap: 6px; }
+.destaque.composicao { flex-wrap: wrap; justify-content: flex-start; gap: 22px; }
+.destaque.composicao > div { display: flex; flex-direction: column; }
+.destaque.composicao b { font-size: 19px; }
+.envio-arquivo { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.envio-arquivo small { width: 100%; }
+.btn.desativado { opacity: .55; pointer-events: none; }
+.arquivos-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.arquivo { background: var(--sup); border: 1px solid var(--linha); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+.arquivo-previa { aspect-ratio: 3 / 4; background: var(--fundo); border: 0; display: grid; place-items: center; padding: 0; overflow: hidden; }
+.arquivo-previa img { width: 100%; height: 100%; object-fit: cover; }
+.arquivo-previa span { font-weight: 700; color: var(--suave); font-size: 18px; letter-spacing: .1em; }
+.arquivo-info { padding: 8px 10px; display: flex; flex-direction: column; min-width: 0; }
+.arquivo-info b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arquivo .icone.perigo { position: absolute; top: 6px; right: 6px; background: rgba(0, 0, 0, .55); }
+.feed { display: flex; flex-direction: column; gap: 14px; }
+.feed-dia h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--suave); }
+.feed-item { display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; border-radius: 10px; background: var(--sup); border: 1px solid var(--linha); margin-bottom: 6px; }
+.feed-item > div { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.feed-ico { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--roxo-fundo); color: var(--roxo-claro); font-size: 13px; flex-shrink: 0; }
+.feed-item.checkin .feed-ico { background: rgba(95, 212, 160, .14); color: var(--ok); }
+.feed-item.avaliacao .feed-ico { background: rgba(91, 141, 239, .16); color: #8fb0f5; }
+.feed-item.troca .feed-ico { background: rgba(242, 193, 78, .14); color: var(--atencao); }
+.feed-hora { flex-shrink: 0; }

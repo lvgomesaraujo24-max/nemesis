@@ -38,6 +38,10 @@ function criarSupabase() {
     async ups(tabela, linha, conflito) { return erro(await sb.from(tabela).upsert(linha, { onConflict: conflito }).select()); },
     async del(tabela, id) { erro(await sb.from(tabela).delete().eq('id', id)); },
     async rpc(fn, args = {}) { return erro(await sb.rpc(fn, args)); },
+    // arquivos da aluna (bucket privado "arquivos", pasta = id da aluna)
+    async subirArquivo(caminho, arquivo) { erro(await sb.storage.from('arquivos').upload(caminho, arquivo, { contentType: arquivo.type || undefined, upsert: false })); },
+    async linkArquivo(caminho) { return erro(await sb.storage.from('arquivos').createSignedUrl(caminho, 3600)).signedUrl; },
+    async apagarArquivo(caminho) { erro(await sb.storage.from('arquivos').remove([caminho])); },
     // tempo real: chama fn quando entra linha nova em alguma das tabelas; devolve a função que desliga
     aoInserir(tabelas, fn) {
       const canal = sb.channel('nemesis-' + tabelas.join('-') + '-' + Math.random().toString(36).slice(2, 7));
@@ -54,7 +58,7 @@ function traduzErro(m) {
   if (/Password should be at least/i.test(m)) return 'A senha precisa ter pelo menos 6 caracteres.';
   if (/Email not confirmed/i.test(m)) return 'Confirme seu e-mail pelo link que chegou na sua caixa de entrada.';
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Sem conexão com o servidor. Confira sua internet.';
-  if (/(column|coluna|relation|relação).*(does not exist|não existe)|Could not find the '.*' (column|table)|schema cache/i.test(m)) return 'O banco precisa das atualizações novas: rode supabase/atualizacao-5.sql e depois atualizacao-6.sql no SQL Editor do Supabase.';
+  if (/(column|coluna|relation|relação).*(does not exist|não existe)|Could not find the '.*' (column|table)|schema cache/i.test(m)) return 'O banco precisa das atualizações novas: rode no SQL Editor do Supabase as atualizações 5, 6 e 7 (pasta supabase), nessa ordem.';
   return m;
 }
 

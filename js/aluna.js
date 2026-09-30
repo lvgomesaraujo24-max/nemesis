@@ -5,6 +5,7 @@ import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
 import { ResponderFormulario, pendenciasDaAluna } from './vivo.js';
 import { CardioAluna, TestesAluna, MetasAluna, semanaDoMeso } from './extras.js';
 import { Relatorio } from './relatorio.js';
+import { ArquivosAluna } from './aluna360.js';
 import { Icone } from './icones.js';
 import { nomeMetodo, textoDescanso, textoEsforco, TIPOS, PERFIS } from './musculos.js';
 import { DEMO } from './api.js';
@@ -377,7 +378,7 @@ function PerfilAluna({ perfil, recarregarPerfil }) {
     catch (err) { toast(err.message, 'erro'); }
   };
   return html`<div class="pilha"><h1 class="titulo">Perfil</h1>
-    <div class="abas">${[['dados', 'Dados'], ['metas', 'Metas'], ['avaliacoes', 'Avaliações'], ['testes', 'Testes'], ['anamnese', 'Alistamento']].map(([k, r]) => html`<button class=${aba === k ? 'on' : ''} onClick=${() => setAba(k)}>${r}</button>`)}</div>
+    <div class="abas">${[['dados', 'Dados'], ['metas', 'Metas'], ['avaliacoes', 'Avaliações'], ['arquivos', 'Fotos e arquivos'], ['testes', 'Testes'], ['anamnese', 'Alistamento']].map(([k, r]) => html`<button class=${aba === k ? 'on' : ''} onClick=${() => setAba(k)}>${r}</button>`)}</div>
     ${aba === 'dados' && html`
       <${Estado} e=${ass}>${(l) => { const a = l[0]; if (!a) return null; const resta = diasEntre(hoje(), a.fim);
         return html`<section class="card"><div class="card-topo"><h3>Plano ${a.plano_nome}</h3><span class=${'tag' + (resta < 0 ? ' perigo' : resta <= 10 ? ' atencao' : ' roxo')}>${resta < 0 ? 'vencido' : `${resta} dias`}</span></div>
@@ -391,6 +392,7 @@ function PerfilAluna({ perfil, recarregarPerfil }) {
       </form>
       <button class="btn" onClick=${() => api.sair()}>Sair da conta</button>`}
     ${aba === 'avaliacoes' && html`<${Avaliacoes} aluna=${perfil} podeEditar=${false}/>`}
+    ${aba === 'arquivos' && html`<${ArquivosAluna} aluna=${perfil} podeApagar=${false}/>`}
     ${aba === 'metas' && html`<${MetasAluna} aluna=${perfil} podeEditar=${false}/>`}
     ${aba === 'testes' && html`<${TestesAluna} aluna=${perfil} podeEditar=${false}/>`}
     ${aba === 'anamnese' && html`<${Anamnese} alunaId=${perfil.id} onSalvo=${recarregarPerfil}/>`}

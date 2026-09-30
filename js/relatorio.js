@@ -138,7 +138,7 @@ export function calcularRelatorio({ ini, fim, aluna, sessoes, series, exercicios
 // ============================================================
 export function Relatorio({ aluna, coachNome, podeEditar }) {
   const e = useCarregar(async () => {
-    const [sessoes, series, exercicios, treinos, checkins, avaliacoes, anamnese, mesociclos] = await Promise.all([
+    const [sessoes, series, exercicios, treinos, checkins, avaliacoes, anamnese, mesociclos, fotosAluna] = await Promise.all([
       api.q('sessoes', { eq: { aluna_id: aluna.id }, order: 'data' }),
       api.q('series', { eq: { aluna_id: aluna.id }, order: 'created_at' }),
       api.q('exercicios', { order: 'nome' }),
@@ -147,8 +147,9 @@ export function Relatorio({ aluna, coachNome, podeEditar }) {
       api.q('avaliacoes', { eq: { aluna_id: aluna.id }, order: 'data' }),
       api.um('anamneses', { aluna_id: aluna.id }).catch(() => null),
       api.q('mesociclos', { eq: { aluna_id: aluna.id }, order: 'inicio', asc: false }).catch(() => []),
+      api.q('arquivos_aluna', { eq: { aluna_id: aluna.id, categoria: 'foto' }, order: 'created_at' }).catch(() => []),
     ]);
-    return { sessoes, series, exercicios, treinos, checkins, avaliacoes, anamnese, mesociclos };
+    return { sessoes, series, exercicios, treinos, checkins, avaliacoes, anamnese, mesociclos, fotosAluna };
   }, [aluna.id]);
   return html`<${Estado} e=${e}>${(d) => html`<${RelatorioCorpo} d=${d} aluna=${aluna} coachNome=${coachNome} podeEditar=${podeEditar}/>`}<//>`;
 }
@@ -178,6 +179,12 @@ function RelatorioCorpo({ d, aluna, coachNome, podeEditar }) {
     leitor.onload = () => setFotos((x) => ({ ...x, [k]: leitor.result }));
     leitor.readAsDataURL(f);
   };
+  // foto guardada em Arquivos (categoria foto de evolução)
+  const usarFoto = (k) => async (ev) => {
+    const x = d.fotosAluna.find((f) => f.id === ev.target.value); if (!x) return;
+    try { const url = await api.linkArquivo(x.caminho); setFotos((f) => ({ ...f, [k]: url, [k === 'antes' ? 'rotAntes' : 'rotDepois']: dataBR(x.created_at) })); }
+    catch (err) { toast(err.message, 'erro'); }
+  };
   const resumoTexto = () => {
     const linhas = [`Oi, ${primeiro(aluna.nome)}! Seu relatório de evolução (${modo === 'mes' ? mesLongo(ym) : periodo}) está pronto 💜`, '',
       `• ${r.feitas.length} treino(s) feitos · ${num(r.aderencia * 100, 0)}% de aderência`,
@@ -200,13 +207,15 @@ function RelatorioCorpo({ d, aluna, coachNome, podeEditar }) {
         <${Campo} rotulo="Até"><input class="input" type="date" value=${livre.fim} onInput=${(ev) => setLivre({ ...livre, fim: ev.target.value })}/><//></div>`}
       ${podeEditar && html`<details class="rel-extras"><summary>Mensagem e fotos (opcional)</summary><div class="pilha">
         <${Campo} rotulo="Palavra do treinador" dica="Aparece no resumo do relatório. Fica salva só neste aparelho."><textarea class="input" rows="3" value=${msg} onInput=${(ev) => salvarMsg(ev.target.value)} placeholder="Ex.: Mês de muita consistência. No próximo, foco em subir a carga do stiff."></textarea><//>
+        ${d.fotosAluna.length > 0 && html`<div class="grade2">${['antes', 'depois'].map((k) => html`<${Campo} rotulo=${`Foto ${k} (dos arquivos dela)`}>
+          <select class="input" onChange=${usarFoto(k)}><option value="">Escolher foto</option>${d.fotosAluna.map((x) => html`<option value=${x.id}>${dataBR(x.created_at)} · ${x.nome}</option>`)}</select><//>`)}</div>`}
         <div class="grade2">
           <${Campo} rotulo="Foto antes"><input class="input" type="file" accept="image/*" onChange=${lerFoto('antes')}/><//>
           <${Campo} rotulo="Foto depois"><input class="input" type="file" accept="image/*" onChange=${lerFoto('depois')}/><//>
           <${Campo} rotulo="Legenda antes"><input class="input" value=${fotos.rotAntes} onInput=${(ev) => setFotos({ ...fotos, rotAntes: ev.target.value })}/><//>
           <${Campo} rotulo="Legenda depois"><input class="input" value=${fotos.rotDepois} onInput=${(ev) => setFotos({ ...fotos, rotDepois: ev.target.value })}/><//>
         </div>
-        <small>As fotos entram só no PDF gerado agora. Elas não são enviadas para o servidor.</small>
+        <small>Fotos escolhidas do computador entram só no PDF gerado agora. As da aba Arquivos já ficam guardadas para a próxima vez.</small>
         ${(fotos.antes || fotos.depois) && html`<button type="button" class="btn-texto perigo" onClick=${() => setFotos({ ...fotos, antes: null, depois: null })}>Tirar fotos</button>`}
       </div></details>`}
       <div class="acoes">

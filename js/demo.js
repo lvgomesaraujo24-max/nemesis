@@ -181,6 +181,13 @@ export function criarDemo() {
       salvar();
     },
     async rpc() { throw new Error('Esta parte (Acrópole, formulários vivos) só funciona com o banco ligado.'); },
+    async subirArquivo(caminho, arquivo) {
+      if (arquivo.size > 1.5 * 1024 * 1024) throw new Error('No modo demonstração, só arquivos de até 1,5 MB.');
+      const url = await new Promise((ok, falha) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = falha; r.readAsDataURL(arquivo); });
+      const m = carregar(); (m.db._blobs = m.db._blobs || {})[caminho] = url; salvar();
+    },
+    async linkArquivo(caminho) { return (carregar().db._blobs || {})[caminho] || ''; },
+    async apagarArquivo(caminho) { const m = carregar(); if (m.db._blobs) delete m.db._blobs[caminho]; salvar(); },
     aoInserir() { return () => {}; },
   };
 }
