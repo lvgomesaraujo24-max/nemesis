@@ -5,7 +5,7 @@ import { html, useState, useEffect } from '../lib/preact-htm.js';
 import { api, DEMO } from './api.js';
 import { textoCiclo } from './motor.js';
 import { abrirSelo } from './dossie.js';
-import { Modal, Campo, toast, num, brl, dataBR, hoje, somaDias, diasEntre, linkWhats } from './util.js';
+import { Modal, Campo, toast, num, brl, dataBR, hoje, somaDias, diasEntre, linkWhats, semaforo } from './util.js';
 import { Icone } from './icones.js';
 import { ModalCompromisso, dataLocal } from './chronos.js';
 
@@ -170,12 +170,14 @@ export function Acropole({ perfil, ir }) {
   const [novoComp, setNovoComp] = useState(false);
   const [oculto, setOculto] = useState(() => { try { return localStorage.getItem(CHAVE_OCULTO) === '1'; } catch (e) { return false; } });
   const [extra, setExtra] = useState(null);
+  const [fila, setFila] = useState(null);
   useEffect(() => {
     const desde = somaDias(hoje(), -30);
     Promise.all([api.q('profiles', { eq: { role: 'student', ativo: true } }), api.q('lancamentos', { eq: { tipo: 'receita' }, gte: { pago_em: desde } }),
       api.q('checkins', { eq: { resposta: null } })])
       .then(([alunas, receitas, checkins]) => setExtra({ alunas: alunas.length, receita: receitas.reduce((t, l) => t + Number(l.valor), 0), checkins: checkins.length }))
       .catch(() => setExtra({ alunas: null, receita: null, checkins: 0 }));
+    carregarFila().then(setFila).catch(() => setFila(null));
   }, []);
 
   // sem banco (demonstração) a Acrópole abre com os blocos vazios
@@ -221,6 +223,8 @@ export function Acropole({ perfil, ir }) {
         rotulo=${html`30 dias <span class="kpi-olho" role="button" tabindex="0" aria-label=${oculto ? 'Mostrar valor' : 'Esconder valor'} onClick=${alternarOculto}><${Icone} nome=${oculto ? 'olhoOff' : 'olho'} tam=${15}/></span>`}/>
     </section>
 
+    ${fila && html`<${FilaDoDia} f=${fila} ir=${ir}/>`}
+
     <div class="paineis">
       <section class="painel">
         <div class="painel-topo"><h2 class="bloco">Ferramentas de Consultoria</h2></div>
@@ -240,6 +244,39 @@ export function Acropole({ perfil, ir }) {
     </div>
     ${novoComp && html`<${ModalCompromisso} onFechar=${() => setNovoComp(false)} onFeito=${() => { setNovoComp(false); recarregar(); }}/>`}
   </div>`;
+}
+
+// ---------- Templo: fila do dia (o que precisa de você antes de qualquer outra coisa) ----------
+async function carregarFila() {
+  const pega = (t, o) => api.q(t, o).catch(() => []);
+  const [alunas, checkins, videos] = await Promise.all([pega('profiles', { eq: { role: 'student', ativo: true } }),
+    pega('checkins', { gte: { semana: somaDias(hoje(), -14) } }), pega('videos_execucao', { order: 'created_at' })]);
+  const ativas = new Set(alunas.map((a) => a.id));
+  const ultimo = {};
+  checkins.filter((c) => ativas.has(c.aluna_id)).forEach((c) => { if (!ultimo[c.aluna_id] || ultimo[c.aluna_id].semana < c.semana) ultimo[c.aluna_id] = c; });
+  const vermelhas = alunas.filter((a) => { const x = semaforo(ultimo[a.id]); return x && x.cor === 'vermelho'; });
+  const dow = new Date().getDay();
+  return {
+    semResposta: checkins.filter((c) => ativas.has(c.aluna_id) && !c.resposta).length,
+    videos: videos.filter((v) => !v.correcao && ativas.has(v.aluna_id)),
+    vermelhas,
+    revisao: alunas.filter((a) => a.dia_revisao === dow),
+  };
+}
+function FilaDoDia({ f, ir }) {
+  const total = f.semResposta + f.videos.length + f.vermelhas.length + f.revisao.length;
+  const item = (n, rot, sub, onClick, cls = '') => html`<button class=${'templo-item' + (n ? ' ' + cls : ' zerado')} onClick=${onClick}><b>${n}</b><span>${rot}</span>${sub && html`<small>${sub}</small>`}</button>`;
+  const nomes = (l) => (l.length ? l.slice(0, 3).map((a) => pn(a.nome)).join(', ') + (l.length > 3 ? ` +${l.length - 3}` : '') : null);
+  const umaSo = (l, aba) => (l.length === 1 ? () => ir(`aluna/${l[0].aluna_id || l[0].id}/${aba}`) : null);
+  return html`<section class="templo">
+    <div class="templo-cab"><h2 class="bloco">Fila do dia</h2><small>${total ? `${total} coisa(s) esperando você` : 'Nada na fila. Dia limpo.'}</small></div>
+    <div class="templo-itens">
+      ${item(f.semResposta, 'check-ins sem resposta', null, () => ir('checkins'), 'atencao')}
+      ${item(f.videos.length, 'vídeos para corrigir', null, umaSo(f.videos, 'videos') || (() => ir('alunas')), 'atencao')}
+      ${item(f.vermelhas.length, 'alunas no vermelho', nomes(f.vermelhas), umaSo(f.vermelhas, 'checkins') || (() => ir('alunas')), 'perigo')}
+      ${item(f.revisao.length, 'revisões de hoje', nomes(f.revisao), umaSo(f.revisao, 'ficha') || (() => ir('agenda')), 'roxo')}
+    </div>
+  </section>`;
 }
 
 function Kpi({ n, rotulo, icone, onClick }) {

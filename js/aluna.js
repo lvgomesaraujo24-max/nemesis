@@ -7,9 +7,9 @@ import { CardioAluna, TestesAluna, MetasAluna, semanaDoMeso } from './extras.js'
 import { Relatorio } from './relatorio.js';
 import { ArquivosAluna } from './aluna360.js';
 import { Icone } from './icones.js';
-import { nomeMetodo, textoDescanso, textoEsforco, TIPOS, PERFIS } from './musculos.js';
+import { nomeMetodo, textoDescanso, textoEsforco, TIPOS, PERFIS, METODOS_GRUPO, textoCadencia } from './musculos.js';
 import { DEMO } from './api.js';
-import { useCarregar, Estado, Vazio, Modal, Campo, Escala, toast, num, dataBR, hoje, segundaDe, lerNum, relativo, diasEntre } from './util.js';
+import { useCarregar, Estado, Vazio, Modal, Campo, Escala, toast, num, dataBR, hoje, segundaDe, lerNum, relativo, diasEntre, semaforo } from './util.js';
 
 export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
   const [pulouAnamnese, setPulou] = useState(false);
@@ -120,7 +120,8 @@ function Execucao({ perfil, treinoId, ir }) {
     const ajustados = !semana ? itens : itens.map((i) => (i.tipo && i.tipo !== 'musculacao' ? i
       : semana.alvo.deload ? { ...i, series: Math.max(1, Math.ceil(i.series / 2)) }
       : semana.alvo.rir != null ? { ...i, esforco_tipo: 'rir', esforco_alvo: semana.alvo.rir } : i));
-    return { treino, itens: ajustados, exercicios, aberta, historico, semana };
+    const videos = await api.q('videos_execucao', { eq: { aluna_id: perfil.id }, order: 'created_at' }).catch(() => []);
+    return { treino, itens: ajustados, exercicios, aberta, historico, semana, videos };
   }, [treinoId]);
   return html`<${Estado} e=${e}>${(d) => (d.treino ? html`<${ExecucaoCorpo} d=${d} perfil=${perfil} ir=${ir}/>` : html`<${Vazio} titulo="Treino não encontrado"/>`)}<//>`;
 }
@@ -130,7 +131,7 @@ function resumoItem(it) {
   if (it.tipo === 'aerobico') return [TIPOS.aerobico.nome, it.duracao ? `${it.duracao} min` : null, it.intensidade, nomeMetodo(it.metodo || 'continuo')].filter(Boolean).join(' · ');
   return [`${it.aquecimento ? it.aquecimento + ' aquec. + ' : ''}${it.series} × ${it.reps || '·'}`, textoDescanso(it),
     it.metodo && it.metodo !== 'padrao' ? nomeMetodo(it.metodo) : null, it.tecnica,
-    it.cadencia_exc != null || it.cadencia_con != null ? `cadência ${it.cadencia_exc ?? 2}s descida / ${it.cadencia_con ?? 0}s subida` : null,
+    textoCadencia(it) || null,
     textoEsforco(it), it.tipo && it.tipo !== 'musculacao' ? TIPOS[it.tipo].nome : null].filter(Boolean).join(' · ');
 }
 
@@ -147,6 +148,21 @@ function ExecucaoCorpo({ d, perfil, ir }) {
   const exDe = (id) => exercicios.find((x) => x.id === id) || {};
   // troca de exercício (aparelho ocupado): vale só para esta sessão e avisa o treinador
   const [trocas, setTrocas] = useState({});
+  const [enviandoVideo, setEnviandoVideo] = useState(null);
+  // vídeo da série para o treinador corrigir no app
+  const enviarVideo = async (item, ev) => {
+    const f = ev.target.files && ev.target.files[0]; ev.target.value = '';
+    if (!f) return;
+    if (f.size > 50 * 1024 * 1024) { toast('Vídeo muito grande (máximo 50 MB). Grave um trecho mais curto.', 'erro'); return; }
+    const comentario = prompt('Quer deixar uma dúvida ou comentário para o treinador? (opcional)') || null;
+    setEnviandoVideo(item.id);
+    try {
+      const caminho = `${perfil.id}/videos/${Date.now()}.${(f.name.split('.').pop() || 'mp4').toLowerCase()}`;
+      await api.subirArquivo(caminho, f);
+      await api.ins('videos_execucao', { aluna_id: perfil.id, exercicio_id: exAtual(item), treino_item_id: item.id, sessao_id: sessaoRef.current ? sessaoRef.current.id : null, caminho, comentario });
+      toast('Vídeo enviado. A correção aparece aqui no exercício.', 'ok');
+    } catch (err) { toast(err.message, 'erro'); } finally { setEnviandoVideo(null); }
+  };
   const [trocando, setTrocando] = useState(null);
   const exAtual = (item) => trocas[item.id] || item.exercicio_id;
   const trocar = async (item, novoId) => {
@@ -179,7 +195,9 @@ function ExecucaoCorpo({ d, perfil, ir }) {
     const carga = lerNum(l.carga); const reps = lerNum(l.reps);
     try {
       const s = await garantirSessao();
-      const [salva] = await api.ins('series', { sessao_id: s.id, aluna_id: perfil.id, treino_item_id: item.id, exercicio_id: exAtual(item), numero: l.numero, carga, reps: reps == null ? null : Math.round(reps), aquecimento: l.aquecimento });
+      const linha = { sessao_id: s.id, aluna_id: perfil.id, treino_item_id: item.id, exercicio_id: exAtual(item), numero: l.numero, carga, reps: reps == null ? null : Math.round(reps), aquecimento: l.aquecimento };
+      if (lerNum(l.rir) != null) linha.rir = lerNum(l.rir); // RIR real que a aluna sentiu
+      const [salva] = await api.ins('series', linha);
       const antes = historico.filter((h) => h.exercicio_id === exAtual(item) && !h.aquecimento && h.carga != null);
       const maxAntes = antes.length ? Math.max(...antes.map((h) => h.carga)) : null;
       setHistorico([...historico, salva]);
@@ -215,20 +233,24 @@ function ExecucaoCorpo({ d, perfil, ir }) {
       const ult = ultimaVez(historico, exId, sessao);
       return html`<section class="card exercicio">
         <div class="ex-cab"><span class="ex-n">${n + 1}</span><div><h3>${exNome(exId)}</h3>${exId !== item.exercicio_id && html`<small class="trocado">no lugar de ${exNome(item.exercicio_id)}</small>`}
-          <small>${resumoItem(item)}</small></div></div>
+          <small>${resumoItem(item)}</small>
+          ${METODOS_GRUPO.includes(item.metodo) && html`<small class=${'grupo-tag g' + (item.grupo || 1)}>(${item.grupo || 1}) ${nomeMetodo(item.metodo)}${(() => { const par = itens.filter((x) => x.id !== item.id && METODOS_GRUPO.includes(x.metodo) && String(x.grupo || 1) === String(item.grupo || 1)); return par.length ? ` com ${par.map((x) => exNome(x.exercicio_id)).join(' e ')}` : ''; })()}</small>`}</div></div>
+        ${(() => { const c = d.videos.filter((v) => v.exercicio_id === exId && v.correcao).pop(); return c && html`<p class="nota correcao"><b>Correção do seu treinador (${dataBR(c.corrigido_em || c.created_at)}):</b> ${c.correcao}</p>`; })()}
         ${item.obs && html`<p class="nota">${item.obs}</p>`}
         ${(exInstr(exId) || perfilR) && html`<details class="instr"><summary>Como executar</summary>${exInstr(exId) && html`<p>${exInstr(exId)}</p>`}${perfilR && html`<p><b>${perfilR[1]}:</b> ${perfilR[2].toLowerCase()}</p>`}</details>`}
         <div class="acoes">${exVideo(exId) && html`<a class="btn-texto" href=${exVideo(exId)} target="_blank" rel="noopener">▶ Ver vídeo</a>`}
-          ${subs.length > 0 && html`<button class="btn-texto" onClick=${() => setTrocando(trocando === item.id ? null : item.id)}>⇄ Aparelho ocupado? Trocar</button>`}</div>
+          ${subs.length > 0 && html`<button class="btn-texto" onClick=${() => setTrocando(trocando === item.id ? null : item.id)}>⇄ Aparelho ocupado? Trocar</button>`}
+          ${item.tipo !== 'aerobico' && html`<label class="btn-texto">🎥 ${enviandoVideo === item.id ? 'Enviando vídeo...' : 'Enviar vídeo da série'}<input type="file" accept="video/*" capture="environment" hidden onChange=${(ev) => enviarVideo(item, ev)}/></label>`}</div>
         ${trocando === item.id && html`<div class="troca-lista"><small>Escolha um equivalente. Seu treinador fica sabendo.</small>
           ${[item.exercicio_id, ...subs].map((id) => html`<button class=${'chip' + (exId === id ? ' on' : '')} onClick=${() => trocar(item, id)}>${exNome(id)}${id === item.exercicio_id ? ' (original)' : ''}</button>`)}</div>`}
         ${ult && html`<p class="ultima">Última vez: ${ult}</p>`}
         <div class="series">
-          <div class="serie cab"><span>Série</span><span>kg</span><span>reps</span><span></span></div>
+          <div class="serie cab"><span>Série</span><span>kg</span><span>reps</span><span title="Quantas repetições ainda sairiam">RIR</span><span></span></div>
           ${linhas[item.id].map((l, idx) => html`<div class=${'serie' + (l.id ? ' feita' : '') + (l.aquecimento ? ' aquec' : '')}>
             <span class="s-n">${l.aquecimento ? 'Aquec.' : l.numero}</span>
             <input class="input" inputmode="decimal" placeholder=${item.tipo === 'aerobico' ? '—' : 'sem peso'} value=${l.carga} disabled=${!!l.id || item.tipo === 'aerobico'} onInput=${(ev) => muda(item, idx, 'carga', ev.target.value)} aria-label="Carga em kg"/>
-            <input class="input" inputmode="numeric" placeholder=${item.tipo === 'aerobico' ? 'min' : item.reps} value=${l.reps} disabled=${!!l.id} onInput=${(ev) => muda(item, idx, 'reps', ev.target.value)} aria-label="Repetições"/>
+            <input class="input" inputmode="numeric" placeholder=${item.tipo === 'aerobico' ? 'min' : l.metaReps || item.reps} value=${l.reps} disabled=${!!l.id} onInput=${(ev) => muda(item, idx, 'reps', ev.target.value)} aria-label="Repetições"/>
+            <input class="input" inputmode="numeric" placeholder=${l.aquecimento || item.tipo === 'aerobico' ? '—' : l.metaRir != null ? String(l.metaRir) : '·'} value=${l.rir} disabled=${!!l.id || l.aquecimento || item.tipo === 'aerobico'} onInput=${(ev) => muda(item, idx, 'rir', ev.target.value)} aria-label="RIR sentido"/>
             ${l.id ? html`<button class="check on" aria-label="Desfazer série" onClick=${() => desfazer(item, idx)}>✓</button>`
               : html`<button class="check" aria-label="Concluir série" onClick=${() => concluir(item, idx)}>✓</button>`}
           </div>`)}
@@ -250,15 +272,19 @@ function montarLinhas(itens, historico, aberta) {
     const ultSessao = ant.length ? ant[ant.length - 1].sessao_id : null;
     const daUlt = ant.filter((h) => h.sessao_id === ultSessao);
     const lista = [];
-    for (let i = 1; i <= it.aquecimento; i++) lista.push({ numero: i, aquecimento: true, carga: '', reps: '', id: null });
+    for (let i = 1; i <= it.aquecimento; i++) lista.push({ numero: i, aquecimento: true, carga: '', reps: '', rir: '', id: null });
     for (let i = 1; i <= it.series; i++) {
       const ref = daUlt.find((h) => h.numero === i) || daUlt[daUlt.length - 1];
-      lista.push({ numero: i, aquecimento: false, carga: ref && ref.carga != null ? String(ref.carga).replace('.', ',') : '', reps: '', id: null });
+      // meta da série (séries detalhadas pelo treinador) ou a da linha do exercício
+      const meta = (it.series_detalhe || [])[i - 1] || {};
+      const carga = meta.carga != null ? meta.carga : ref && ref.carga != null ? ref.carga : null;
+      lista.push({ numero: i, aquecimento: false, carga: carga == null ? '' : String(carga).replace('.', ','), reps: '', rir: '', id: null,
+        metaReps: meta.reps || it.reps, metaRir: meta.rir != null ? meta.rir : it.esforco_alvo });
     }
     if (aberta) {
       historico.filter((h) => h.sessao_id === aberta.id && h.treino_item_id === it.id).forEach((h) => {
         const l = lista.find((x) => x.numero === h.numero && x.aquecimento === h.aquecimento);
-        if (l) Object.assign(l, { id: h.id, carga: h.carga == null ? '' : String(h.carga).replace('.', ','), reps: h.reps == null ? '' : String(h.reps) });
+        if (l) Object.assign(l, { id: h.id, carga: h.carga == null ? '' : String(h.carga).replace('.', ','), reps: h.reps == null ? '' : String(h.reps), rir: h.rir == null ? '' : String(h.rir) });
       });
     }
     out[it.id] = lista;
@@ -332,8 +358,9 @@ function CheckinAluna({ perfil }) {
           <${ResumoCheckin} c=${c}/>${c.resposta && html`<div class="resposta"><b>Resposta</b><p>${c.resposta}</p></div>`}</details>`)}`}`;
     }}<//></div>`;
 }
-export function ResumoCheckin({ c }) {
-  return html`<div class="resumo-checkin">
+export function ResumoCheckin({ c, sinal }) {
+  const sem = sinal ? semaforo(c) : null;
+  return html`${sem && html`<div class=${'semaforo ' + sem.cor} title="(6 − sono) + (6 − energia) + estresse + dor · 4–9 verde, 10–14 amarelo, 15–20 vermelho"><i></i><b>${sem.rotulo}</b><span>${sem.soma}/20</span></div>`}<div class="resumo-checkin">
     ${c.peso != null && html`<span>Peso <b>${num(c.peso, 1)} kg</b></span>`}
     ${c.treinos_feitos != null && html`<span>Treinos <b>${c.treinos_feitos}</b></span>`}
     ${ITENS_CHECKIN.map(([k, r]) => (c[k] != null && !(k === 'estresse' && c.estresse10 != null) ? html`<span class=${alerta(k, c[k]) ? 'ruim' : ''}>${r.split(' ')[0]} <b>${c[k]}/5</b></span>` : null))}

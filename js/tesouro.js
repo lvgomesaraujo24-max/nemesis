@@ -55,6 +55,9 @@ export function metricas({ assinaturas, lanc, alunas }) {
     encerradas: encerradas.length, ltv: ltv.length ? ltv.reduce((a, b) => a + b, 0) / ltv.length : 0, atrasadas, inadimplencia: atrasadas.reduce((t, l) => t + Number(l.valor), 0) };
 }
 
+// aulas presenciais dadas dentro do período do plano (compromissos tipo presencial marcados como feitos)
+export const presenciaisUsadas = (a, agenda) => agenda.filter((g) => g.aluna_id === a.aluna_id && g.tipo === 'presencial' && g.feito && String(g.inicio).slice(0, 10) >= a.inicio && String(g.inicio).slice(0, 10) <= a.fim).length;
+
 // ============================================================
 // TELA
 // ============================================================
@@ -63,15 +66,16 @@ export function Financeiro() {
   const [mes, setMes] = useState(hoje().slice(0, 7));
   const [modal, setModal] = useState(null);
   const e = useCarregar(async () => {
-    const [lanc, alunas, assinaturas, planos] = await Promise.all([api.q('lancamentos', { order: 'vencimento' }), api.q('profiles', { eq: { role: 'student' }, order: 'nome' }), api.q('assinaturas', {}), api.q('planos', { order: 'meses' })]);
-    return { lanc, alunas, assinaturas, planos };
+    const [lanc, alunas, assinaturas, planos, presenciais] = await Promise.all([api.q('lancamentos', { order: 'vencimento' }), api.q('profiles', { eq: { role: 'student' }, order: 'nome' }), api.q('assinaturas', {}), api.q('planos', { order: 'meses' }),
+      api.q('agenda', { eq: { tipo: 'presencial' } }).catch(() => [])]);
+    return { lanc, alunas, assinaturas, planos, presenciais };
   }, []);
   const pagar = async (l) => { try { await api.upd('lancamentos', l.id, { pago_em: l.pago_em ? null : hoje() }); e.recarregar(); } catch (err) { toast(err.message, 'erro'); } };
   const feito = () => { setModal(null); e.recarregar(); };
   return html`<div class="pilha">
     <div class="titulo-acoes"><h1 class="titulo">Tesouro</h1><button class="btn primario" onClick=${() => setModal({ tipo: 'lanc' })}>+ Lançamento</button></div>
     <${Abas} abas=${[['resumo', 'Resumo'], ['lancamentos', 'Lançamentos'], ['planos', 'Planos']]} atual=${aba} onMuda=${setAba}/>
-    <${Estado} e=${e}>${({ lanc, alunas, assinaturas, planos }) => {
+    <${Estado} e=${e}>${({ lanc, alunas, assinaturas, planos, presenciais }) => {
       const m = metricas({ assinaturas, lanc, alunas });
       const soma = (l) => l.reduce((t, x) => t + Number(x.valor), 0);
       const ativas = alunas.filter((a) => a.ativo);
@@ -83,6 +87,9 @@ export function Financeiro() {
         const seis = [...Array(6)].map((_, i) => somaMeses(mesAtual + '-15', i - 5).slice(0, 7)).map((x) => ({ x: mesNome(x).split(' ')[0], v: soma(lanc.filter((l) => l.tipo === 'receita' && l.pago_em && l.pago_em.slice(0, 7) === x)) }));
         const porPlano = {}; m.vigentes.forEach((a) => { porPlano[a.plano_nome || 'Outro'] = (porPlano[a.plano_nome || 'Outro'] || 0) + Number(a.valor) / mesesDe(a); });
         const semPlano = ativas.filter((a) => !m.vigentes.some((v) => v.aluna_id === a.id));
+        const venceMes = m.vigentes.filter((a) => a.fim.slice(0, 7) === mesAtual);
+        const combo = ativas.filter((a) => a.combo_nutri).length;
+        const presRestam = m.vigentes.reduce((t, a) => t + (a.presenciais ? Math.max(0, a.presenciais - presenciaisUsadas(a, presenciais)) : 0), 0);
         corpo = html`
           <div class="kpis tesouro">
             <div class="kpi-t"><span>MRR</span><b>${brl(m.mrr)}</b><small>receita recorrente por mês</small></div>
@@ -95,6 +102,12 @@ export function Financeiro() {
             <div class="stat"><b>${brl(m.ltv)}</b><span>LTV médio por aluna</span></div>
             <div class=${'stat' + (m.inadimplencia ? ' neg' : '')}><b>${brl(m.inadimplencia)}</b><span>em atraso (${m.atrasadas.length})</span></div>
             <div class="stat"><b>${brl(m.mrr * 12)}</b><span>receita anual no ritmo atual</span></div>
+          </div>
+          <div class="stats">
+            <div class=${'stat' + (venceMes.length ? ' atencao' : '')}><b>${venceMes.length}</b><span>plano(s) vencem em ${mesNome(mesAtual).split(' ')[0].toLowerCase()}</span></div>
+            <div class="stat"><b>${combo}</b><span>no combo com nutri${ativas.length ? ` (${Math.round((combo / ativas.length) * 100)}%)` : ''}</span></div>
+            <div class="stat"><b>${presRestam}</b><span>aulas presenciais a dar</span></div>
+            <div class=${'stat' + (semPlano.length ? ' neg' : '')}><b>${semPlano.length}</b><span>ativa(s) sem plano</span></div>
           </div>
           <div class="paineis dois">
             <section class="card"><h3>Recebido nos últimos 6 meses</h3><${Barras} dados=${seis}/></section>
@@ -185,7 +198,7 @@ function Estimativa({ valor, parcelas, taxa, meses }) {
 export function NovaAssinatura({ aluna, planos, anterior, onFechar, onFeito }) {
   const ativos = planos.filter((p) => p.ativo);
   const inicio0 = anterior && anterior.fim >= somaDias(hoje(), -15) ? anterior.fim : hoje();
-  const [f, setF] = useState({ plano_id: (ativos[0] || {}).id, inicio: inicio0, valor: ativos[0] ? Number(ativos[0].valor) : 0, parcelas: 1, forma: 'Pix', primeiraPaga: true, taxa: TAXAS.Pix, gerarAgenda: true });
+  const [f, setF] = useState({ plano_id: (ativos[0] || {}).id, inicio: inicio0, valor: ativos[0] ? Number(ativos[0].valor) : 0, parcelas: 1, forma: 'Pix', primeiraPaga: true, taxa: TAXAS.Pix, gerarAgenda: true, presenciais: '' });
   const plano = planos.find((p) => p.id === f.plano_id) || {};
   const escolhe = (id) => { const p = planos.find((x) => x.id === id); setF({ ...f, plano_id: id, valor: Number(p.valor) }); };
   const fim = plano.meses ? somaMeses(f.inicio, plano.meses) : f.inicio;
@@ -194,7 +207,8 @@ export function NovaAssinatura({ aluna, planos, anterior, onFechar, onFeito }) {
     ev.preventDefault();
     const valor = f.valor || 0; const parcelas = f.parcelas;
     try {
-      const [a] = await api.ins('assinaturas', { aluna_id: aluna.id, plano_id: plano.id, plano_nome: plano.nome, inicio: f.inicio, fim, valor, forma_pagamento: parcelas > 1 ? `${f.forma} ${parcelas}x` : f.forma });
+      const pres = parseInt(f.presenciais, 10);
+      const [a] = await api.ins('assinaturas', { aluna_id: aluna.id, plano_id: plano.id, plano_nome: plano.nome, inicio: f.inicio, fim, valor, forma_pagamento: parcelas > 1 ? `${f.forma} ${parcelas}x` : f.forma, ...(pres > 0 ? { presenciais: pres } : {}) });
       const vp = Math.round((valor / parcelas) * 100) / 100;
       const linhas = [...Array(parcelas)].map((_, i) => ({ tipo: 'receita', descricao: `${plano.nome} · ${aluna.nome}${parcelas > 1 ? ` (${i + 1}/${parcelas})` : ''}`, categoria: 'Consultoria',
         valor: i === parcelas - 1 ? Math.round((valor - vp * (parcelas - 1)) * 100) / 100 : vp, vencimento: somaMeses(f.inicio, i), pago_em: i === 0 && f.primeiraPaga ? hoje() : null, aluna_id: aluna.id, assinatura_id: a.id }));
@@ -213,6 +227,7 @@ export function NovaAssinatura({ aluna, planos, anterior, onFechar, onFeito }) {
         <${Campo} rotulo="Forma"><select class="input" onChange=${(ev) => setF({ ...f, forma: ev.target.value, taxa: TAXAS[ev.target.value] })}>${Object.keys(TAXAS).map((o) => html`<option value=${o} selected=${f.forma === o}>${o}</option>`)}</select><//>
         <${Campo} rotulo="Taxa (%)"><input class="input" inputmode="decimal" value=${String(f.taxa.pct).replace('.', ',')} onInput=${(ev) => setF({ ...f, taxa: { ...f.taxa, pct: Number(ev.target.value.replace(',', '.')) || 0 } })}/><//>
         <${Campo} rotulo="Taxa fixa por parcela"><${InputMoeda} valor=${f.taxa.fixo} onValor=${(v) => setF((x) => ({ ...x, taxa: { ...x.taxa, fixo: v } }))}/><//>
+        <${Campo} rotulo="Aulas presenciais" dica="Opcional: quantas aulas presenciais o plano inclui"><input class="input" inputmode="numeric" placeholder="0" value=${f.presenciais} onInput=${(ev) => setF({ ...f, presenciais: ev.target.value.replace(/\D/g, '') })}/><//>
       </div>
       <${Estimativa} valor=${f.valor} parcelas=${f.parcelas} taxa=${f.taxa} meses=${plano.meses}/>
       <p class="suave">Vai de ${dataBR(f.inicio)} até ${plano.meses ? dataBR(fim) : '·'}.${f.parcelas > 1 ? ` Parcelas lançadas mês a mês.` : ''}</p>
@@ -255,12 +270,13 @@ function ModalPlano({ plano, onFechar, onFeito }) {
 
 export function FinanceiroAluna({ aluna }) {
   const e = useCarregar(async () => {
-    const [ass, lanc, planos] = await Promise.all([api.q('assinaturas', { eq: { aluna_id: aluna.id }, order: 'inicio', asc: false }), api.q('lancamentos', { eq: { aluna_id: aluna.id }, order: 'vencimento' }), api.q('planos', { order: 'meses' })]);
-    return { ass, lanc, planos };
+    const [ass, lanc, planos, agenda] = await Promise.all([api.q('assinaturas', { eq: { aluna_id: aluna.id }, order: 'inicio', asc: false }), api.q('lancamentos', { eq: { aluna_id: aluna.id }, order: 'vencimento' }), api.q('planos', { order: 'meses' }),
+      api.q('agenda', { eq: { aluna_id: aluna.id, tipo: 'presencial' } }).catch(() => [])]);
+    return { ass, lanc, planos, agenda };
   }, [aluna.id]);
   const [novo, setNovo] = useState(false);
   const pagar = async (l) => { await api.upd('lancamentos', l.id, { pago_em: l.pago_em ? null : hoje() }); e.recarregar(); };
-  return html`<${Estado} e=${e}>${({ ass, lanc, planos }) => { const total = lanc.filter((l) => l.pago_em).reduce((t, l) => t + Number(l.valor), 0);
+  return html`<${Estado} e=${e}>${({ ass, lanc, planos, agenda }) => { const total = lanc.filter((l) => l.pago_em).reduce((t, l) => t + Number(l.valor), 0);
     return html`<div class="pilha">
       <button class="btn primario" onClick=${() => setNovo(true)}>${ass.length ? 'Renovar plano' : '+ Registrar plano'}</button>
       ${ass.length ? ass.map((a) => { const d = diasEntre(hoje(), a.fim); const p = planos.find((x) => x.id === a.plano_id);
@@ -268,6 +284,7 @@ export function FinanceiroAluna({ aluna }) {
           <span class=${'tag' + (d < 0 ? '' : d <= 10 ? ' atencao' : ' roxo')}>${d < 0 ? 'encerrado' : `${d} dias restantes`}</span></div>
           <p class="suave">${dataBR(a.inicio)} a ${dataBR(a.fim)} · ${brl(a.valor)}${a.forma_pagamento ? ' · ' + a.forma_pagamento : ''}</p>
           ${p && html`<small>Entregas: ${textoEntregas(entregasDe(p)).join(', ')}</small>`}
+          ${a.presenciais > 0 && html`<small>Aulas presenciais: ${presenciaisUsadas(a, agenda)} de ${a.presenciais} dadas · ${Math.max(0, a.presenciais - presenciaisUsadas(a, agenda))} restante(s)</small>`}
           <ul class="lista">${lanc.filter((l) => l.assinatura_id === a.id).map((l) => html`<li class="linha lanc">
             <button class=${'check' + (l.pago_em ? ' on' : '')} aria-label="Alternar pago" onClick=${() => pagar(l)}>✓</button>
             <div class="lanc-info"><b>${brl(l.valor)}</b><small>vence ${dataBR(l.vencimento)}${l.pago_em ? ' · pago' : l.vencimento < hoje() ? ' · em atraso' : ''}</small></div></li>`)}</ul>

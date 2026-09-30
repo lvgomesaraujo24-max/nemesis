@@ -58,7 +58,7 @@ function traduzErro(m) {
   if (/Password should be at least/i.test(m)) return 'A senha precisa ter pelo menos 6 caracteres.';
   if (/Email not confirmed/i.test(m)) return 'Confirme seu e-mail pelo link que chegou na sua caixa de entrada.';
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Sem conexão com o servidor. Confira sua internet.';
-  if (/(column|coluna|relation|relação).*(does not exist|não existe)|Could not find the '.*' (column|table)|schema cache/i.test(m)) return 'O banco precisa das atualizações novas: rode no SQL Editor do Supabase as atualizações 5, 6 e 7 (pasta supabase), nessa ordem.';
+  if (/(column|coluna|relation|relação).*(does not exist|não existe)|Could not find the '.*' (column|table)|schema cache/i.test(m)) return 'O banco precisa das atualizações novas: rode no SQL Editor do Supabase as atualizações 5, 6, 7 e 8 (pasta supabase), nessa ordem.';
   return m;
 }
 

@@ -6,7 +6,7 @@ import { api } from './api.js';
 import { Mesociclo } from './extras.js';
 import { Icone } from './icones.js';
 import { MapaCorpo } from './corpo.js';
-import { MUSCULOS, GRUPOS_MUSC, TIPOS, METODOS, METODOS_AEROBICO, DESCANSOS, REPS_TIPOS, NIVEIS, GRUPOS_TREINO, musculosDe, tipoDoTreino,
+import { MUSCULOS, GRUPOS_MUSC, TIPOS, METODOS, METODOS_AEROBICO, METODOS_GRUPO, CADENCIAS, CAD_SIMPLES, DESCANSOS, REPS_TIPOS, NIVEIS, GRUPOS_TREINO, musculosDe, tipoDoTreino,
   lerFaixa, juntarFaixa, tipoReps, repsPara, numeroReps, tempoTreino, fmtTempo, volumePorMusculo, volumePorGrupo, faixaGrupo, statusFaixa,
   seriesValidas, nivelVolume, REF_VOLUME } from './musculos.js';
 import { useCarregar, Estado, Modal, Campo, toast, lerNum } from './util.js';
@@ -20,10 +20,10 @@ const PADRAO = {
 };
 // o que o "Replicar valores" copia do 1º exercício para os outros
 const REPLICAR = [['reps', 'Repetições', ['reps', 'reps_tipo']], ['metodo', 'Método', ['metodo', 'tecnica']], ['series', 'Séries', ['series']],
-  ['cadencia', 'Cadência', ['cadencia_exc', 'cadencia_con']], ['intervalo', 'Intervalo', ['descanso', 'descanso_tipo', 'descanso_max']],
+  ['cadencia', 'Cadência', ['cadencia_exc', 'cadencia_con', 'cadencia_tipo', 'cadencia_texto']], ['intervalo', 'Intervalo', ['descanso', 'descanso_tipo', 'descanso_max']],
   ['aquecimento', 'Séries de aquecimento', ['aquecimento']], ['esforco', 'RIR/RPE', ['esforco_tipo', 'esforco_alvo']]];
 // o que um preset de linha guarda
-const CAMPOS_PRESET = ['series', 'aquecimento', 'reps', 'reps_tipo', 'cadencia_exc', 'cadencia_con', 'descanso', 'descanso_tipo', 'descanso_max', 'metodo', 'tecnica', 'esforco_tipo', 'esforco_alvo'];
+const CAMPOS_PRESET = ['series', 'aquecimento', 'reps', 'reps_tipo', 'cadencia_exc', 'cadencia_con', 'cadencia_tipo', 'cadencia_texto', 'descanso', 'descanso_tipo', 'descanso_max', 'metodo', 'tecnica', 'esforco_tipo', 'esforco_alvo'];
 
 // dono dos treinos: uma aluna (ficha) ou um modelo
 const donoDe = (aluna, modelo) => (aluna ? { campo: 'aluna_id', id: aluna.id, tabela: 'profiles', nivel: aluna.nivel, aluna } : { campo: 'modelo_id', id: modelo.id, tabela: 'modelos', nivel: modelo.nivel, modelo });
@@ -237,6 +237,9 @@ function Item({ it, ex, i, n, presets, salvar, mover, remover, trocar, salvarPre
   const dt = it.descanso_tipo || 'exato';
   const et = it.esforco_tipo || 'rir';
   const mus = musculosDe(ex);
+  const ct = it.cadencia_tipo || 'padrao';
+  const [verSeries, setVerSeries] = useState(false);
+  const emGrupo = METODOS_GRUPO.includes(it.metodo);
   const cel = (rotulo, corpo, extra) => html`<div class="cel"><div class="cel-rot">${rotulo}</div><div class=${'cel-corpo' + (extra ? ' ' + extra : '')}>${corpo}</div></div>`;
   const num = (campo, ph = '—') => html`<input class="cel-in" inputmode="numeric" placeholder=${ph} value=${it[campo] ?? ''} onChange=${(ev) => salvar({ [campo]: numOuNull(ev.target.value) ?? (campo === 'series' ? 1 : campo === 'aquecimento' ? 0 : null) })}/>`;
   const sobre = arrasto && arrasto.sobre === i && arrasto.de !== i;
@@ -250,10 +253,13 @@ function Item({ it, ex, i, n, presets, salvar, mover, remover, trocar, salvarPre
       <span class="ex-ordem"><button class="icone" aria-label="Subir" disabled=${i === 0} onClick=${() => mover(-1)}><${Icone} nome="subir" tam=${15}/></button>
         <button class="icone" aria-label="Descer" disabled=${i === n - 1} onClick=${() => mover(1)}><${Icone} nome="abaixo" tam=${15}/></button></span>
       <button class="icone" title="Trocar exercício" aria-label="Trocar exercício" onClick=${trocar}><${Icone} nome="trocar" tam=${18}/></button>
+      ${emGrupo && html`<select class=${'grupo-num g' + (it.grupo || 1)} aria-label="Grupo do método" title="Exercícios com o mesmo número são feitos juntos" onChange=${(ev) => salvar({ grupo: ev.target.value })}>
+        ${['1', '2', '3', '4', '5'].map((g) => html`<option value=${g} selected=${String(it.grupo || '1') === g}>(${g})</option>`)}</select>`}
       <div class="ex-nome"><b>${ex ? ex.nome : '(exercício removido)'}</b>
         <small>${tipo !== 'musculacao' ? html`<span class="tipo-ponto" style=${`background:${TIPOS[tipo].cor}`}></span>${TIPOS[tipo].nome} · ` : ''}${mus.primarios.map((m) => MUSCULOS[m].nome).join(', ') || (ex && ex.grupo) || ''}</small></div>
       <div class="ex-acoes">
         ${tipo !== 'aerobico' && html`<${Presets} presets=${presets} aplicar=${(p) => salvar(p.dados)} salvarPreset=${salvarPreset} apagarPreset=${apagarPreset}/>`}
+        ${tipo !== 'aerobico' && html`<button class=${'icone' + (verSeries || (it.series_detalhe || []).length ? ' on' : '')} title="Detalhar série por série (carga, reps e RIR)" aria-label="Detalhar séries" onClick=${() => setVerSeries(!verSeries)}><${Icone} nome="lista" tam=${17}/></button>`}
         <button class=${'icone' + (it.obs || verObs ? ' on' : '')} title="Observação para a aluna" aria-label="Observação" onClick=${() => setVerObs(!verObs)}><${Icone} nome="comentario" tam=${17}/></button>
         ${ex && ex.video_url ? html`<a class="icone" title="Ver vídeo" aria-label="Ver vídeo" href=${ex.video_url} target="_blank" rel="noopener"><${Icone} nome="video" tam=${17}/></a>`
           : html`<span class="icone apagado" title="Sem vídeo na biblioteca"><${Icone} nome="video" tam=${17}/></span>`}
@@ -269,8 +275,11 @@ function Item({ it, ex, i, n, presets, salvar, mover, remover, trocar, salvarPre
         ${cel('Séries', num('series'))}
         ${cel('Aquec.', num('aquecimento', '0'))}
         <${CelReps} it=${it} salvar=${salvar} cel=${cel}/>
-        ${cel('Cadência', html`<label class="cad">Exc<select class="cel-in" onChange=${(ev) => salvar({ cadencia_exc: Number(ev.target.value), cadencia_con: it.cadencia_con ?? 0 })}>${opcoes(CAD, it.cadencia_exc ?? 2)}</select></label>
-          <label class="cad">Con<select class="cel-in" onChange=${(ev) => salvar({ cadencia_con: Number(ev.target.value), cadencia_exc: it.cadencia_exc ?? 2 })}>${opcoes(CAD, it.cadencia_con ?? 0)}</select></label>`, 'duplo')}
+        ${cel(html`<select class="cel-sel" aria-label="Tipo de cadência" onChange=${(ev) => salvar({ cadencia_tipo: ev.target.value, cadencia_texto: ev.target.value === 'americana' ? '3-0-1-0' : ev.target.value === 'simplificada' ? 'moderada' : null })}>${opcoes(CADENCIAS, ct)}</select>`,
+          ct === 'americana' ? html`<input class="cel-in" placeholder="3-0-1-0" title="Descida, pausa embaixo, subida, pausa em cima (segundos)" value=${it.cadencia_texto || ''} onChange=${(ev) => salvar({ cadencia_texto: ev.target.value.replace(/[^\dX]/gi, '').slice(0, 4).split('').join('-') || null })}/>`
+          : ct === 'simplificada' ? html`<select class="cel-in" onChange=${(ev) => salvar({ cadencia_texto: ev.target.value })}>${opcoes(CAD_SIMPLES.map(([k, r]) => [k, r]), it.cadencia_texto || 'moderada')}</select>`
+          : html`<label class="cad">Exc<select class="cel-in" onChange=${(ev) => salvar({ cadencia_exc: Number(ev.target.value), cadencia_con: it.cadencia_con ?? 0 })}>${opcoes(CAD, it.cadencia_exc ?? 2)}</select></label>
+          <label class="cad">Con<select class="cel-in" onChange=${(ev) => salvar({ cadencia_con: Number(ev.target.value), cadencia_exc: it.cadencia_exc ?? 2 })}>${opcoes(CAD, it.cadencia_con ?? 0)}</select></label>`, ct === 'padrao' ? 'duplo' : '')}
         ${cel(html`<select class="cel-sel" aria-label="Formato do descanso" onChange=${(ev) => salvar({ descanso_tipo: ev.target.value })}>${opcoes(DESCANSOS, dt)}</select>`,
           dt === 'livre' ? html`<span class="cel-txt">o quanto precisar</span>`
           : dt === 'faixa' ? html`${num('descanso')}<span class="cel-div"></span>${num('descanso_max')}` : num('descanso'), dt === 'faixa' ? 'duplo' : '')}
@@ -279,11 +288,28 @@ function Item({ it, ex, i, n, presets, salvar, mover, remover, trocar, salvarPre
           html`<select class="cel-in" onChange=${(ev) => salvar({ esforco_tipo: et, esforco_alvo: ev.target.value === '' ? null : Number(ev.target.value) })}>
             <option value="" selected=${it.esforco_alvo == null}>—</option>${opcoes(et === 'rpe' ? RPE : RIR, it.esforco_alvo)}</select>`)}
       </div>`}
+    ${verSeries && tipo !== 'aerobico' && html`<${SeriesDetalhe} it=${it} salvar=${salvar}/>`}
     ${(verObs || it.obs || (it.metodo && it.metodo !== 'padrao' && it.tecnica)) && html`<div class="ex-obs">
       ${it.metodo && it.metodo !== 'padrao' && tipo !== 'aerobico' && html`<input class="input" placeholder="Detalhe do método (ex.: 2 drops de 20%)" value=${it.tecnica || ''} onChange=${(ev) => salvar({ tecnica: ev.target.value || null })}/>`}
       ${(verObs || it.obs) && html`<textarea class="input" rows="2" placeholder="Observação para a aluna" value=${it.obs || ''} onChange=${(ev) => salvar({ obs: ev.target.value || null })}></textarea>`}
     </div>`}
   </article>`;
+}
+
+// ---------- séries detalhadas: carga, reps e RIR de cada série ----------
+function SeriesDetalhe({ it, salvar }) {
+  const n = Math.max(1, Number(it.series || 1));
+  const base = it.series_detalhe || [];
+  const linhas = [...Array(n)].map((_, i) => base[i] || {});
+  const muda = (i, k, v) => { const l = linhas.map((x, j) => (j === i ? { ...x, [k]: v === '' ? null : v } : x)); salvar({ series_detalhe: l.some((x) => x.carga || x.reps || x.rir != null) ? l : null }); };
+  return html`<div class="series-det">
+    <div class="sd-cab"><span>Série</span><span>Carga (kg)</span><span>Reps</span><span>RIR</span></div>
+    ${linhas.map((x, i) => html`<div class="sd-linha"><b>${i + 1}</b>
+      <input class="input" inputmode="decimal" placeholder="livre" value=${x.carga ?? ''} onChange=${(ev) => muda(i, 'carga', lerNum(ev.target.value))}/>
+      <input class="input" placeholder=${it.reps || '—'} value=${x.reps ?? ''} onChange=${(ev) => muda(i, 'reps', ev.target.value.trim())}/>
+      <select class="input" onChange=${(ev) => muda(i, 'rir', ev.target.value === '' ? '' : Number(ev.target.value))}><option value="" selected=${x.rir == null}>${it.esforco_alvo != null ? `igual (${it.esforco_alvo})` : '—'}</option>${[0, 1, 2, 3, 4, 5].map((r) => html`<option value=${r} selected=${x.rir === r}>${r}</option>`)}</select></div>`)}
+    <small>Em branco, vale o que está na linha do exercício. A aluna vê a meta de cada série na execução.</small>
+  </div>`;
 }
 
 // ---------- presets de linha ----------

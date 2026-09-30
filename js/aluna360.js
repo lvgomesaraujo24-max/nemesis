@@ -1,9 +1,9 @@
-// Visão 360 da aluna: formulários (atribuições e respostas com status), arquivos e feed de atividades.
+// Visão 360 da aluna: formulários (atribuições e respostas com status), arquivos e Crônica (feed do que a aluna viveu).
 import { html, useState, useEffect } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { Icone } from './icones.js';
 import { ComoFunciona } from './comum.js';
-import { ModalEnvio } from './formularios.js';
+import { ModalEnvio, statusAtribuicao } from './formularios.js';
 import { useCarregar, Estado, Modal, Campo, Abas, toast, dataBR, hoje, somaDias, segundaDe, relativo, num } from './util.js';
 
 const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -46,21 +46,6 @@ export function FormulariosAluna({ aluna }) {
 
 const descQuando = (a) => (a.quando === 'recorrente' ? `toda ${((a.recorrencia || {}).dias_semana || []).map((x) => DIAS[x]).join(', ')}`
   : a.quando === 'programado' ? `em ${a.agendado_para ? dataBR(a.agendado_para) : '?'}` : `desde ${dataBR(a.created_at)}`);
-
-// [classe da tag, rótulo, detalhe]
-function statusAtribuicao(a, envios) {
-  const doForm = envios.filter((x) => x.formulario_id === a.formulario_id);
-  if (!a.ativa) return ['', 'pausada', null];
-  if (a.quando === 'recorrente') {
-    const semana = doForm.find((x) => String(x.enviado_em).slice(0, 10) >= segundaDe());
-    return semana ? ['ok', 'respondido esta semana', `em ${dataBR(semana.enviado_em)}`] : ['atencao', 'pendente esta semana', doForm[0] ? `última resposta ${relativo(doForm[0].enviado_em)}` : 'nunca respondeu'];
-  }
-  if (a.quando === 'programado' && a.agendado_para && new Date(a.agendado_para) > new Date()) return ['', 'agendado', `libera em ${dataBR(a.agendado_para)}`];
-  const resp = doForm.find((x) => x.atribuicao_id === a.id) || doForm.find((x) => x.enviado_em >= a.created_at);
-  if (resp) return ['ok', 'respondido', `em ${dataBR(resp.enviado_em)}`];
-  const desde = String(a.agendado_para || a.created_at).slice(0, 10);
-  return desde < somaDias(hoje(), -3) ? ['perigo', 'atrasado', `pendente desde ${dataBR(desde)}`] : ['atencao', 'pendente', `desde ${dataBR(desde)}`];
-}
 
 function ModalAtribuirAluna({ aluna, forms, onFechar, onFeito }) {
   const [f, setF] = useState({ formulario_id: (forms[0] || {}).id || '', quando: 'agora', dias: [5], dia: hoje(), hora: '08:00', entrega: 'manual', bloqueia_app: false });
@@ -144,9 +129,10 @@ function CartaoArquivo({ x, abrir, apagar }) {
 }
 
 // ============================================================
-// ATIVIDADES (feed do que a aluna fez)
+// CRÔNICA (a estrada da aluna: cada pedra é um marco)
 // ============================================================
-const TIPOS_ATV = [['treino', 'Treinos', '◆'], ['checkin', 'Check-ins', '✓'], ['formulario', 'Formulários', '☰'], ['avaliacao', 'Avaliações', '◎'], ['plano', 'Plano', '$'], ['arquivo', 'Arquivos', '▣'], ['troca', 'Trocas de exercício', '⇄']];
+const TIPOS_ATV = [['treino', 'Treinos', '◆'], ['recorde', 'Recordes', '▲'], ['ficha', 'Ficha', '✎'], ['checkin', 'Check-ins', '✓'], ['formulario', 'Formulários', '☰'],
+  ['avaliacao', 'Avaliações', '◎'], ['meta', 'Metas', '★'], ['foto', 'Fotos', '◐'], ['plano', 'Plano', '$'], ['arquivo', 'Arquivos', '▣'], ['troca', 'Trocas de exercício', '⇄']];
 
 export function AtividadesAluna({ aluna }) {
   const [ocultos, setOcultos] = useState(() => { try { return JSON.parse(localStorage.getItem('nemesis-atividades-ocultas')) || []; } catch (e) { return []; } });
@@ -156,11 +142,23 @@ export function AtividadesAluna({ aluna }) {
     const ts = new Date(desde + 'T00:00:00').toISOString();
     const eq = { aluna_id: aluna.id };
     const pega = (t, o) => api.q(t, o).catch(() => []);
-    const [sessoes, series, checkins, envios, forms, avals, ass, arqs, alertas] = await Promise.all([
-      pega('sessoes', { eq, gte: { data: desde } }), pega('series', { eq, gte: { created_at: ts } }), pega('checkins', { eq, gte: { semana: somaDias(desde, -7) } }),
+    const [sessoes, todas, checkins, envios, forms, avals, ass, arqs, alertas, treinos, mesos, metas, exercicios] = await Promise.all([
+      pega('sessoes', { eq, gte: { data: desde } }), pega('series', { eq, order: 'created_at' }), pega('checkins', { eq, gte: { semana: somaDias(desde, -7) } }),
       pega('envios', { eq, gte: { enviado_em: ts } }), pega('formularios', {}), pega('avaliacoes', { eq, gte: { data: desde } }), pega('assinaturas', { eq }),
-      pega('arquivos_aluna', { eq, gte: { created_at: ts } }), pega('alertas_coach', { eq, gte: { created_at: ts } })]);
-    return { sessoes, series, checkins, envios, forms, avals, ass: ass.filter((x) => x.inicio >= desde), arqs, alertas: alertas.filter((x) => x.titulo === 'Troca de exercício') };
+      pega('arquivos_aluna', { eq, gte: { created_at: ts } }), pega('alertas_coach', { eq, gte: { created_at: ts } }), pega('treinos', { eq }), pega('mesociclos', { eq }),
+      pega('metas', { eq }), pega('exercicios', {})]);
+    // recordes: série que passou a maior carga já feita naquele exercício (a primeira vez não conta)
+    const melhor = {}, recs = [];
+    todas.filter((x) => !x.aquecimento && x.carga != null).sort((a, b) => (a.created_at < b.created_at ? -1 : 1)).forEach((x) => {
+      const m = melhor[x.exercicio_id];
+      if (m && (x.carga > m.carga || (x.carga === m.carga && (x.reps || 0) > (m.reps || 0))) && x.created_at >= ts) recs.push({ ...x, antes: m });
+      if (!m || x.carga > m.carga || (x.carga === m.carga && (x.reps || 0) > (m.reps || 0))) melhor[x.exercicio_id] = x;
+    });
+    // um recorde por exercício por dia (o maior)
+    const recDia = {}; recs.forEach((x) => { recDia[x.exercicio_id + String(x.created_at).slice(0, 10)] = x; });
+    return { sessoes, series: todas.filter((x) => x.created_at >= ts), checkins, envios, forms, avals, ass: ass.filter((x) => x.inicio >= desde), arqs,
+      alertas: alertas.filter((x) => x.titulo === 'Troca de exercício'), recs: Object.values(recDia), exercicios,
+      treinos: treinos.filter((x) => String(x.created_at || '') >= ts), mesos: mesos.filter((x) => x.inicio >= desde), metas, desde };
   }, [aluna.id, dias]);
   const alterna = (k) => { const v = ocultos.includes(k) ? ocultos.filter((x) => x !== k) : [...ocultos, k]; setOcultos(v); try { localStorage.setItem('nemesis-atividades-ocultas', JSON.stringify(v)); } catch (err) { /* */ } };
   return html`<div class="pilha">
@@ -173,17 +171,71 @@ export function AtividadesAluna({ aluna }) {
         sub: [temSerie[x.id] && `${temSerie[x.id]} séries`, x.esforco && `esforço ${x.esforco}/10`, x.comentario].filter(Boolean).join(' · ') }));
       d.checkins.forEach((x) => itens.push({ tipo: 'checkin', quando: x.created_at || x.semana, txt: 'Mandou o check-in da semana', sub: [x.peso && `${num(x.peso, 1)} kg`, x.comentario].filter(Boolean).join(' · ') }));
       d.envios.forEach((x) => itens.push({ tipo: 'formulario', quando: x.enviado_em, txt: `Respondeu "${(d.forms.find((f) => f.id === x.formulario_id) || {}).titulo || 'formulário'}"` }));
-      d.avals.forEach((x) => itens.push({ tipo: 'avaliacao', quando: x.data, txt: 'Avaliação física', sub: [x.peso && `${num(x.peso, 1)} kg`, x.percentual_gordura != null && `${num(x.percentual_gordura, 1)}% de gordura`].filter(Boolean).join(' · ') }));
+      d.avals.forEach((x) => itens.push({ tipo: 'avaliacao', quando: x.data, marco: true, txt: x.autoavaliacao ? 'Autoavaliação (medidas e fotos)' : 'Avaliação física', sub: [x.peso && `${num(x.peso, 1)} kg`, x.percentual_gordura != null && `${num(x.percentual_gordura, 1)}% de gordura`].filter(Boolean).join(' · ') }));
       d.ass.forEach((x) => itens.push({ tipo: 'plano', quando: x.inicio, txt: `Plano ${x.plano_nome || ''} começou`, sub: `até ${dataBR(x.fim)}` }));
-      d.arqs.forEach((x) => itens.push({ tipo: 'arquivo', quando: x.created_at, txt: `Arquivo: ${x.nome}` }));
+      const nomeEx = (id) => (d.exercicios.find((x) => x.id === id) || {}).nome || 'Exercício';
+      // recordes do mesmo dia viram uma pedra só
+      const recsDia = {}; d.recs.forEach((x) => { const k = String(x.created_at).slice(0, 10); (recsDia[k] = recsDia[k] || []).push(x); });
+      Object.values(recsDia).forEach((xs) => itens.push(xs.length === 1
+        ? { tipo: 'recorde', quando: xs[0].created_at, txt: `Recorde no ${nomeEx(xs[0].exercicio_id)}: ${num(xs[0].carga, 1)} kg × ${xs[0].reps || '·'}`, sub: `antes ${num(xs[0].antes.carga, 1)} kg × ${xs[0].antes.reps || '·'}` }
+        : { tipo: 'recorde', quando: xs[xs.length - 1].created_at, txt: `${xs.length} recordes no treino`, sub: xs.map((x) => `${nomeEx(x.exercicio_id)} ${num(x.carga, 1)} kg × ${x.reps || '·'}`).join(' · ') }));
+      const fichas = {}; d.treinos.forEach((x) => { const k = String(x.created_at).slice(0, 10); (fichas[k] = fichas[k] || []).push(x.nome); });
+      Object.entries(fichas).forEach(([k, ns]) => itens.push({ tipo: 'ficha', quando: k, txt: ns.length > 1 ? 'Ficha nova' : `Treino novo: ${ns[0]}`, sub: ns.length > 1 ? ns.join(', ') : null, marco: ns.length > 1 }));
+      d.mesos.forEach((x) => itens.push({ tipo: 'ficha', quando: x.inicio, txt: `Começou o mesociclo ${x.nome || ''}`.trim(), sub: `${dataBR(x.inicio)} a ${dataBR(x.fim)}`, marco: true }));
+      d.metas.forEach((x) => {
+        const t = x.titulo || { carga: `Carga no ${nomeEx(x.exercicio_id)}`, peso: 'Peso', gordura: '% de gordura', medida: x.medida || 'Medida', vo2: 'VO2' }[x.tipo] || 'Meta';
+        if (String(x.created_at || '') >= d.desde) itens.push({ tipo: 'meta', quando: x.created_at, txt: `Nova meta: ${t}`, sub: x.valor_alvo != null ? `alvo ${num(x.valor_alvo, 1)}${x.prazo ? ' até ' + dataBR(x.prazo) : ''}` : null });
+        if (x.concluida_em && x.concluida_em >= d.desde) itens.push({ tipo: 'meta', quando: x.concluida_em, txt: `Meta batida: ${t}`, marco: true });
+      });
+      const fotos = {}; d.arqs.filter((x) => x.categoria === 'foto').forEach((x) => { const k = String(x.created_at).slice(0, 10); fotos[k] = (fotos[k] || 0) + 1; });
+      Object.entries(fotos).forEach(([k, n]) => itens.push({ tipo: 'foto', quando: k, txt: n > 1 ? `${n} fotos de progresso` : 'Foto de progresso' }));
+      d.arqs.filter((x) => x.categoria !== 'foto').forEach((x) => itens.push({ tipo: 'arquivo', quando: x.created_at, txt: `Arquivo: ${x.nome}` }));
       d.alertas.forEach((x) => itens.push({ tipo: 'troca', quando: x.created_at, txt: x.texto }));
       const l = itens.filter((x) => !ocultos.includes(x.tipo)).sort((a, b) => (String(a.quando) < String(b.quando) ? 1 : -1));
       if (!l.length) return html`<div class="card vazio"><p>Nada nesse período.</p></div>`;
       const porDia = {}; l.forEach((x) => { const k = String(x.quando).slice(0, 10); (porDia[k] = porDia[k] || []).push(x); });
-      return html`<div class="feed">${Object.entries(porDia).map(([dia, xs]) => html`<section class="feed-dia"><h4>${relativo(dia) === 'hoje' ? 'Hoje' : relativo(dia) === 'ontem' ? 'Ontem' : dataBR(dia)}</h4>
-        ${xs.map((x) => html`<div class=${'feed-item ' + x.tipo}><span class="feed-ico">${(TIPOS_ATV.find(([k]) => k === x.tipo) || [])[2]}</span>
+      const marcos = l.filter((x) => x.marco).length;
+      return html`<div class="feed cronica">
+        <p class="suave">${l.length} registro(s) nos últimos ${dias} dias${marcos ? ` · ${marcos} marco(s) na estrada` : ''}.</p>
+        ${Object.entries(porDia).map(([dia, xs]) => html`<section class="feed-dia"><h4>${relativo(dia) === 'hoje' ? 'Hoje' : relativo(dia) === 'ontem' ? 'Ontem' : dataBR(dia)}</h4>
+        ${xs.map((x) => html`<div class=${'feed-item ' + x.tipo + (x.marco ? ' marco' : '')}><span class="feed-ico">${(TIPOS_ATV.find(([k]) => k === x.tipo) || [])[2]}</span>
           <div><b>${x.txt}</b>${x.sub && html`<small>${x.sub}</small>`}</div>
           ${String(x.quando).length > 10 && html`<small class="feed-hora">${new Date(x.quando).toTimeString().slice(0, 5)}</small>`}</div>`)}</section>`)}</div>`;
     }}<//>
   </div>`;
+}
+
+// ============================================================
+// VÍDEOS DE EXECUÇÃO (a aluna envia a série, o treinador corrige no app)
+// ============================================================
+export function VideosAluna({ aluna }) {
+  const e = useCarregar(async () => {
+    const [videos, exercicios] = await Promise.all([api.q('videos_execucao', { eq: { aluna_id: aluna.id }, order: 'created_at', asc: false }), api.q('exercicios', {})]);
+    return { videos, exercicios };
+  }, [aluna.id]);
+  return html`<${Estado} e=${e}>${({ videos, exercicios }) => (videos.length
+    ? html`<div class="pilha">${videos.map((v) => html`<${CartaoVideo} key=${v.id} v=${v} exNome=${(exercicios.find((x) => x.id === v.exercicio_id) || {}).nome || 'Exercício'} onFeito=${e.recarregar}/>`)}</div>`
+    : html`<${ComoFunciona} titulo="Nenhum vídeo ainda" passos=${[['A aluna grava a série', 'No treino, em cada exercício, ela toca em "Enviar vídeo da série".'],
+      ['Você assiste aqui', 'E também na fila do dia, na Acrópole.'], ['Devolve a correção', 'O texto aparece para ela no próprio exercício, no próximo treino.']]}/>`)}<//>`;
+}
+
+export function CartaoVideo({ v, exNome, alunaNome, onFeito }) {
+  const [url, setUrl] = useState(null);
+  const [txt, setTxt] = useState(v.correcao || '');
+  const [salvando, setSalvando] = useState(false);
+  const assistir = async () => { try { setUrl(await api.linkArquivo(v.caminho)); } catch (err) { toast(err.message, 'erro'); } };
+  const corrigir = async () => {
+    if (!txt.trim()) { toast('Escreva a correção.', 'erro'); return; }
+    setSalvando(true);
+    try { await api.upd('videos_execucao', v.id, { correcao: txt.trim(), corrigido_em: new Date().toISOString() }); toast('Correção enviada', 'ok'); onFeito && onFeito(); }
+    catch (err) { toast(err.message, 'erro'); } finally { setSalvando(false); }
+  };
+  return html`<section class="card video-card">
+    <div class="card-topo"><div><h3>${alunaNome ? `${alunaNome} · ` : ''}${exNome}</h3><small>enviado ${relativo(v.created_at)}</small></div>
+      <span class=${'tag ' + (v.correcao ? 'ok' : 'atencao')}>${v.correcao ? 'corrigido' : 'para corrigir'}</span></div>
+    ${v.comentario && html`<p class="nota">"${v.comentario}"</p>`}
+    ${url ? html`<video class="video-exec" src=${url} controls playsinline preload="metadata"></video>` : html`<button class="btn" onClick=${assistir}><${Icone} nome="video" tam=${16}/>Assistir</button>`}
+    <textarea class="input" rows="2" placeholder="Correção: o que manter, o que ajustar e a dica para a próxima série" value=${txt} onInput=${(ev) => setTxt(ev.target.value)}></textarea>
+    <button class="btn primario" disabled=${salvando} onClick=${corrigir}>${v.correcao ? 'Atualizar correção' : 'Enviar correção'}</button>
+  </section>`;
 }

@@ -3,7 +3,7 @@
 // A aluna vê o mesmo relatório no app, em Evolução.
 import { html, useState, useMemo } from '../lib/preact-htm.js';
 import { api } from './api.js';
-import { useCarregar, Estado, Vazio, Campo, toast, num, dataBR, dataCurta, hoje, somaDias, diasEntre, segundaDe,
+import { useCarregar, Estado, Vazio, Campo, toast, num, dataBR, dataCurta, hoje, somaDias, diasEntre, segundaDe, MEDIDAS_TODAS,
   tonelagem, linkWhats, copiar } from './util.js';
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -366,7 +366,7 @@ function Folhas({ r, aluna, coachNome, periodo, tipo, objetivo, msg, fotos }) {
       <${Cab} sobre="Composição e rotina" titulo="Corpo e Bem-estar"/>
       ${r.avAtual && html`<p class="rf-sobre">Avaliação física <span class="rf-leve">${r.avAnterior ? `${dataBR(r.avAnterior.data)} × ${dataBR(r.avAtual.data)}` : dataBR(r.avAtual.data)}</span></p>
         <table class="rf-tabela"><thead><tr><th>Medida</th>${r.avAnterior && html`<th>Antes</th>`}<th>Atual</th>${r.avAnterior && html`<th>Diferença</th>`}</tr></thead>
-        <tbody>${[['peso', 'Peso', 'kg'], ['percentual_gordura', '% de gordura', '%'], ...['cintura', 'abdomen', 'quadril', 'coxa', 'braco', 'panturrilha'].map((k) => [k, { cintura: 'Cintura', abdomen: 'Abdômen', quadril: 'Quadril', coxa: 'Coxa', braco: 'Braço', panturrilha: 'Panturrilha' }[k], 'cm', true])]
+        <tbody>${[['peso', 'Peso', 'kg'], ['percentual_gordura', '% de gordura', '%'], ...MEDIDAS_TODAS.map(([k, r]) => [k, r, 'cm', true])]
           .map(([k, rot, un, med]) => { const v = (a) => (a ? (med ? (a.medidas || {})[k] : a[k]) : null); const at = v(r.avAtual), an = v(r.avAnterior);
             if (at == null || at === '') return null;
             const dif = an != null && an !== '' ? Number(at) - Number(an) : null;

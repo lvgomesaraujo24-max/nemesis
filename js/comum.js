@@ -1,8 +1,9 @@
 // Telas usadas pelos dois lados (treinador e aluna)
 import { html, useState, useMemo } from '../lib/preact-htm.js';
 import { api } from './api.js';
+import { Icone } from './icones.js';
 import { useCarregar, Estado, Vazio, Linha, Modal, Campo, toast, num, dataBR, dataCurta, hoje, lerNum, tonelagem,
-  recordes, sequenciaSemanas, equivalencia, DOBRAS, MEDIDAS, percentualJP7, percentualJP3, DOBRAS_JP3, DIAMETROS, composicao, idadeDe, relativo } from './util.js';
+  recordes, sequenciaSemanas, equivalencia, DOBRAS, MEDIDAS, MEDIDAS_TODAS, DIAMETROS, PROTOCOLOS, camposProtocolo, percentualGordura, protocoloSugerido, composicao, idadeDe, relativo, diasEntre } from './util.js';
 
 // ============================================================
 // ESTADO VAZIO QUE ENSINA ("Como funciona" em passos)
@@ -92,10 +93,14 @@ function EvolucaoCorpo({ d }) {
     ${comCarga.length > 0 && html`<${ProgressaoGeral} sessoes=${sessoes} series=${series} exercicios=${exercicios} onVer=${setExSel}/>`}
 
     <section class="card">
-      <div class="card-topo"><h3>Olimpo · recordes</h3><span class="tag">${recs.length}</span></div>
-      ${recs.length ? html`<ul class="lista">${(verTodos ? recs : recs.slice(0, 6)).map((r) => html`<li class="linha">
-        <div><b>${r.nome}</b><small>${relativo(r.created_at)}</small></div>
-        <span class="valor">${num(r.carga, 1)} kg × ${r.reps || '·'}</span></li>`)}</ul>
+      <div class="card-topo"><div><h3>Olimpo</h3><small class="suave">O melhor de cada exercício: maior carga, repetições nela e 1RM estimado</small></div><span class="tag">${recs.length}</span></div>
+      ${recs.length ? html`<div class="olimpo">${(verTodos ? recs : recs.slice(0, 6)).map((r) => { const novo = diasEntre(String(r.created_at).slice(0, 10), hoje()) <= 7;
+        return html`<button class=${'trofeu' + (novo ? ' novo' : '')} onClick=${() => setExSel(r.exercicio_id)} title="Ver a curva de carga">
+          <div class="trofeu-topo"><${Icone} nome="trofeu" tam=${18}/>${novo && html`<span class="tag roxo">novo</span>`}</div>
+          <b class="trofeu-nome">${r.nome}</b>
+          <div class="trofeu-num"><span>${num(r.carga, 1)}<small> kg</small></span><em>× ${r.reps || '·'} reps</em></div>
+          <small>${r.rm ? `1RM estimado ${num(r.rm, 1)} kg · ` : ''}${dataBR(r.created_at)}</small>
+        </button>`; })}</div>
         ${recs.length > 6 && html`<button class="btn-texto" onClick=${() => setVerTodos(!verTodos)}>${verTodos ? 'Ver menos' : `Ver todos (${recs.length})`}</button>`}`
       : html`<p class="suave">Os recordes aparecem quando houver séries com carga.</p>`}
     </section>
@@ -240,7 +245,8 @@ export function Avaliacoes({ aluna, podeEditar }) {
   const [comparando, setComparando] = useState(false);
   const [sel, setSel] = useState([]);
   return html`<div class="pilha">
-    <div class="acoes">${podeEditar && html`<button class="btn primario" onClick=${() => setNova(true)}>+ Nova avaliação</button>`}
+    <div class="acoes">${podeEditar ? html`<button class="btn primario" onClick=${() => setNova(true)}>+ Nova avaliação</button>`
+      : html`<button class="btn primario" onClick=${() => setNova(true)}>+ Fazer autoavaliação</button>`}
       ${(e.dados || []).length > 1 && html`<button class=${'btn' + (comparando ? ' on' : '')} onClick=${() => { setComparando(!comparando); setSel(comparando ? [] : (e.dados || []).slice(0, 2).map((x) => x.id)); }}>${comparando ? 'Fechar comparação' : 'Comparar avaliações'}</button>`}</div>
     <${Estado} e=${e}>${(lista) => {
       if (!lista.length) return html`<${ComoFunciona} titulo="Nenhuma avaliação ainda" passos=${[
@@ -255,7 +261,8 @@ export function Avaliacoes({ aluna, podeEditar }) {
           ${comparando && html`<label class="toggle"><input type="checkbox" checked=${sel.includes(a.id)} onChange=${() => setSel(sel.includes(a.id) ? sel.filter((x) => x !== a.id) : [...sel, a.id])}/> Comparar ${dataBR(a.data)}</label>`}
           <${CartaoAvaliacao} a=${a} anterior=${lista[i + 1]} sexo=${aluna.sexo} podeEditar=${podeEditar} onApagar=${async () => { if (confirm('Apagar esta avaliação?')) { await api.del('avaliacoes', a.id); e.recarregar(); } }}/></div>`)}`;
     }}<//>
-    ${nova && html`<${NovaAvaliacao} aluna=${aluna} onFechar=${() => setNova(false)} onSalvo=${() => { setNova(false); e.recarregar(); }}/>`}
+    ${nova && (podeEditar ? html`<${NovaAvaliacao} aluna=${aluna} onFechar=${() => setNova(false)} onSalvo=${() => { setNova(false); e.recarregar(); }}/>`
+      : html`<${Autoavaliacao} aluna=${aluna} onFechar=${() => setNova(false)} onSalvo=${() => { setNova(false); e.recarregar(); }}/>`)}
   </div>`;
 }
 
@@ -265,7 +272,7 @@ function linhasComparacao(sexo) {
   const c = (k) => (a) => composicao(a, sexo)[k];
   return [['Peso', (a) => a.peso, 'kg', 1], ['% de gordura', (a) => a.percentual_gordura, '%', 1], ['Massa gorda', c('gorda'), 'kg', 1], ['Massa magra', c('magra'), 'kg', 1],
     ['Massa muscular', c('muscular'), 'kg', 1], ['Massa óssea', c('ossea'), 'kg', 1], ['IMC', c('imc'), '', 1], ['Relação cintura/quadril', c('rcq'), '', 2], ['Soma das dobras', somaDobras, 'mm', 0],
-    ...MEDIDAS.map(([k, r]) => [r, (a) => (a.medidas || {})[k], 'cm', 1])];
+    ...MEDIDAS_TODAS.map(([k, r]) => [r, (a) => (a.medidas || {})[k], 'cm', 1])];
 }
 function ComparaAvaliacoes({ lista, sexo }) {
   if (lista.length < 2) return html`<p class="nota">Marque pelo menos duas avaliações abaixo para comparar.</p>`;
@@ -293,7 +300,7 @@ function CartaoAvaliacao({ a, anterior, sexo, podeEditar, onApagar }) {
   const dif = (atual, antes) => { if (atual == null || antes == null) return null; const d = atual - antes; return Math.abs(d) < 0.05 ? null : html`<small class=${d < 0 ? 'baixa' : 'alta'}>${d > 0 ? '+' : ''}${num(d, 1)}</small>`; };
   const c = composicao(a, sexo); const ca = anterior ? composicao(anterior, sexo) : {};
   return html`<section class="card">
-    <div class="card-topo"><div><h3>${dataBR(a.data)}</h3><small>${a.protocolo === 'jp3' ? 'Pollock 3 dobras' : Object.keys(a.dobras || {}).length ? 'Pollock 7 dobras' : 'Sem dobras'}</small></div>
+    <div class="card-topo"><div><h3>${dataBR(a.data)}</h3><small>${a.autoavaliacao ? 'Autoavaliação · ' : ''}${(PROTOCOLOS.find(([k]) => k === (a.protocolo || (Object.keys(a.dobras || {}).length ? 'jp7' : 'perimetria'))) || [, ''])[1]}</small></div>
       ${podeEditar && html`<button class="btn-texto perigo" onClick=${onApagar}>Apagar</button>`}</div>
     <div class="stats">
       <div class="stat"><b>${num(a.peso, 1)} kg</b><span>peso ${dif(a.peso, anterior && anterior.peso)}</span></div>
@@ -305,52 +312,102 @@ function CartaoAvaliacao({ a, anterior, sexo, podeEditar, onApagar }) {
       ${c.imc != null && html`<div class="stat"><b>${num(c.imc, 1)}</b><span>IMC</span></div>`}
       ${c.rcq != null && html`<div class="stat"><b>${num(c.rcq, 2)}</b><span>cintura/quadril</span></div>`}
     </div>
-    ${Object.keys(a.medidas || {}).length > 0 && html`<dl class="grade-medidas">${MEDIDAS.filter(([k]) => (a.medidas || {})[k] != null).map(([k, r]) => html`<div><dt>${r}</dt><dd>${num(a.medidas[k], 1)} cm ${dif(a.medidas[k], anterior && (anterior.medidas || {})[k])}</dd></div>`)}</dl>`}
+    ${Object.keys(a.medidas || {}).length > 0 && html`<dl class="grade-medidas">${MEDIDAS_TODAS.filter(([k]) => (a.medidas || {})[k] != null).map(([k, r]) => html`<div><dt>${r}</dt><dd>${num(a.medidas[k], 1)} cm ${dif(a.medidas[k], anterior && (anterior.medidas || {})[k])}</dd></div>`)}</dl>`}
     ${a.obs && html`<p class="nota">${a.obs}</p>`}
   </section>`;
 }
 
 function NovaAvaliacao({ aluna, onFechar, onSalvo }) {
+  const sexo = aluna.sexo === 'M' ? 'M' : 'F';
   const [f, setF] = useState({ data: hoje(), idade: idadeDe(aluna.nascimento) || '', peso: '', altura: '', obs: '' });
-  const [protocolo, setProtocolo] = useState('jp7');
+  const [protocolo, setProtocolo] = useState(() => protocoloSugerido(sexo, idadeDe(aluna.nascimento)));
   const [dobras, setDobras] = useState({});
   const [medidas, setMedidas] = useState({});
   const [diametros, setDiametros] = useState({});
-  const sexo = aluna.sexo === 'M' ? 'M' : 'F';
-  const pct = protocolo === 'jp3' ? percentualJP3(dobras, lerNum(f.idade), sexo) : percentualJP7(dobras, lerNum(f.idade), sexo);
   const limpa = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, lerNum(v)]).filter(([, v]) => v != null));
+  const pede = camposProtocolo(protocolo, sexo);
+  const pct = percentualGordura(protocolo, { dobras, medidas, peso: f.peso, altura: f.altura, idade: f.idade }, sexo);
   const previa = composicao({ peso: f.peso, altura: f.altura, percentual_gordura: pct, diametros: limpa(diametros), medidas: limpa(medidas) }, sexo);
-  const campos = protocolo === 'jp3' ? DOBRAS.filter(([k]) => DOBRAS_JP3[sexo].includes(k)) : DOBRAS;
   const salvar = async (ev) => {
     ev.preventDefault();
-    const dobrasUsadas = Object.fromEntries(Object.entries(limpa(dobras)).filter(([k]) => campos.some(([c]) => c === k)));
-    const linha = { aluna_id: aluna.id, data: f.data, idade: lerNum(f.idade), peso: lerNum(f.peso), altura: lerNum(f.altura), dobras: dobrasUsadas, medidas: limpa(medidas), percentual_gordura: pct, obs: f.obs || null };
+    const linha = { aluna_id: aluna.id, data: f.data, idade: lerNum(f.idade), peso: lerNum(f.peso), altura: lerNum(f.altura), dobras: limpa(dobras), medidas: limpa(medidas), percentual_gordura: pct, obs: f.obs || null };
     if (protocolo !== 'jp7') linha.protocolo = protocolo;
     if (Object.keys(limpa(diametros)).length) linha.diametros = limpa(diametros);
     try { await api.ins('avaliacoes', linha); toast('Avaliação salva', 'ok'); onSalvo(); } catch (err) { toast(err.message, 'erro'); }
   };
   const inp = (obj, set, k) => html`<input class="input" inputmode="decimal" value=${obj[k] || ''} onInput=${(ev) => set({ ...obj, [k]: ev.target.value })}/>`;
+  const rot = (r, k, lista) => html`${r}${lista && lista.includes(k) ? html` <b class="obrig">*</b>` : ''}`;
+  const info = PROTOCOLOS.find(([k]) => k === protocolo);
   return html`<${Modal} titulo=${'Avaliação · ' + aluna.nome} onFechar=${onFechar} largo>
     <form class="pilha" onSubmit=${salvar}>
       <div class="grade2">
         <${Campo} rotulo="Data"><input class="input" type="date" value=${f.data} onInput=${(ev) => setF({ ...f, data: ev.target.value })}/><//>
-        <${Campo} rotulo="Idade">${inp(f, setF, 'idade')}<//>
+        <${Campo} rotulo=${`Idade · ${sexo === 'M' ? 'masculino' : 'feminino'} (do cadastro)`}>${inp(f, setF, 'idade')}<//>
         <${Campo} rotulo="Peso (kg)">${inp(f, setF, 'peso')}<//>
         <${Campo} rotulo="Estatura (cm)">${inp(f, setF, 'altura')}<//>
       </div>
-      <div class="card-topo"><h3>Dobras cutâneas (mm)</h3><div class="chips">${[['jp7', 'Pollock 7'], ['jp3', 'Pollock 3']].map(([k, r]) => html`<button type="button" class=${protocolo === k ? 'chip on' : 'chip'} onClick=${() => setProtocolo(k)}>${r}</button>`)}</div></div>
-      <div class="grade2">${campos.map(([k, r]) => html`<${Campo} rotulo=${r}>${inp(dobras, setDobras, k)}<//>`)}</div>
-      <h3>Circunferências (cm)</h3>
-      <div class="grade2">${MEDIDAS.map(([k, r]) => html`<${Campo} rotulo=${r}>${inp(medidas, setMedidas, k)}<//>`)}</div>
-      <h3>Diâmetros ósseos (cm) <small>opcional, para a massa óssea</small></h3>
-      <div class="grade2">${DIAMETROS.map(([k, r]) => html`<${Campo} rotulo=${r}>${inp(diametros, setDiametros, k)}<//>`)}</div>
+      <div class="campo"><span class="rotulo">Protocolo</span>
+        <div class="chips">${PROTOCOLOS.map(([k, r]) => html`<button type="button" class=${protocolo === k ? 'chip on' : 'chip'} onClick=${() => setProtocolo(k)}>${r}</button>`)}</div>
+        <small>${info[3]} · pede ${info[2]}. Os campos com * são os que a fórmula usa.</small></div>
+      <details class="bloco-aval" open=${!!pede.dobras}><summary>Dobras cutâneas (mm)${pede.dobras ? '' : ' · opcional'}</summary>
+        <div class="grade3">${DOBRAS.map(([k, r]) => html`<${Campo} rotulo=${rot(r, k, pede.dobras)}>${inp(dobras, setDobras, k)}<//>`)}</div></details>
+      <details class="bloco-aval" open><summary>Perimetria (cm)</summary>
+        <div class="grade3">${MEDIDAS.map(([k, r]) => html`<${Campo} rotulo=${rot(r, k, pede.medidas)}>${inp(medidas, setMedidas, k)}<//>`)}</div></details>
+      <details class="bloco-aval"><summary>Diâmetros ósseos (mm) · opcional, para a massa óssea</summary>
+        <div class="grade3">${DIAMETROS.map(([k, r]) => html`<${Campo} rotulo=${r}>${inp(diametros, setDiametros, k)}<//>`)}</div></details>
       <div class="destaque composicao">${pct != null ? html`<div><span>% de gordura</span><b>${num(pct, 1)}%</b></div>
           ${previa.gorda != null && html`<div><span>Massa gorda</span><b>${num(previa.gorda, 1)} kg</b></div>`}
           ${previa.magra != null && html`<div><span>Massa magra</span><b>${num(previa.magra, 1)} kg</b></div>`}
           ${previa.ossea != null && html`<div><span>Massa óssea</span><b>${num(previa.ossea, 1)} kg</b></div>`}
-          ${previa.muscular != null && html`<div><span>Massa muscular</span><b>${num(previa.muscular, 1)} kg</b></div>`}`
-        : html`<span>Preencha as ${protocolo === 'jp3' ? '3' : '7'} dobras, a idade e o peso para calcular a composição corporal.</span>`}</div>
+          ${previa.muscular != null && html`<div><span>Massa muscular</span><b>${num(previa.muscular, 1)} kg</b></div>`}
+          ${previa.rcq != null && html`<div><span>Cintura/quadril</span><b>${num(previa.rcq, 2)}</b></div>`}`
+        : html`<span>${protocolo === 'perimetria' ? 'Só perimetria: sem % de gordura. Os perímetros e o peso entram na comparação.' : 'Preencha os campos com * para calcular a composição corporal.'}</span>`}</div>
       <${Campo} rotulo="Observações"><textarea class="input" rows="2" value=${f.obs} onInput=${(ev) => setF({ ...f, obs: ev.target.value })}></textarea><//>
       <button class="btn primario grande">Salvar avaliação</button>
     </form><//>`;
+}
+
+// ============================================================
+// AUTOAVALIAÇÃO (a aluna mede sozinha: perímetros, peso e fotos padronizadas)
+// ============================================================
+const PONTOS_AUTO = [
+  ['cintura', 'Cintura', 'Na parte mais fina da barriga, entre as costelas e o umbigo. Solte o ar e meça sem apertar.'],
+  ['abdomen', 'Abdômen', 'Na altura do umbigo, com a barriga relaxada, depois de soltar o ar.'],
+  ['quadril', 'Quadril', 'Na parte mais larga do bumbum, com os pés juntos.'],
+  ['coxa_med_d', 'Coxa média D', 'No meio da coxa direita, entre a virilha e o joelho, com a perna relaxada.'],
+  ['braco_rel_d', 'Braço D relaxado', 'No meio do braço direito, entre o ombro e o cotovelo, braço solto ao lado do corpo.'],
+  ['pant_d', 'Panturrilha D', 'Na parte mais grossa da panturrilha direita, em pé.'],
+];
+const FOTOS_AUTO = [['frente', 'Frente'], ['lado', 'Lado'], ['costas', 'Costas']];
+function Autoavaliacao({ aluna, onFechar, onSalvo }) {
+  const [f, setF] = useState({ peso: '', obs: '' });
+  const [medidas, setMedidas] = useState({});
+  const [fotos, setFotos] = useState({});
+  const [salvando, setSalvando] = useState(false);
+  const salvar = async (ev) => {
+    ev.preventDefault();
+    if (!lerNum(f.peso)) { toast('Coloque o seu peso.', 'erro'); return; }
+    setSalvando(true);
+    try {
+      for (const [k, r] of FOTOS_AUTO) {
+        const arq = fotos[k]; if (!arq) continue;
+        const caminho = `${aluna.id}/${Date.now()}-autoavaliacao-${k}.${(arq.name.split('.').pop() || 'jpg').toLowerCase()}`;
+        await api.subirArquivo(caminho, arq);
+        await api.ins('arquivos_aluna', { aluna_id: aluna.id, nome: `Autoavaliação ${dataBR(hoje())} · ${r}`, caminho, tipo: arq.type || null, categoria: 'foto', tamanho: arq.size });
+      }
+      const m = Object.fromEntries(Object.entries(medidas).map(([k, v]) => [k, lerNum(v)]).filter(([, v]) => v != null));
+      await api.ins('avaliacoes', { aluna_id: aluna.id, data: hoje(), idade: idadeDe(aluna.nascimento), peso: lerNum(f.peso), medidas: m, dobras: {}, protocolo: 'perimetria', autoavaliacao: true, obs: f.obs || null });
+      toast('Autoavaliação enviada para o seu treinador', 'ok'); onSalvo();
+    } catch (err) { toast(err.message, 'erro'); setSalvando(false); }
+  };
+  return html`<${Modal} titulo="Autoavaliação" onFechar=${onFechar} largo><form class="pilha" onSubmit=${salvar}>
+    <p class="nota">Use uma fita métrica de costura. Meça de manhã, antes de comer, sempre no mesmo lugar e sem apertar a pele. Se tiver dúvida em algum ponto, pule.</p>
+    <${Campo} rotulo="Peso (kg), em jejum"><input class="input" inputmode="decimal" value=${f.peso} onInput=${(ev) => setF({ ...f, peso: ev.target.value })}/><//>
+    ${PONTOS_AUTO.map(([k, r, como]) => html`<div class="auto-ponto"><${Campo} rotulo=${`${r} (cm)`} dica=${como}><input class="input" inputmode="decimal" value=${medidas[k] || ''} onInput=${(ev) => setMedidas({ ...medidas, [k]: ev.target.value })}/><//></div>`)}
+    <div class="campo"><span class="rotulo">Fotos</span><small>Roupa justa, luz de frente, celular na altura do umbigo, a uns 2 metros. Braços soltos ao lado do corpo.</small>
+      <div class="grade3">${FOTOS_AUTO.map(([k, r]) => html`<label class=${'foto-auto' + (fotos[k] ? ' ok' : '')}><b>${r}</b><small>${fotos[k] ? fotos[k].name : 'toque para tirar'}</small>
+        <input type="file" accept="image/*" capture="environment" hidden onChange=${(ev) => setFotos({ ...fotos, [k]: ev.target.files[0] })}/></label>`)}</div></div>
+    <${Campo} rotulo="Quer contar algo?"><textarea class="input" rows="2" value=${f.obs} onInput=${(ev) => setF({ ...f, obs: ev.target.value })}></textarea><//>
+    <button class="btn primario grande" disabled=${salvando}>${salvando ? 'Enviando...' : 'Enviar autoavaliação'}</button>
+  </form><//>`;
 }

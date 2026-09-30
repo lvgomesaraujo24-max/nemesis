@@ -15,7 +15,7 @@ import { Modelos } from './modelos.js';
 import { Exercicios } from './biblioteca.js';
 import { Financeiro, FinanceiroAluna } from './tesouro.js';
 import { Radar, Score, carregarRadar, saudeDa } from './radar.js';
-import { FormulariosAluna, ArquivosAluna, AtividadesAluna } from './aluna360.js';
+import { FormulariosAluna, ArquivosAluna, AtividadesAluna, VideosAluna } from './aluna360.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Abas, Barras, toast, num, brl, dataBR, hoje, segundaDe, somaDias,
   somaMeses, diasEntre, lerNum, relativo, linkWhats, copiar, mesNome, idadeDe } from './util.js';
 
@@ -184,7 +184,7 @@ function Convite({ onFechar }) {
 // DETALHE DA ALUNA
 // ============================================================
 const ABAS_ALUNA = [['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['relatorio', 'Relatório'], ['avaliacoes', 'Avaliações'], ['checkins', 'Oráculo'], ['formularios', 'Formulários'],
-  ['atividades', 'Atividades'], ['dossie', 'Dossiê'], ['arquivos', 'Arquivos'], ['metas', 'Metas'], ['cardio', 'Cardio'], ['testes', 'Testes'],
+  ['atividades', 'Crônica'], ['videos', 'Vídeos'], ['dossie', 'Dossiê'], ['arquivos', 'Arquivos'], ['metas', 'Metas'], ['cardio', 'Cardio'], ['testes', 'Testes'],
   ['anamnese', 'Alistamento'], ['financeiro', 'Financeiro'], ['dados', 'Dados']];
 // mensagem com o link de acesso da aluna ao app
 const linkAcesso = (a) => `Oi, ${(a.nome || '').split(' ')[0]}! Este é o seu acesso ao Nemesis: ${location.origin + location.pathname}\n\nEntre com o e-mail ${a.email || 'que você cadastrou'}. Se esquecer a senha, toque em "Esqueci a senha" na tela de entrada. No celular, use "Adicionar à tela de início" para ele virar um app.`;
@@ -208,6 +208,7 @@ function AlunaDetalhe({ id, aba, ir, onAluna, coachNome }) {
     ${aba === 'formularios' && html`<${FormulariosAluna} aluna=${a}/>`}
     ${aba === 'atividades' && html`<${AtividadesAluna} aluna=${a}/>`}
     ${aba === 'arquivos' && html`<${ArquivosAluna} aluna=${a}/>`}
+    ${aba === 'videos' && html`<${VideosAluna} aluna=${a}/>`}
     ${aba === 'metas' && html`<${MetasAluna} aluna=${a}/>`}
     ${aba === 'cardio' && html`<${CardioAluna} aluna=${a}/>`}
     ${aba === 'testes' && html`<${TestesAluna} aluna=${a}/>`}
@@ -218,14 +219,26 @@ function AlunaDetalhe({ id, aba, ir, onAluna, coachNome }) {
   </div>`)}<//>`;
 }
 
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 function DadosAluna({ aluna, onSalvo }) {
   const [f, setF] = useState({ nome: aluna.nome || '', telefone: aluna.telefone || '', nascimento: aluna.nascimento || '', sexo: aluna.sexo || 'F', objetivo: aluna.objetivo || '', ativo: aluna.ativo,
     alistada_em: aluna.alistada_em || String(aluna.created_at || '').slice(0, 10), treinos_semana_alvo: aluna.treinos_semana_alvo || '' });
+  // campos da atualização 8: só vão no salvar se mudaram (quem ainda não rodou o SQL continua salvando o resto)
+  const [n, setN] = useState({ dia_revisao: aluna.dia_revisao != null ? aluna.dia_revisao : null, combo_nutri: !!aluna.combo_nutri });
+  const [enviandoSenha, setEnviandoSenha] = useState(false);
   const salvar = async (ev) => {
     ev.preventDefault();
     const alvo = lerNum(f.treinos_semana_alvo);
-    try { await api.upd('profiles', aluna.id, { ...f, telefone: f.telefone || null, nascimento: f.nascimento || null, alistada_em: f.alistada_em || null, treinos_semana_alvo: alvo ? Math.min(7, Math.max(1, Math.round(alvo))) : null }); toast('Dados salvos', 'ok'); onSalvo(); }
+    const novos = {};
+    if (n.dia_revisao !== (aluna.dia_revisao != null ? aluna.dia_revisao : null)) novos.dia_revisao = n.dia_revisao;
+    if (n.combo_nutri !== !!aluna.combo_nutri) novos.combo_nutri = n.combo_nutri;
+    try { await api.upd('profiles', aluna.id, { ...f, ...novos, telefone: f.telefone || null, nascimento: f.nascimento || null, alistada_em: f.alistada_em || null, treinos_semana_alvo: alvo ? Math.min(7, Math.max(1, Math.round(alvo))) : null }); toast('Dados salvos', 'ok'); onSalvo(); }
     catch (err) { toast(err.message, 'erro'); }
+  };
+  const novaSenha = async () => {
+    if (!aluna.email || !confirm(`Enviar para ${aluna.email} um link para criar uma senha nova?`)) return;
+    setEnviandoSenha(true);
+    try { await api.recuperar(aluna.email); toast('Link enviado para o e-mail da aluna', 'ok'); } catch (err) { toast(err.message, 'erro'); } finally { setEnviandoSenha(false); }
   };
   return html`<form class="card pilha" onSubmit=${salvar}>
     <${Campo} rotulo="Nome"><input class="input" value=${f.nome} onInput=${(ev) => setF({ ...f, nome: ev.target.value })}/><//>
@@ -239,8 +252,12 @@ function DadosAluna({ aluna, onSalvo }) {
       <${Campo} rotulo="Alistada em" dica="Dia zero da jornada"><input class="input" type="date" value=${f.alistada_em} onInput=${(ev) => setF({ ...f, alistada_em: ev.target.value })}/><//>
       <${Campo} rotulo="Treinos por semana (meta)" dica="Vazio = treinos obrigatórios da ficha"><input class="input" inputmode="numeric" value=${f.treinos_semana_alvo} onInput=${(ev) => setF({ ...f, treinos_semana_alvo: ev.target.value })}/><//>
     </div>
+    <${Campo} rotulo="Dia de revisão" dica="Dia fixo em que você olha o Oráculo dela e ajusta a ficha. Entra na Fila do dia e no Chronos."><div class="chips">
+      ${[[null, 'Nenhum'], ...DIAS_SEMANA.map((r, i) => [i, r])].map(([k, r]) => html`<button type="button" class=${n.dia_revisao === k ? 'chip on' : 'chip'} onClick=${() => setN({ ...n, dia_revisao: k })}>${r}</button>`)}</div><//>
+    <label class="toggle"><input type="checkbox" checked=${n.combo_nutri} onChange=${(ev) => setN({ ...n, combo_nutri: ev.target.checked })}/> Combo com nutricionista (treino + dieta)</label>
     <label class="toggle"><input type="checkbox" checked=${f.ativo} onChange=${(ev) => setF({ ...f, ativo: ev.target.checked })}/> Aluna ativa</label>
-    <p class="suave">E-mail de acesso: ${aluna.email}</p>
+    <div class="linha-acao"><p class="suave">E-mail de acesso: ${aluna.email}</p>
+      ${aluna.email && html`<button type="button" class="btn-texto" disabled=${enviandoSenha} onClick=${novaSenha}>${enviandoSenha ? 'Enviando…' : 'Enviar e-mail de nova senha'}</button>`}</div>
     <button class="btn primario">Salvar</button>
   </form>`;
 }
@@ -260,7 +277,7 @@ function CartaoResposta({ c, aluna, envio, onFeito }) {
   return html`<section class="card">
     <div class="card-topo"><div>${aluna && html`<a href=${`#/aluna/${aluna.id}/checkins`}><h3>${aluna.nome}</h3></a>`}<small class="suave">Semana de ${dataBR(c.semana)} · enviado ${relativo(c.created_at)}</small></div>
       ${c.resposta ? html`<span class="tag roxo">respondido</span>` : html`<span class="tag atencao">aguardando</span>`}</div>
-    <${ResumoCheckin} c=${c}/>
+    <${ResumoCheckin} c=${c} sinal/>
     ${envio && html`<button class="btn-texto" onClick=${() => setVerEnvio(true)}>Ver o Oráculo completo (dores, ciclo, RIR)</button>`}
     ${verEnvio && html`<${ModalEnvio} envio=${envio} nome=${aluna ? aluna.nome : 'Oráculo'} onFechar=${() => setVerEnvio(false)}/>`}
     ${editando ? html`<textarea class="input" rows="3" placeholder="Sua resposta (a aluna vê no app)" value=${txt} onInput=${(ev) => setTxt(ev.target.value)}></textarea>

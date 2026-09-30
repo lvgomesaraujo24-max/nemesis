@@ -3,7 +3,7 @@
 // (últimas 4 semanas contra as 4 anteriores) e risco de evasão, tudo calculado no aparelho.
 import { html } from '../lib/preact-htm.js';
 import { api } from './api.js';
-import { hoje, somaDias, diasEntre, segundaDe, linkWhats } from './util.js';
+import { hoje, somaDias, diasEntre, segundaDe, linkWhats, semaforo } from './util.js';
 
 const e1rm = (s) => (s.carga == null ? 0 : s.carga * (1 + Math.min(s.reps || 1, 12) / 30));
 
@@ -42,6 +42,8 @@ export function saudeDa(a, d) {
   const ultimo = feitas.map((s) => s.data).sort().pop() || null;
   const semTreinar = ultimo ? diasEntre(ultimo, hj) : null;
   const semCheckinSemana = !chk.some((c) => c.semana === segundaDe());
+  const ultimoCheckin = chk.slice().sort((x, y) => (x.semana < y.semana ? 1 : -1))[0];
+  const sinal = semaforo(ultimoCheckin);
   const inicioFicha = [...d.mesos.filter((m) => m.aluna_id === a.id).map((m) => m.inicio), ...ts.map((t) => String(t.created_at || '').slice(0, 10))].filter(Boolean).sort().pop();
   const fichaDias = inicioFicha ? diasEntre(inicioFicha, hj) : null;
   const plano = d.assinaturas.filter((s) => s.aluna_id === a.id).sort((x, y) => (x.fim < y.fim ? 1 : -1))[0];
@@ -54,8 +56,9 @@ export function saudeDa(a, d) {
   if (planoDias != null && planoDias <= 7) risco += 15;
   if (progressao != null && progressao < 0) risco += 10;
   if (!ts.length) risco += 15;
+  if (sinal && sinal.cor === 'vermelho') risco += 10;
   risco = Math.min(100, risco);
-  return { engajamento, aderencia, progressao, semTreinar, ultimo, semCheckinSemana, fichaDias, semFicha: !ts.length, plano, planoDias, risco,
+  return { engajamento, aderencia, progressao, semTreinar, ultimo, semCheckinSemana, sinal, fichaDias, semFicha: !ts.length, plano, planoDias, risco,
     nivelRisco: risco >= 50 ? ['alto', 'Risco alto'] : risco >= 25 ? ['medio', 'Risco médio'] : ['baixo', 'Risco baixo'] };
 }
 
@@ -76,6 +79,7 @@ export function Score({ s, compacto }) {
 export function Radar({ alunas, saude, ir }) {
   const pn = (n) => (n || '').split(' ')[0];
   const grupos = [
+    ['Sinal vermelho no Oráculo', alunas.filter((a) => saude[a.id].sinal && saude[a.id].sinal.cor === 'vermelho'), (a) => `${pn(a.nome)}, vi seu check-in: sono, energia, estresse e dor pesaram essa semana. Vamos ajustar juntas? Me conta como você está.`],
     ['Sem check-in esta semana', alunas.filter((a) => saude[a.id].semCheckinSemana), (a) => `${pn(a.nome)}, passando para lembrar do check-in da semana. Leva 2 minutos e é com ele que eu ajusto o seu treino.`],
     ['Sem treinar há 7 dias ou mais', alunas.filter((a) => saude[a.id].semTreinar == null || saude[a.id].semTreinar >= 7), (a) => `Oi, ${pn(a.nome)}! Senti sua falta nos treinos. Tá tudo bem? Se a rotina apertou, me fala que eu ajusto a ficha pra caber.`],
     ['Ficha há mais de 4 semanas', alunas.filter((a) => saude[a.id].semFicha || (saude[a.id].fichaDias != null && saude[a.id].fichaDias > 28)), null],
@@ -85,7 +89,7 @@ export function Radar({ alunas, saude, ir }) {
   return html`<section class="card radar">
     <div class="card-topo"><h3>Radar da Guerreira</h3><span class="tag">${total ? `${total} aluna(s) pedindo atenção` : 'Tudo em dia'}</span></div>
     <div class="radar-grade">${grupos.map(([t, l, msg]) => html`<div class="radar-col"><div class="radar-cab"><b>${t}</b><span>${l.length}</span></div>
-      ${l.length ? l.slice(0, 6).map((a) => html`<div class="radar-item"><button onClick=${() => ir(t.startsWith('Ficha') ? `aluna/${a.id}/ficha` : t.startsWith('Plano') ? `aluna/${a.id}/financeiro` : `aluna/${a.id}/evolucao`)}>${a.nome}</button>
+      ${l.length ? l.slice(0, 6).map((a) => html`<div class="radar-item"><button onClick=${() => ir(t.startsWith('Ficha') ? `aluna/${a.id}/ficha` : t.startsWith('Plano') ? `aluna/${a.id}/financeiro` : t.startsWith('Sinal') ? `aluna/${a.id}/checkins` : `aluna/${a.id}/evolucao`)}>${a.nome}</button>
         ${msg && a.telefone && html`<a class="btn-texto mini" target="_blank" rel="noopener" href=${linkWhats(a.telefone, msg(a))}>WhatsApp</a>`}</div>`)
         : html`<small>Ninguém.</small>`}
       ${l.length > 6 && html`<small>e mais ${l.length - 6}</small>`}</div>`)}</div>
