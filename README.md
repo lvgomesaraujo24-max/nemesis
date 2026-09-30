@@ -19,7 +19,7 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 - Avaliação física com 7 dobras (Jackson & Pollock + Siri), circunferências e comparação com a anterior
 - Check-ins: responder pelo app ou mandar no WhatsApp, lembrete para quem não enviou
 - Inscrições do formulário da bio, com status (novo, contatado, fechado, perdido) e botão de WhatsApp
-- Relatório de evolução (mês, ficha ou período livre): resumo, carga e força estimada, recordes, volume por grupamento, frequência, corpo e bem-estar. Baixa em PDF e manda no WhatsApp
+- Relatório de evolução (mês, ficha ou período livre): capa com a deusa do período (Nike, Ártemis, Sekhmet, Atena ou Héstia, escolhida pelos números), o mês em uma página (calendário dia a dia, momentos e semana a semana), comparativo com o período anterior, carga e força estimada, recordes e volume, frequência, mapa do corpo, bem-estar × desempenho e dor, avaliação física, metas e conquistas, jornada mês a mês, missão do próximo mês com a palavra do treinador e um card 9:16 para a aluna postar nos Stories. Baixa em PDF e manda no WhatsApp
 - Financeiro: planos (Ágora, Delfos, Ítaca, Olimpo), parcelas geradas mês a mês, despesas, saldo do mês, atrasos e renovações
 - Biblioteca de exercícios com link de vídeo e instruções
 
@@ -27,7 +27,7 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 - Treinos da semana, com o próximo treino destacado
 - Execução: carga e reps por série, "última vez" de cada exercício, cronômetro de descanso, aviso de recorde
 - Evolução: gráfico de carga por exercício, recordes, peso, % de gordura, tonelagem acumulada
-- Relatório de evolução do mês, o mesmo que o treinador manda
+- Relatório de evolução do mês, o mesmo que o treinador manda, com a missão e a palavra do treinador
 - Check-in semanal (peso, sono, energia, estresse, fome, dor, alimentação) e a sua resposta
 - Anamnese com PAR-Q no primeiro acesso
 
@@ -69,19 +69,20 @@ A chave do `config.js` é pública por natureza. Quem protege os dados são as r
 Troque os arquivos no GitHub e mude o número em `sw.js` (`nemesis-v1` para `nemesis-v2`), para os celulares buscarem a versão nova.
 
 ## Atualizações do banco
-Quando vier um arquivo `supabase/atualizacao-N.sql` novo, rode ele no Supabase (**SQL Editor > New query**, cole tudo, **Run**). Pode rodar mais de uma vez sem problema. A `atualizacao-5.sql` liga a ficha completa (tipo de exercício, cadência, formato do descanso, método, RIR/RPE, aeróbico e músculos da biblioteca). A `atualizacao-6.sql` liga modelos, presets, progressão do mesociclo, etiquetas e substituição de exercícios, pacote de entregas dos planos e os tipos novos da agenda.
+Quando vier um arquivo `supabase/atualizacao-N.sql` novo, rode ele no Supabase (**SQL Editor > New query**, cole tudo, **Run**). Pode rodar mais de uma vez sem problema. A `atualizacao-5.sql` liga a ficha completa (tipo de exercício, cadência, formato do descanso, método, RIR/RPE, aeróbico e músculos da biblioteca). A `atualizacao-6.sql` liga modelos, presets, progressão do mesociclo, etiquetas e substituição de exercícios, pacote de entregas dos planos e os tipos novos da agenda. A `atualizacao-7.sql` guarda a palavra do treinador e a missão do relatório no banco, para a aluna também ver (sem ela o relatório abre normalmente, só não salva a missão).
 
 ## Estrutura
 ```
 index.html        app (treinador e aluna)
 form.html         formulário de inscrição
-config.js         endereço e chave do Supabase
+config.js         endereço e chave do Supabase, e a assinatura do card de Stories
 supabase/schema.sql  banco completo (tabelas, segurança, planos, exercícios)
 js/app.js         entrada, login e rotas
 js/coach.js       telas do treinador
 js/aluna.js       telas da aluna
 js/comum.js       evolução, anamnese e avaliação (usadas pelos dois lados)
 js/relatorio.js   relatório de evolução (métricas do período e PDF)
+js/relatorio-paginas.js  deusa, visão macro, comparativo, mapa do corpo, bem-estar, metas, conquistas, jornada, missão e card de Stories
 js/ficha.js       editor da ficha (treinador)
 js/musculos.js    músculos, volume, tempo estimado e métodos
 js/corpo.js       mapa do corpo em SVG
