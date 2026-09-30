@@ -1,5 +1,7 @@
 # Nemesis
 
+> Documento completo do projeto (arquitetura, rotas, banco, regras de cálculo, custos e roadmap): [`docs/CEREBRO-NEMESIS.md`](docs/CEREBRO-NEMESIS.md)
+
 App de consultoria de treino: o treinador monta a ficha, acompanha evolução, check-ins, avaliações, inscrições e financeiro. A aluna treina pelo celular, registra as cargas e manda o check-in da semana.
 
 Funciona como app instalável no celular (PWA). Não precisa de loja de aplicativos.
