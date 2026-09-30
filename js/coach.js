@@ -30,7 +30,7 @@ const CHAVE_MENU = 'nemesis-menu-recolhido';
 export function AppCoach({ perfil, rota, ir }) {
   const [base, id, sub] = rota;
   let tela;
-  if (base === 'aluna' && id) tela = html`<${AlunaDetalhe} id=${id} aba=${sub || 'ficha'} ir=${ir} coachNome=${perfil.nome} onAluna=${(a) => setAlunaAtual(a)}/>`;
+  if (base === 'aluna' && id) tela = html`<${AlunaDetalhe} id=${id} aba=${sub || 'geral'} ir=${ir} coachNome=${perfil.nome} onAluna=${(a) => setAlunaAtual(a)}/>`;
   else if (base === 'alunas') tela = html`<${Alunas} ir=${ir}/>`;
   else if (base === 'checkins') tela = html`<${CheckinsCoach} ir=${ir}/>`;
   else if (base === 'leads') tela = html`<${Leads}/>`;
@@ -145,7 +145,7 @@ function Alunas({ ir }) {
       const ativas = alunas.filter((a) => a.ativo);
       const saude = Object.fromEntries(alunas.map((a) => [a.id, saudeDa(a, radar)]));
       const lista = alunas.filter((a) => a.ativo !== inativas && (a.nome || '').toLowerCase().includes(busca.toLowerCase()));
-      const chave = { engajamento: (a) => saude[a.id].engajamento, progressao: (a) => (saude[a.id].progressao == null ? 99 : saude[a.id].progressao), risco: (a) => -saude[a.id].risco };
+      const chave = { engajamento: (a) => (saude[a.id].engajamento == null ? 999 : saude[a.id].engajamento), progressao: (a) => (saude[a.id].progIndice == null ? 999 : saude[a.id].progIndice), risco: (a) => -saude[a.id].risco };
       if (chave[ordem]) lista.sort((x, y) => chave[ordem](x) - chave[ordem](y));
       const nInat = alunas.filter((a) => !a.ativo).length;
       return html`${ativas.length > 0 && !inativas && html`<${Radar} alunas=${ativas} saude=${saude} ir=${ir}/>`}
@@ -166,27 +166,57 @@ function Alunas({ ir }) {
   </div>`;
 }
 
+// convite com link único (#/convite/<token>), válido por 7 dias: a conta criada por ele já nasce ligada aos dados do convite
+const novoToken = () => { const b = new Uint8Array(16); crypto.getRandomValues(b); return [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); };
+const linkConvite = (token) => `${location.origin + location.pathname}#/convite/${token}`;
+const msgConvite = (c) => `Oi${c.nome ? ', ' + c.nome.split(' ')[0] : ''}! Seja bem-vinda ao time 💜\n\nSeu app de treino é o Nemesis. É por ele que você vai ver sua ficha, registrar as cargas e mandar o check-in da semana.\n\n1. Abra este link (vale por 7 dias): ${linkConvite(c.token)}\n2. Crie a sua senha\n3. Preencha o Alistamento (leva uns 5 minutos)\n\nNo celular, toque em "Adicionar à tela de início" para ele virar um app. Qualquer dúvida, me chama aqui.`;
 function Convite({ onFechar }) {
-  const link = location.origin + location.pathname;
-  const msg = `Oi! Seja bem-vinda ao time 💜\n\nSeu app de treino é o Nemesis. É por ele que você vai ver sua ficha, registrar as cargas e mandar o check-in da semana.\n\n1. Abra este link: ${link}\n2. Toque em "Criar conta" e use o seu e-mail\n3. Preencha a anamnese (leva uns 5 minutos)\n\nNo celular, toque em "Adicionar à tela de início" para ele virar um app. Qualquer dúvida, me chama aqui.`;
-  const [tel, setTel] = useState('');
+  const e = useCarregar(() => api.q('convites', { order: 'created_at', asc: false }).catch(() => null), []);
+  const [f, setF] = useState({ nome: '', email: '', telefone: '', objetivo: '' });
+  const [gerado, setGerado] = useState(null);
+  const gerar = async (ev) => {
+    ev.preventDefault();
+    if (!f.nome.trim()) { toast('Digite o nome da aluna.', 'erro'); return; }
+    try {
+      const [c] = await api.ins('convites', { token: novoToken(), nome: f.nome.trim(), email: f.email.trim().toLowerCase() || null, telefone: f.telefone || null, objetivo: f.objetivo || null,
+        expira_em: new Date(Date.now() + 7 * 86400000).toISOString() });
+      setGerado(c); e.recarregar();
+    } catch (err) { toast(err.message, 'erro'); }
+  };
+  const cancelar = async (c) => { if (!confirm(`Cancelar o convite de ${c.nome}? O link para de funcionar.`)) return; try { await api.del('convites', c.id); e.recarregar(); } catch (err) { toast(err.message, 'erro'); } };
+  const pendentes = (e.dados || []).filter((c) => !c.usado_em);
   return html`<${Modal} titulo="Convidar aluna" onFechar=${onFechar}>
-    <div class="pilha">
-      <p class="suave">A aluna cria a conta pelo link e aparece na sua lista. Depois é só montar a ficha e registrar o plano.</p>
-      <textarea class="input" rows="9" readonly value=${msg}></textarea>
-      <button class="btn" onClick=${() => copiar(msg)}>Copiar mensagem</button>
-      <${Campo} rotulo="Ou mande direto no WhatsApp"><input class="input" inputmode="tel" placeholder="(11) 99999-9999" value=${tel} onInput=${(ev) => setTel(ev.target.value)}/><//>
-      <a class="btn primario" target="_blank" rel="noopener" href=${linkWhats(tel, msg)}>Abrir no WhatsApp</a>
-    </div><//>`;
+    ${e.dados === null ? html`<p class="nota">Os convites com link precisam da atualização 9 do banco (pasta supabase). Enquanto isso, mande o link do app: ${location.origin + location.pathname}</p>`
+    : gerado ? html`<div class="pilha">
+        <p class="suave">Link criado para <b>${gerado.nome}</b>. Vale até ${dataBR(String(gerado.expira_em).slice(0, 10))} e só pode ser usado uma vez.</p>
+        <textarea class="input" rows="9" readonly value=${msgConvite(gerado)}></textarea>
+        <div class="acoes"><button class="btn" onClick=${() => copiar(msgConvite(gerado))}>Copiar mensagem</button><button class="btn" onClick=${() => copiar(linkConvite(gerado.token))}>Copiar só o link</button>
+          ${gerado.telefone && html`<a class="btn primario" target="_blank" rel="noopener" href=${linkWhats(gerado.telefone, msgConvite(gerado))}>Mandar no WhatsApp</a>`}</div>
+        <button class="btn-texto" onClick=${() => { setGerado(null); setF({ nome: '', email: '', telefone: '', objetivo: '' }); }}>Convidar outra</button></div>`
+    : html`<form class="pilha" onSubmit=${gerar}>
+        <p class="suave">Cada aluna recebe um link único, válido por 7 dias. Quando ela cria a senha, a conta já entra com o nome, o WhatsApp e o objetivo que você preencheu.</p>
+        <${Campo} rotulo="Nome"><input class="input" value=${f.nome} onInput=${(ev) => setF({ ...f, nome: ev.target.value })}/><//>
+        <div class="grade2"><${Campo} rotulo="E-mail (opcional)"><input class="input" type="email" value=${f.email} onInput=${(ev) => setF({ ...f, email: ev.target.value })}/><//>
+          <${Campo} rotulo="WhatsApp (opcional)"><input class="input" inputmode="tel" placeholder="(11) 99999-9999" value=${f.telefone} onInput=${(ev) => setF({ ...f, telefone: ev.target.value })}/><//></div>
+        <${Campo} rotulo="Objetivo (opcional)"><input class="input" placeholder="Ex.: glúteo e definição" value=${f.objetivo} onInput=${(ev) => setF({ ...f, objetivo: ev.target.value })}/><//>
+        <button class="btn primario grande">Gerar link de convite</button>
+      </form>`}
+    ${pendentes.length > 0 && !gerado && html`<section class="pilha-curta"><span class="rotulo">Convites em aberto</span>
+      <ul class="lista">${pendentes.map((c) => { const vencido = new Date(c.expira_em) < new Date();
+        return html`<li class="linha"><div><b>${c.nome}</b><small>${vencido ? 'venceu em ' : 'vale até '}${dataBR(String(c.expira_em).slice(0, 10))}</small></div>
+          <div class="mini-acoes">${!vencido && html`<button class="btn-texto" onClick=${() => setGerado(c)}>Ver link</button>`}<button class="btn-texto perigo" onClick=${() => cancelar(c)}>${vencido ? 'Apagar' : 'Cancelar'}</button></div></li>`; })}</ul></section>`}
+  <//>`;
 }
 
 // ============================================================
 // DETALHE DA ALUNA
 // ============================================================
-const ABAS_ALUNA = [['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['relatorio', 'Relatório'], ['avaliacoes', 'Avaliações'], ['checkins', 'Oráculo'], ['formularios', 'Formulários'],
+const ABAS_ALUNA = [['geral', 'Visão geral'], ['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['relatorio', 'Relatório'], ['avaliacoes', 'Avaliações'], ['checkins', 'Oráculo'], ['formularios', 'Formulários'],
   ['atividades', 'Crônica'], ['videos', 'Vídeos'], ['dossie', 'Dossiê'], ['arquivos', 'Arquivos'], ['metas', 'Metas'], ['cardio', 'Cardio'], ['testes', 'Testes'],
   ['anamnese', 'Alistamento'], ['financeiro', 'Financeiro'], ['dados', 'Dados']];
 // mensagem com o link de acesso da aluna ao app
+const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const mesAno = (d) => (d ? `${MESES_CURTOS[+d.slice(5, 7) - 1]}/${d.slice(0, 4)}` : '·');
 const linkAcesso = (a) => `Oi, ${(a.nome || '').split(' ')[0]}! Este é o seu acesso ao Nemesis: ${location.origin + location.pathname}\n\nEntre com o e-mail ${a.email || 'que você cadastrou'}. Se esquecer a senha, toque em "Esqueci a senha" na tela de entrada. No celular, use "Adicionar à tela de início" para ele virar um app.`;
 function AlunaDetalhe({ id, aba, ir, onAluna, coachNome }) {
   const e = useCarregar(async () => { const a = await api.um('profiles', { id }); if (a && onAluna) onAluna({ id: a.id, nome: a.nome }); return a; }, [id]);
@@ -195,11 +225,14 @@ function AlunaDetalhe({ id, aba, ir, onAluna, coachNome }) {
     <button class="btn-texto" onClick=${() => ir('alunas')}>‹ Alunas</button>
     <div class="aluna-cab"><span class="avatar grande">${(a.nome || '?').slice(0, 1)}</span>
       <div><h1>${a.nome || a.email}</h1><p class="suave">${[idadeDe(a.nascimento) && idadeDe(a.nascimento) + ' anos', a.objetivo].filter(Boolean).join(' · ') || a.email}</p>
-        <p class="aluna-meta"><span class=${'tag ' + (a.ativo ? 'ok' : '')}>${a.ativo ? 'Ativa' : 'Pausada'}</span><small>Aluna desde ${dataBR(a.alistada_em || String(a.created_at || '').slice(0, 10))}</small></p></div>
+        <p class="aluna-meta"><span class=${'tag ' + (a.ativo ? 'ok' : '')}>${a.ativo ? 'Ativa' : 'Pausada'}</span><small>Guerreira desde ${mesAno(a.alistada_em || String(a.created_at || '').slice(0, 10))}</small>
+          ${r.dados && (() => { const sn = saudeDa(a, r.dados).sinal; return html`<small class="sinal-cab" title="Soma do último check-in: (6 − sono) + (6 − energia) + estresse + dor">${sn ? html`<span class=${'ponto-sinal ' + sn.cor}></span>Último check-in: ${sn.cor}` : 'Sem check-in com sinal'}</small>`; })()}</p></div>
       <div class="acoes"><button class="btn" onClick=${() => copiar(linkAcesso(a))}><${Icone} nome="copiar" tam=${16}/>Copiar link</button>
         ${a.telefone && html`<a class="btn" target="_blank" rel="noopener" href=${linkWhats(a.telefone)}>WhatsApp</a>`}</div></div>
     ${r.dados && html`<${Score} s=${saudeDa(a, r.dados)}/>`}
     <${Abas} abas=${ABAS_ALUNA} atual=${aba} onMuda=${(k) => ir(`aluna/${id}/${k}`)}/>
+    ${aba === 'geral' && html`<div class="visao-geral"><section><h2 class="bloco">Dossiê</h2><${DossieAluna} aluna=${a}/></section>
+      <section><h2 class="bloco">Estrada</h2><${AtividadesAluna} aluna=${a}/></section></div>`}
     ${aba === 'ficha' && html`<${Ficha} aluna=${a}/>`}
     ${aba === 'evolucao' && html`<${Evolucao} alunaId=${a.id}/>`}
     ${aba === 'relatorio' && html`<${Relatorio} aluna=${a} coachNome=${coachNome} podeEditar=${true}/>`}

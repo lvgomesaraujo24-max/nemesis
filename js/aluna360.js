@@ -3,8 +3,8 @@ import { html, useState, useEffect } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { Icone } from './icones.js';
 import { ComoFunciona } from './comum.js';
-import { ModalEnvio, statusAtribuicao } from './formularios.js';
-import { useCarregar, Estado, Modal, Campo, Abas, toast, dataBR, hoje, somaDias, segundaDe, relativo, num } from './util.js';
+import { ModalEnvio, statusAtribuicao, CampoPrazo } from './formularios.js';
+import { useCarregar, Estado, Modal, Campo, Abas, toast, dataBR, hoje, somaDias, segundaDe, relativo, num, diasEntre } from './util.js';
 
 const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -20,7 +20,7 @@ export function FormulariosAluna({ aluna }) {
     return { forms, atribs: atribs.filter((a) => a.aluna_id === aluna.id || !a.aluna_id), envios };
   }, [aluna.id]);
   return html`<div class="pilha">
-    <div class="titulo-acoes"><${Abas} abas=${[['atribuicoes', 'Atribuições'], ['respostas', 'Respostas']]} atual=${aba} onMuda=${setAba}/>
+    <div class="titulo-acoes"><${Abas} abas=${[['atribuicoes', `Atribuições${e.dados ? ` (${e.dados.atribs.length})` : ''}`], ['respostas', `Respostas${e.dados ? ` (${e.dados.envios.length})` : ''}`]]} atual=${aba} onMuda=${setAba}/>
       <button class="btn primario" onClick=${() => setNovo(true)}>+ Atribuir formulário</button></div>
     <${Estado} e=${e}>${({ forms, atribs, envios }) => {
       const titulo = (id) => (forms.find((f) => f.id === id) || {}).titulo || 'Formulário';
@@ -45,15 +45,16 @@ export function FormulariosAluna({ aluna }) {
 }
 
 const descQuando = (a) => (a.quando === 'recorrente' ? `toda ${((a.recorrencia || {}).dias_semana || []).map((x) => DIAS[x]).join(', ')}`
-  : a.quando === 'programado' ? `em ${a.agendado_para ? dataBR(a.agendado_para) : '?'}` : `desde ${dataBR(a.created_at)}`);
+  : (a.quando === 'programado' ? `em ${a.agendado_para ? dataBR(a.agendado_para) : '?'}` : `desde ${dataBR(a.created_at)}`) + (a.prazo ? ` · prazo ${dataBR(a.prazo)}` : ''));
 
 function ModalAtribuirAluna({ aluna, forms, onFechar, onFeito }) {
-  const [f, setF] = useState({ formulario_id: (forms[0] || {}).id || '', quando: 'agora', dias: [5], dia: hoje(), hora: '08:00', entrega: 'manual', bloqueia_app: false });
+  const [f, setF] = useState({ formulario_id: (forms[0] || {}).id || '', quando: 'agora', dias: [5], dia: hoje(), hora: '08:00', entrega: 'manual', bloqueia_app: false, prazo: '' });
   const salvar = async (ev) => {
     ev.preventDefault(); if (!f.formulario_id) { toast('Escolha o formulário.', 'erro'); return; }
     try {
       await api.ins('atribuicoes', { formulario_id: f.formulario_id, aluna_id: aluna.id, entrega: f.entrega, quando: f.quando, bloqueia_app: f.bloqueia_app, ativa: true,
-        recorrencia: f.quando === 'recorrente' ? { dias_semana: f.dias } : null, agendado_para: f.quando === 'programado' ? new Date(`${f.dia}T${f.hora}:00`).toISOString() : null });
+        recorrencia: f.quando === 'recorrente' ? { dias_semana: f.dias } : null, agendado_para: f.quando === 'programado' ? new Date(`${f.dia}T${f.hora}:00`).toISOString() : null,
+        ...(f.prazo && f.quando !== 'recorrente' ? { prazo: f.prazo } : {}) });
       toast('Formulário atribuído', 'ok'); onFeito();
     } catch (err) { toast(err.message, 'erro'); }
   };
@@ -66,6 +67,7 @@ function ModalAtribuirAluna({ aluna, forms, onFechar, onFeito }) {
     ${f.quando === 'programado' && html`<div class="grade2"><${Campo} rotulo="Dia"><input class="input" type="date" value=${f.dia} onInput=${(ev) => setF({ ...f, dia: ev.target.value })}/><//>
       <${Campo} rotulo="Hora"><input class="input" type="time" value=${f.hora} onInput=${(ev) => setF({ ...f, hora: ev.target.value })}/><//></div>`}
     <${Campo} rotulo="Entrega">${chips('entrega', [['manual', 'Aparece no app'], ['fim_treino', 'Ao finalizar o treino']])}<//>
+    ${f.quando !== 'recorrente' && html`<${CampoPrazo} f=${f} setF=${setF}/>`}
     <label class="toggle"><input type="checkbox" checked=${f.bloqueia_app} onChange=${(ev) => setF({ ...f, bloqueia_app: ev.target.checked })}/> Exigir resposta antes de usar o app</label>
     <button class="btn primario grande">Atribuir</button>
   </form><//>`;
@@ -80,7 +82,9 @@ const tamanho = (b) => (b >= 1048576 ? `${num(b / 1048576, 1)} MB` : `${Math.max
 export function ArquivosAluna({ aluna, podeApagar = true }) {
   const e = useCarregar(() => api.q('arquivos_aluna', { eq: { aluna_id: aluna.id }, order: 'created_at', asc: false }), [aluna.id]);
   const [categoria, setCategoria] = useState('foto');
+  const [pose, setPose] = useState('');
   const [filtro, setFiltro] = useState('');
+  const [comparar, setComparar] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const enviar = async (ev) => {
     const arquivos = [...(ev.target.files || [])]; ev.target.value = '';
@@ -91,7 +95,7 @@ export function ArquivosAluna({ aluna, podeApagar = true }) {
         if (a.size > 20 * 1024 * 1024) { toast(`${a.name} passa de 20 MB`, 'erro'); continue; }
         const caminho = `${aluna.id}/${Date.now()}-${a.name.normalize('NFD').replace(/[^\w.-]+/g, '_')}`;
         await api.subirArquivo(caminho, a);
-        await api.ins('arquivos_aluna', { aluna_id: aluna.id, nome: a.name, caminho, tipo: a.type || null, categoria, tamanho: a.size });
+        await api.ins('arquivos_aluna', { aluna_id: aluna.id, nome: a.name, caminho, tipo: a.type || null, categoria, tamanho: a.size, ...(categoria === 'foto' && pose ? { pose } : {}) });
       }
       toast('Arquivo(s) enviado(s)', 'ok'); e.recarregar();
     } catch (err) { toast(err.message, 'erro'); } finally { setEnviando(false); }
@@ -104,6 +108,7 @@ export function ArquivosAluna({ aluna, podeApagar = true }) {
   return html`<div class="pilha">
     <section class="card envio-arquivo">
       <div class="chips">${CATEGORIAS_ARQ.map(([k, r]) => html`<button class=${categoria === k ? 'chip on' : 'chip'} onClick=${() => setCategoria(k)}>${r}</button>`)}</div>
+      ${categoria === 'foto' && html`<div class="chips"><small>Pose:</small>${[['', 'Livre'], ...POSES].map(([k, r]) => html`<button class=${pose === k ? 'chip on' : 'chip'} onClick=${() => setPose(k)}>${r}</button>`)}</div>`}
       <label class=${'btn primario' + (enviando ? ' desativado' : '')}><${Icone} nome="mais" tam=${16}/>${enviando ? 'Enviando...' : 'Enviar arquivos'}
         <input type="file" multiple hidden disabled=${enviando} accept=${categoria === 'foto' ? 'image/*' : undefined} onChange=${enviar}/></label>
       <small>Fotos, exames e PDFs ficam guardados só para você e para a aluna. Até 20 MB por arquivo.</small>
@@ -111,10 +116,40 @@ export function ArquivosAluna({ aluna, podeApagar = true }) {
     <${Estado} e=${e}>${(lista) => {
       const l = filtro ? lista.filter((x) => x.categoria === filtro) : lista;
       if (!lista.length) return html`<${ComoFunciona} titulo="Nenhum arquivo ainda" passos=${[['Escolha a categoria', 'Foto de evolução, exame, documento ou outro.'], ['Envie', 'Do celular ou do computador, vários de uma vez.'], ['Use no relatório', 'As fotos ajudam no antes e depois do relatório de evolução.']]}/>`;
-      return html`<div class="chips">${[['', 'Todos'], ...CATEGORIAS_ARQ].map(([k, r]) => html`<button class=${filtro === k ? 'chip on' : 'chip'} onClick=${() => setFiltro(k)}>${r} ${k ? `(${lista.filter((x) => x.categoria === k).length})` : ''}</button>`)}</div>
+      const fotos = lista.filter((x) => x.categoria === 'foto' && /^image\//.test(x.tipo || 'image/'));
+      const datasFotos = new Set(fotos.map((x) => String(x.created_at).slice(0, 10)));
+      return html`<div class="titulo-acoes"><div class="chips">${[['', 'Todos'], ...CATEGORIAS_ARQ].map(([k, r]) => html`<button class=${filtro === k ? 'chip on' : 'chip'} onClick=${() => setFiltro(k)}>${r} ${k ? `(${lista.filter((x) => x.categoria === k).length})` : ''}</button>`)}</div>
+          ${datasFotos.size > 1 && html`<button class=${'btn' + (comparar ? ' on' : '')} onClick=${() => setComparar(!comparar)}>${comparar ? 'Fechar comparação' : 'Comparar fotos'}</button>`}</div>
+        ${comparar && html`<${ComparaFotos} fotos=${fotos} abrir=${abrir}/>`}
         <div class="arquivos-grade">${l.map((x) => html`<${CartaoArquivo} key=${x.id} x=${x} abrir=${() => abrir(x)} apagar=${podeApagar ? () => apagar(x) : null}/>`)}</div>`;
     }}<//>
   </div>`;
+}
+
+// ---------- fotos de evolução lado a lado (frente, lado, costas) ----------
+const POSES = [['frente', 'Frente'], ['lado', 'Lado'], ['costas', 'Costas']];
+export const poseDe = (x) => x.pose || ((String(x.nome || '').toLowerCase().match(/frente|lado|costas/) || [])[0]) || null;
+function FotoAssinada({ x, abrir }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => { setUrl(null); if (x) api.linkArquivo(x.caminho).then(setUrl).catch(() => {}); }, [x && x.caminho]);
+  if (!x) return html`<div class="foto-comp vazia"><small>sem foto</small></div>`;
+  return html`<button class="foto-comp" onClick=${abrir} aria-label=${`Abrir ${x.nome}`}>${url ? html`<img src=${url} alt=${x.nome}/>` : html`<span class="spin"></span>`}</button>`;
+}
+function ComparaFotos({ fotos, abrir }) {
+  const datas = [...new Set(fotos.map((x) => String(x.created_at).slice(0, 10)))].sort();
+  const [a, setA] = useState(datas[0]);
+  const [b, setB] = useState(datas[datas.length - 1]);
+  const doDia = (d) => fotos.filter((x) => String(x.created_at).slice(0, 10) === d);
+  const temPose = fotos.some((x) => poseDe(x));
+  // com pose: uma linha por pose; sem pose: as fotos do dia em ordem
+  const linhas = temPose ? POSES.map(([k, r]) => [r, doDia(a).find((x) => poseDe(x) === k), doDia(b).find((x) => poseDe(x) === k)]).filter(([, x, y]) => x || y)
+    : [...Array(Math.max(doDia(a).length, doDia(b).length))].map((_, i) => [`Foto ${i + 1}`, doDia(a)[i], doDia(b)[i]]);
+  const sel = (v, set) => html`<select class="input curto" value=${v} onChange=${(ev) => set(ev.target.value)}>${datas.map((d) => html`<option value=${d}>${dataBR(d)}</option>`)}</select>`;
+  return html`<section class="card compara-fotos">
+    <div class="card-topo"><h3>Antes e depois</h3><small>${diasEntre(a, b) > 0 ? `${diasEntre(a, b)} dias entre as fotos` : ''}</small></div>
+    <div class="cf-grade"><span></span>${sel(a, setA)}${sel(b, setB)}
+      ${linhas.map(([r, x, y]) => html`<b class="cf-pose">${r}</b><${FotoAssinada} x=${x} abrir=${() => x && abrir(x)}/><${FotoAssinada} x=${y} abrir=${() => y && abrir(y)}/>`)}</div>
+  </section>`;
 }
 
 function CartaoArquivo({ x, abrir, apagar }) {

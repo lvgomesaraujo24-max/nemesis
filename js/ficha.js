@@ -30,8 +30,10 @@ const donoDe = (aluna, modelo) => (aluna ? { campo: 'aluna_id', id: aluna.id, ta
 const colunasDono = (dono) => ({ aluna_id: dono.campo === 'aluna_id' ? dono.id : null, modelo_id: dono.campo === 'modelo_id' ? dono.id : null });
 
 // copia todos os treinos de um dono para outro (aluna -> aluna, modelo -> aluna, aluna -> modelo)
-export async function copiarTreinos(origem, destino, ordemInicial = 0) {
-  const [ts, its] = await Promise.all([api.q('treinos', { eq: { [origem.campo]: origem.id }, order: 'ordem' }), api.q('treino_itens', { eq: { [origem.campo]: origem.id } })]);
+// cópia independente: mexer na cópia não altera a origem (e vice-versa). soIds limita a alguns treinos.
+export async function copiarTreinos(origem, destino, ordemInicial = 0, soIds = null) {
+  const [todos, its] = await Promise.all([api.q('treinos', { eq: { [origem.campo]: origem.id }, order: 'ordem' }), api.q('treino_itens', { eq: { [origem.campo]: origem.id } })]);
+  const ts = soIds ? todos.filter((t) => soIds.includes(t.id)) : todos;
   for (const [k, t] of ts.entries()) {
     const [novo] = await api.ins('treinos', { ...colunasDono(destino), nome: t.nome, ordem: ordemInicial + k, opcional: t.opcional, observacoes: t.observacoes, ativo: t.ativo });
     const linhas = its.filter((i) => i.treino_id === t.id).map(({ id, treino_id, aluna_id, modelo_id, created_at, ...r }) => ({ ...r, ...colunasDono(destino), treino_id: novo.id }));
@@ -135,7 +137,7 @@ function Editor({ dono, d, recarregar }) {
         return html`<button class=${'treino-aba' + (t.id === atual ? ' on' : '') + (t.ativo ? '' : ' apagado')} onClick=${() => setAtual(t.id)}>
           <b>${t.nome}</b><small>${tipoDoTreino(its)}${t.opcional ? ' · opcional' : ''}</small></button>`; })}
       <button class="treino-aba nova" onClick=${() => setModal({ tipo: 'treino' })}><${Icone} nome="mais" tam=${16}/>Criar treino</button>
-      <button class="treino-aba nova" onClick=${() => setModal({ tipo: 'importar' })}><${Icone} nome="copiar" tam=${16}/>Importar</button>
+      <button class="treino-aba nova" onClick=${() => setModal({ tipo: 'importar' })}><${Icone} nome="copiar" tam=${16}/>Importar modelo</button>
       ${dono.aluna && treinos.length > 0 && html`<button class="treino-aba nova" onClick=${() => setModal({ tipo: 'salvarModelo' })}><${Icone} nome="forja" tam=${16}/>Salvar como modelo</button>`}
     </div>
 
@@ -478,36 +480,69 @@ function ModalImportar({ dono, ordemInicial, onFechar, onFeito }) {
   }, []);
   const [fonte, setFonte] = useState('modelo');
   const [origem, setOrigem] = useState('');
+  const [treinosOrigem, setTreinosOrigem] = useState([]);
+  const [marcados, setMarcados] = useState([]);
+  const [substituir, setSubstituir] = useState(false);
   const [copiando, setCopiando] = useState(false);
+  const campo = fonte === 'modelo' ? 'modelo_id' : 'aluna_id';
+  useEffect(() => {
+    if (!origem) { setTreinosOrigem([]); setMarcados([]); return; }
+    api.q('treinos', { eq: { [campo]: origem }, order: 'ordem' }).then((l) => { setTreinosOrigem(l); setMarcados(l.map((t) => t.id)); }).catch(() => setTreinosOrigem([]));
+  }, [origem, fonte]);
   const importar = async () => {
+    if (!marcados.length) { toast('Marque pelo menos um treino.', 'erro'); return; }
     setCopiando(true);
     try {
-      const n = await copiarTreinos({ campo: fonte === 'modelo' ? 'modelo_id' : 'aluna_id', id: origem }, dono, ordemInicial);
+      let ordem = ordemInicial;
+      if (substituir && dono.aluna) { const atuais = await api.q('treinos', { eq: { aluna_id: dono.id } }); for (const t of atuais.filter((x) => x.ativo)) await api.upd('treinos', t.id, { ativo: false }); }
+      const n = await copiarTreinos({ campo, id: origem }, dono, ordem, marcados.length === treinosOrigem.length ? null : marcados);
       if (!n) { toast('Não há treinos para importar aí.', 'erro'); setCopiando(false); return; }
       toast(`${n} treino(s) importado(s)`, 'ok'); onFeito();
     } catch (err) { toast(err.message, 'erro'); setCopiando(false); }
   };
+  const alterna = (id) => setMarcados(marcados.includes(id) ? marcados.filter((x) => x !== id) : [...marcados, id]);
   return html`<${Modal} titulo="Importar treinos" onFechar=${onFechar}>
     <${Estado} e=${e}>${({ modelos, alunas }) => { const lista = fonte === 'modelo' ? modelos : alunas;
       return html`<div class="pilha">
         <div class="chips">${[['modelo', 'De um modelo'], ['aluna', 'Da ficha de outra aluna']].map(([k, r]) => html`<button class=${fonte === k ? 'chip on' : 'chip'} onClick=${() => { setFonte(k); setOrigem(''); }}>${r}</button>`)}</div>
-        <p class="suave">Os treinos são adicionados ${dono.aluna ? `à ficha de ${dono.aluna.nome}` : 'a este modelo'}. Depois você ajusta o que precisar.</p>
+        <p class="suave">É uma cópia independente: ajustar ${dono.aluna ? `a ficha de ${dono.aluna.nome}` : 'este modelo'} não muda a origem.</p>
         ${lista.length ? html`<select class="input" value=${origem} onChange=${(ev) => setOrigem(ev.target.value)}><option value="">${fonte === 'modelo' ? 'Escolha o modelo' : 'Escolha a aluna'}</option>
           ${lista.map((x) => html`<option value=${x.id}>${x.nome}${x.nivel ? ` · ${(NIVEIS.find(([k]) => k === x.nivel) || [, ''])[1]}` : ''}</option>`)}</select>`
           : html`<p class="nota">${fonte === 'modelo' ? 'Nenhum modelo ainda. Crie em Modelos, no menu, ou salve uma ficha como modelo.' : 'Nenhuma outra aluna.'}</p>`}
-        <button class="btn primario grande" disabled=${!origem || copiando} onClick=${importar}>${copiando ? 'Importando...' : 'Importar treinos'}</button>
+        ${treinosOrigem.length > 0 && html`<div class="pilha-curta"><span class="rotulo">Quais treinos</span>
+          ${treinosOrigem.map((t) => html`<label class="toggle"><input type="checkbox" checked=${marcados.includes(t.id)} onChange=${() => alterna(t.id)}/> ${t.nome}${t.ativo === false ? ' (oculto)' : ''}</label>`)}</div>`}
+        ${dono.aluna && treinosOrigem.length > 0 && html`<label class="toggle"><input type="checkbox" checked=${substituir} onChange=${(ev) => setSubstituir(ev.target.checked)}/> Substituir a ficha atual (os treinos de hoje ficam ocultos e salvos)</label>`}
+        <button class="btn primario grande" disabled=${!origem || !marcados.length || copiando} onClick=${importar}>${copiando ? 'Importando...' : `Importar ${marcados.length && marcados.length < treinosOrigem.length ? marcados.length + ' treino(s)' : 'treinos'}`}</button>
       </div>`; }}<//><//>`;
 }
 
 // criar modelo sempre pede nome e nível antes (e pode nascer de uma ficha)
+// objetivo, frequência e duração do modelo (atualização 9): só vão para o banco quando preenchidos
+export const OBJETIVOS_MODELO = [['hipertrofia', 'Hipertrofia'], ['gluteo', 'Glúteo foco'], ['emagrecimento', 'Emagrecimento'], ['forca', 'Força'], ['condicionamento', 'Condicionamento']];
+export function extrasModelo(f, antes = {}) {
+  const o = {};
+  const n = (v) => (v === '' || v == null ? null : Math.round(Number(v)) || null);
+  if ((f.objetivo || null) !== (antes.objetivo || null)) o.objetivo = f.objetivo || null;
+  if (n(f.frequencia_semanal) !== (antes.frequencia_semanal || null)) o.frequencia_semanal = n(f.frequencia_semanal);
+  if (n(f.duracao_semanas) !== (antes.duracao_semanas || null)) o.duracao_semanas = n(f.duracao_semanas);
+  return o;
+}
+export function CamposModelo({ f, setF }) {
+  return html`<${Campo} rotulo="Objetivo"><div class="chips">${OBJETIVOS_MODELO.map(([k, r]) => html`<button type="button" class=${f.objetivo === k ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, objetivo: f.objetivo === k ? '' : k })}>${r}</button>`)}</div><//>
+    <div class="grade2">
+      <${Campo} rotulo="Treinos por semana"><input class="input" inputmode="numeric" placeholder="ex.: 4" value=${f.frequencia_semanal || ''} onInput=${(ev) => setF({ ...f, frequencia_semanal: ev.target.value.replace(/\D/g, '') })}/><//>
+      <${Campo} rotulo="Duração (semanas)"><input class="input" inputmode="numeric" placeholder="ex.: 8" value=${f.duracao_semanas || ''} onInput=${(ev) => setF({ ...f, duracao_semanas: ev.target.value.replace(/\D/g, '') })}/><//>
+    </div>`;
+}
+
 export function ModalNovoModelo({ origem, nomeInicial = '', nivelInicial = 'intermediaria', onFechar, onFeito }) {
-  const [f, setF] = useState({ nome: nomeInicial, nivel: nivelInicial, descricao: '' });
+  const [f, setF] = useState({ nome: nomeInicial, nivel: nivelInicial, descricao: '', objetivo: '', frequencia_semanal: '', duracao_semanas: '' });
   const [salvando, setSalvando] = useState(false);
   const salvar = async (ev) => {
     ev.preventDefault(); if (!f.nome.trim()) { toast('Dê um nome ao modelo.', 'erro'); return; }
     setSalvando(true);
     try {
-      const [m] = await api.ins('modelos', { nome: f.nome.trim(), nivel: f.nivel, descricao: f.descricao || null });
+      const [m] = await api.ins('modelos', { nome: f.nome.trim(), nivel: f.nivel, descricao: f.descricao || null, ...extrasModelo(f) });
       if (origem) await copiarTreinos(origem, { campo: 'modelo_id', id: m.id }, 0);
       onFeito(m);
     } catch (err) { toast(err.message, 'erro'); setSalvando(false); }
@@ -515,6 +550,7 @@ export function ModalNovoModelo({ origem, nomeInicial = '', nivelInicial = 'inte
   return html`<${Modal} titulo=${origem ? 'Salvar ficha como modelo' : 'Novo modelo'} onFechar=${onFechar}><form class="pilha" onSubmit=${salvar}>
     <${Campo} rotulo="Nome" dica="Ex.: Glúteo 4x · intermediária"><input class="input" value=${f.nome} onInput=${(ev) => setF({ ...f, nome: ev.target.value })} autofocus/><//>
     <${Campo} rotulo="Nível"><div class="chips">${NIVEIS.map(([k, r]) => html`<button type="button" class=${f.nivel === k ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, nivel: k })}>${r}</button>`)}</div><//>
+    <${CamposModelo} f=${f} setF=${setF}/>
     <${Campo} rotulo="Descrição (opcional)"><textarea class="input" rows="2" value=${f.descricao} onInput=${(ev) => setF({ ...f, descricao: ev.target.value })}></textarea><//>
     <button class="btn primario grande" disabled=${salvando}>${salvando ? 'Salvando...' : origem ? 'Salvar modelo' : 'Criar modelo'}</button>
   </form><//>`;

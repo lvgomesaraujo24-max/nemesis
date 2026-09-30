@@ -3,7 +3,7 @@ import { html, useState, useMemo } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { Icone } from './icones.js';
 import { useCarregar, Estado, Vazio, Linha, Modal, Campo, toast, num, dataBR, dataCurta, hoje, lerNum, tonelagem,
-  recordes, sequenciaSemanas, equivalencia, DOBRAS, MEDIDAS, MEDIDAS_TODAS, DIAMETROS, PROTOCOLOS, camposProtocolo, percentualGordura, protocoloSugerido, composicao, idadeDe, relativo, diasEntre } from './util.js';
+  recordes, sequenciaSemanas, equivalencia, DOBRAS, MEDIDAS, MEDIDAS_TODAS, DIAMETROS, PROTOCOLOS, camposProtocolo, percentualGordura, protocoloSugerido, composicao, idadeDe, idadeEm, relativo, diasEntre } from './util.js';
 
 // ============================================================
 // ESTADO VAZIO QUE ENSINA ("Como funciona" em passos)
@@ -256,7 +256,7 @@ export function Avaliacoes({ aluna, podeEditar }) {
         ['Acompanhe nos gráficos', 'Peso, gordura e massa magra ao longo do tempo.']]}/>`;
       const asc = lista.slice().reverse();
       return html`${asc.length > 1 && html`<${GraficosAvaliacao} lista=${asc} sexo=${aluna.sexo}/>`}
-        ${comparando && html`<${ComparaAvaliacoes} lista=${asc.filter((x) => sel.includes(x.id))} sexo=${aluna.sexo}/>`}
+        ${comparando && html`<${ComparaAvaliacoes} lista=${asc.filter((x) => sel.includes(x.id))} sexo=${aluna.sexo} objetivo=${aluna.objetivo}/>`}
         ${lista.map((a, i) => html`<div class=${comparando ? 'aval-sel' : ''}>
           ${comparando && html`<label class="toggle"><input type="checkbox" checked=${sel.includes(a.id)} onChange=${() => setSel(sel.includes(a.id) ? sel.filter((x) => x !== a.id) : [...sel, a.id])}/> Comparar ${dataBR(a.data)}</label>`}
           <${CartaoAvaliacao} a=${a} anterior=${lista[i + 1]} sexo=${aluna.sexo} podeEditar=${podeEditar} onApagar=${async () => { if (confirm('Apagar esta avaliação?')) { await api.del('avaliacoes', a.id); e.recarregar(); } }}/></div>`)}`;
@@ -268,22 +268,43 @@ export function Avaliacoes({ aluna, podeEditar }) {
 
 // linhas da comparação: [rótulo, função que lê o valor, unidade, casas]
 const somaDobras = (a) => { const v = Object.values(a.dobras || {}).map(Number).filter((x) => !isNaN(x)); return v.length ? v.reduce((x, y) => x + y, 0) : null; };
+// [rótulo, leitura, unidade, casas, sentido bom]: 'menor', 'maior' ou 'obj' (depende do objetivo da aluna)
+const MEMBROS = /^(Braço|Antebraço|Coxa|Panturrilha|Quadril|Ombro|Tórax)/;
 function linhasComparacao(sexo) {
   const c = (k) => (a) => composicao(a, sexo)[k];
-  return [['Peso', (a) => a.peso, 'kg', 1], ['% de gordura', (a) => a.percentual_gordura, '%', 1], ['Massa gorda', c('gorda'), 'kg', 1], ['Massa magra', c('magra'), 'kg', 1],
-    ['Massa muscular', c('muscular'), 'kg', 1], ['Massa óssea', c('ossea'), 'kg', 1], ['IMC', c('imc'), '', 1], ['Relação cintura/quadril', c('rcq'), '', 2], ['Soma das dobras', somaDobras, 'mm', 0],
-    ...MEDIDAS_TODAS.map(([k, r]) => [r, (a) => (a.medidas || {})[k], 'cm', 1])];
+  return [['Peso', (a) => a.peso, 'kg', 1, 'obj'], ['% de gordura', (a) => a.percentual_gordura, '%', 1, 'menor'], ['Massa gorda', c('gorda'), 'kg', 1, 'menor'], ['Massa magra', c('magra'), 'kg', 1, 'maior'],
+    ['Massa muscular', c('muscular'), 'kg', 1, 'maior'], ['Massa óssea', c('ossea'), 'kg', 1, null], ['IMC', c('imc'), '', 1, 'obj'], ['Relação cintura/quadril', c('rcq'), '', 2, 'menor'], ['Soma das dobras', somaDobras, 'mm', 0, 'menor'],
+    ...MEDIDAS_TODAS.map(([k, r]) => [r, (a) => (a.medidas || {})[k], 'cm', 1, ['cintura', 'abdomen'].includes(k) ? 'menor' : MEMBROS.test(r) ? 'membro' : null])];
 }
-function ComparaAvaliacoes({ lista, sexo }) {
+// objetivo em texto livre vira direção: perder (emagrecer, definir) ou ganhar (hipertrofia, massa, glúteo)
+// os dois juntos (ex.: "glúteo e definição") = recomposição: peso neutro, membros maiores contam como melhora
+export const direcaoObjetivo = (obj) => { const o = String(obj || '').toLowerCase(); const p = /emagre|perder|secar|defini|reduzir/.test(o), g = /massa|hipertrof|ganhar|gl[uú]teo|volume|crescer/.test(o);
+  return p && g ? 'recomp' : p ? 'perder' : g ? 'ganhar' : null; };
+const NOME_DIR = { perder: 'perder gordura', ganhar: 'ganhar massa', recomp: 'recomposição (menos gordura, mais músculo)' };
+const minimo = (cs) => 0.5 * Math.pow(10, -cs);
+function classeDif(d, sentido, dir, cs = 1) {
+  if (d == null || Math.abs(d) < minimo(cs) || !sentido) return '';
+  let bom = sentido === 'menor' ? d < 0 : sentido === 'maior' ? d > 0 : null;
+  if (sentido === 'obj') bom = dir === 'perder' ? d < 0 : dir === 'ganhar' ? d > 0 : null;
+  if (sentido === 'membro') bom = dir === 'ganhar' || dir === 'recomp' ? d > 0 : null;
+  return bom == null ? '' : bom ? 'melhora' : 'piora';
+}
+const NOME_PROT = { jp7: 'Pollock 7', jp3: 'Pollock 3', weltman: 'Weltman', tran: 'Tran & Weltman', slaughter: 'Slaughter', perimetria: 'só perimetria' };
+function ComparaAvaliacoes({ lista, sexo, objetivo }) {
   if (lista.length < 2) return html`<p class="nota">Marque pelo menos duas avaliações abaixo para comparar.</p>`;
-  // soma de dobras só compara avaliações do mesmo protocolo
-  const mesmoProtocolo = new Set(lista.map((a) => a.protocolo || 'jp7')).size === 1;
+  const protos = [...new Set(lista.map((a) => a.protocolo || 'jp7'))];
+  const mesmoProtocolo = protos.length === 1;
+  const dir = direcaoObjetivo(objetivo);
   const linhas = linhasComparacao(sexo).filter(([r, f]) => lista.some((a) => f(a) != null) && (mesmoProtocolo || r !== 'Soma das dobras'));
-  return html`<section class="card"><h3>Comparação</h3><div class="tabela-rolagem"><table class="tabela">
-    <thead><tr><th></th>${lista.map((a) => html`<th>${dataBR(a.data)}</th>`)}<th>Diferença</th></tr></thead>
-    <tbody>${linhas.map(([r, f, u, cs]) => { const v0 = f(lista[0]), v1 = f(lista[lista.length - 1]); const d = v0 != null && v1 != null ? Number(v1) - Number(v0) : null;
+  return html`<section class="card"><div class="card-topo"><h3>Comparação</h3><small>${dir ? `Cores pelo objetivo: ${NOME_DIR[dir]}` : 'Verde = melhorou · vermelho = piorou'}</small></div>
+    ${!mesmoProtocolo && html`<p class="nota atencao">Atenção: estas avaliações usam protocolos diferentes (${protos.map((p) => NOME_PROT[p] || p).join(', ')}). Parte da diferença no % de gordura pode vir só da troca de protocolo.</p>`}
+    <div class="tabela-rolagem"><table class="tabela">
+    <thead><tr><th></th>${lista.map((a) => html`<th>${dataBR(a.data)}<br/><small>${NOME_PROT[a.protocolo || 'jp7']}</small></th>`)}<th>Diferença</th><th>%</th></tr></thead>
+    <tbody>${linhas.map(([r, f, u, cs, sentido]) => { const v0 = f(lista[0]), v1 = f(lista[lista.length - 1]); const d = v0 != null && v1 != null ? Number(v1) - Number(v0) : null;
+      const pc = d != null && Number(v0) ? (d / Number(v0)) * 100 : null; const cl = classeDif(d, sentido, dir, cs);
       return html`<tr><td>${r}</td>${lista.map((a) => html`<td>${f(a) != null ? `${num(f(a), cs)}${u ? ' ' + u : ''}` : '·'}</td>`)}
-        <td class=${d == null || Math.abs(d) < 0.05 ? '' : d < 0 ? 'baixa' : 'alta'}>${d == null ? '·' : `${d > 0 ? '+' : ''}${num(d, cs)}${u ? ' ' + u : ''}`}</td></tr>`; })}</tbody></table></div></section>`;
+        <td class=${cl}>${d == null ? '·' : `${d > 0 ? '+' : ''}${num(d, cs)}${u ? ' ' + u : ''}`}</td>
+        <td class=${cl}>${pc == null || Math.abs(d) < minimo(cs) ? '·' : `${pc > 0 ? '+' : ''}${num(pc, 1)}%`}</td></tr>`; })}</tbody></table></div></section>`;
 }
 function GraficosAvaliacao({ lista, sexo }) {
   const [serie, setSerie] = useState('Peso');
@@ -341,7 +362,7 @@ function NovaAvaliacao({ aluna, onFechar, onSalvo }) {
   return html`<${Modal} titulo=${'Avaliação · ' + aluna.nome} onFechar=${onFechar} largo>
     <form class="pilha" onSubmit=${salvar}>
       <div class="grade2">
-        <${Campo} rotulo="Data"><input class="input" type="date" value=${f.data} onInput=${(ev) => setF({ ...f, data: ev.target.value })}/><//>
+        <${Campo} rotulo="Data"><input class="input" type="date" value=${f.data} onInput=${(ev) => setF({ ...f, data: ev.target.value, idade: aluna.nascimento && ev.target.value ? idadeEm(aluna.nascimento, ev.target.value) : f.idade })}/><//>
         <${Campo} rotulo=${`Idade · ${sexo === 'M' ? 'masculino' : 'feminino'} (do cadastro)`}>${inp(f, setF, 'idade')}<//>
         <${Campo} rotulo="Peso (kg)">${inp(f, setF, 'peso')}<//>
         <${Campo} rotulo="Estatura (cm)">${inp(f, setF, 'altura')}<//>

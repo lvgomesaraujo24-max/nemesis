@@ -1,6 +1,6 @@
 // Service worker: guarda o app no aparelho para abrir rápido e sem internet.
 // Ao publicar uma versão nova, troque o número abaixo.
-const VERSAO = 'nemesis-v8';
+const VERSAO = 'nemesis-v9';
 const ARQUIVOS = ['./', './index.html', './form.html', './config.js', './manifest.json', './css/app.css', './css/form.css',
   './js/app.js', './js/api.js', './js/demo.js', './js/util.js', './js/comum.js', './js/aluna.js', './js/coach.js', './js/form.js', './js/motor.js', './js/vivo.js', './js/comando.js', './js/dossie.js', './js/formularios.js', './js/extras.js', './js/relatorio.js', './js/icones.js', './js/ficha.js', './js/musculos.js', './js/corpo.js', './js/modelos.js', './js/biblioteca.js', './js/tesouro.js', './js/chronos.js', './js/radar.js', './js/aluna360.js',
   './lib/preact-htm.js', './lib/supabase.js', './icons/icon-192.png',

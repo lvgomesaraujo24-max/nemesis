@@ -72,7 +72,7 @@ function InicioAluna({ perfil, ir, pendentes = [] }) {
   const saud = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
   return html`<div class="pilha">
     <div class="ola"><p class="sobre">${saud},</p><h1>${primeiroNome(perfil.nome)}</h1></div>
-    ${pendentes.map((p) => html`<a class="card aviso" href=${`#/form/${p.formulario.id}/${p.atribuicao.id}`}><b>${p.formulario.titulo}</b><span>${p.formulario.descricao || 'Toque para responder.'}</span></a>`)}
+    ${pendentes.map((p) => html`<a class="card aviso" href=${`#/form/${p.formulario.id}/${p.atribuicao.id}`}><b>${p.formulario.titulo}</b><span>${p.atribuicao.prazo ? (p.atribuicao.prazo < hoje() ? `Prazo era ${dataBR(p.atribuicao.prazo)}. ` : `Responda até ${dataBR(p.atribuicao.prazo)}. `) : ''}${p.formulario.descricao || 'Toque para responder.'}</span></a>`)}
     <${Estado} e=${e}>${({ treinos, sessoes, itens, checkinFeito, cardio }) => {
       if (!treinos.length) return html`<${Vazio} titulo="Sua ficha está sendo montada" texto="Assim que o treinador publicar os seus treinos, eles aparecem aqui."/>`;
       const semana = sessoes.filter((s) => s.data >= segundaDe());

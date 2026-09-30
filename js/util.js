@@ -11,6 +11,8 @@ export const dataBR = (s) => { if (!s) return '·'; const [y, m, d] = String(s).
 export const dataCurta = (s) => { if (!s) return ''; const [, m, d] = String(s).slice(0, 10).split('-'); return `${d}/${m}`; };
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 export const mesNome = (ym) => { const [y, m] = ym.split('-'); return `${MESES[+m - 1]} ${y}`; };
+// idade numa data (avaliação feita em outro dia usa a idade daquele dia)
+export const idadeEm = (nasc, data) => { if (!nasc || !data) return null; const [y, m, d] = data.split('-').map(Number); const [ny, nm, nd] = nasc.slice(0, 10).split('-').map(Number); return y - ny - (m < nm || (m === nm && d < nd) ? 1 : 0); };
 export const idadeDe = (nasc) => { if (!nasc) return null; const n = new Date(nasc + 'T12:00:00'), h = new Date(); let i = h.getFullYear() - n.getFullYear(); if (h < new Date(h.getFullYear(), n.getMonth(), n.getDate())) i--; return i; };
 export const relativo = (s) => {
   if (!s) return 'nunca';
@@ -37,9 +39,9 @@ export const DOBRAS = [['triceps', 'Tríceps'], ['subescapular', 'Subescapular']
   ['suprailiaca', 'Suprailíaca'], ['abdominal', 'Abdominal'], ['coxa', 'Coxa média'], ['panturrilha', 'Panturrilha medial']];
 const DOBRAS_JP7 = ['peitoral', 'axilar', 'triceps', 'subescapular', 'abdominal', 'suprailiaca', 'coxa'];
 export const DOBRAS_JP3 = { F: ['triceps', 'suprailiaca', 'coxa'], M: ['peitoral', 'abdominal', 'coxa'] };
-// 17 perímetros (cm); os 3 antigos continuam aparecendo nas avaliações já feitas
-export const MEDIDAS = [['braco_rel_d', 'Braço D relaxado'], ['braco_rel_e', 'Braço E relaxado'], ['braco_con_d', 'Braço D contraído'], ['braco_con_e', 'Braço E contraído'],
-  ['ombros', 'Ombro a ombro'], ['torax', 'Tórax'], ['cintura', 'Cintura'], ['abdomen', 'Abdômen'], ['quadril', 'Quadril'],
+// 20 perímetros (cm): os 17 do escopo + pescoço e antebraços; os 3 antigos continuam aparecendo nas avaliações já feitas
+export const MEDIDAS = [['pescoco', 'Pescoço'], ['braco_rel_d', 'Braço D relaxado'], ['braco_rel_e', 'Braço E relaxado'], ['braco_con_d', 'Braço D contraído'], ['braco_con_e', 'Braço E contraído'],
+  ['antebraco_d', 'Antebraço D'], ['antebraco_e', 'Antebraço E'], ['ombros', 'Ombro a ombro'], ['torax', 'Tórax'], ['cintura', 'Cintura'], ['abdomen', 'Abdômen'], ['quadril', 'Quadril'],
   ['coxa_prox_d', 'Coxa proximal D'], ['coxa_prox_e', 'Coxa proximal E'], ['coxa_med_d', 'Coxa média D'], ['coxa_med_e', 'Coxa média E'],
   ['coxa_dist_d', 'Coxa distal D'], ['coxa_dist_e', 'Coxa distal E'], ['pant_d', 'Panturrilha D'], ['pant_e', 'Panturrilha E']];
 export const MEDIDAS_TODAS = [...MEDIDAS, ['coxa', 'Coxa'], ['braco', 'Braço'], ['panturrilha', 'Panturrilha']];
