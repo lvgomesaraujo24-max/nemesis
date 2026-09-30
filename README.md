@@ -95,5 +95,8 @@ js/demo.js        modo demonstração
 js/util.js        datas, números, gráficos, componentes
 css/              visual
 lib/              Preact, Supabase e fontes (tudo local, abre sem internet)
+docs/             arquitetura, banco, regras de negócio e decisões
+ferramentas/checar.mjs  checagem antes do commit: node ferramentas/checar.mjs
+CLAUDE.md, .claude/     regras e skills para programar com o Claude Code
 ```
 Sem etapa de build: o que está no repositório é exatamente o que roda.
