@@ -13,3 +13,4 @@
 .feito h2 { font-family: var(--serif); font-size: 24px; }
 .consentimento { font-size: 13px; color: var(--suave); align-items: flex-start; }
 .consentimento input { margin-top: 2px; }
+.isca { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }

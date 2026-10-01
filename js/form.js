@@ -1,5 +1,5 @@
 // Formulário público de inscrição (link da bio). Grava na tabela "leads".
-import { html, render, useState, useEffect } from '../lib/preact-htm.js';
+import { html, render, useState, useEffect, useRef } from '../lib/preact-htm.js';
 import { api, DEMO } from './api.js';
 import { Campo, Toasts, toast, brl, soDigitos } from './util.js';
 
@@ -14,6 +14,9 @@ function Form() {
   const [planos, setPlanos] = useState([]);
   const [enviando, setEnviando] = useState(false);
   const [feito, setFeito] = useState(false);
+  // anti-robô: campo-isca invisível (gente não preenche) e tempo mínimo desde que a página abriu
+  const [isca, setIsca] = useState('');
+  const abertoEm = useRef(Date.now());
   useEffect(() => { api.q('planos', { eq: { ativo: true }, order: 'meses' }).then(setPlanos).catch(() => {}); }, []);
   const muda = (k, v) => setF({ ...f, [k]: v });
   const chips = (k, ops) => html`<div class="chips">${ops.map((o) => html`<button type="button" class=${f[k] === o ? 'chip on' : 'chip'} onClick=${() => muda(k, o)}>${o}</button>`)}</div>`;
@@ -31,6 +34,8 @@ function Form() {
     ev.preventDefault();
     const erro = valida(); if (erro) { toast(erro, 'erro'); return; }
     if (passo < 2) { setPasso(passo + 1); window.scrollTo(0, 0); return; }
+    // robô: finge que deu certo e não grava nada
+    if (isca || Date.now() - abertoEm.current < 5000) { setFeito(true); return; }
     setEnviando(true);
     try {
       const { ok, ...dados } = f;
@@ -66,8 +71,10 @@ function Form() {
         ${planos.map((p) => html`<button type="button" class=${f.plano_interesse === p.nome ? 'chip on' : 'chip'} onClick=${() => muda('plano_interesse', p.nome)}>${p.nome} · ${p.meses} ${p.meses > 1 ? 'meses' : 'mês'} · ${brl(p.valor).replace(',00', '')}</button>`)}
         <button type="button" class=${f.plano_interesse === 'Ainda não sei' ? 'chip on' : 'chip'} onClick=${() => muda('plano_interesse', 'Ainda não sei')}>Ainda não sei</button></div><//>
       <${Campo} rotulo="Qual a sua maior dificuldade hoje? (opcional)"><textarea class="input" rows="3" value=${f.mensagem} onInput=${(ev) => muda('mensagem', ev.target.value)}></textarea><//>
-      <label class="toggle consentimento"><input type="checkbox" checked=${f.ok} onChange=${(ev) => muda('ok', ev.target.checked)}/> Autorizo o contato pelo WhatsApp sobre a consultoria. Meus dados não serão compartilhados com ninguém.</label>
+      <label class="toggle consentimento"><input type="checkbox" checked=${f.ok} onChange=${(ev) => muda('ok', ev.target.checked)}/> Autorizo o uso destes dados para falarem comigo pelo WhatsApp sobre a consultoria. Eles não são compartilhados e são apagados em até 6 meses se eu não fechar.</label>
+      <small><a href="legal.html#privacidade" target="_blank" rel="noopener">Política de Privacidade</a></small>
     </section>`}
+    <div class="isca" aria-hidden="true"><label>Não preencha<input name="nao_preencher" tabindex="-1" autocomplete="off" value=${isca} onInput=${(ev) => setIsca(ev.target.value)}/></label></div>
     <div class="form-rodape">
       ${passo > 0 && html`<button type="button" class="btn grande" onClick=${() => setPasso(passo - 1)}>Voltar</button>`}
       <button class="btn primario grande" disabled=${enviando}>${passo < 2 ? 'Continuar' : enviando ? 'Enviando...' : 'Enviar inscrição'}</button>

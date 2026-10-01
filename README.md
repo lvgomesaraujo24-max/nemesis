@@ -1,5 +1,7 @@
 # Nemesis
 
+> Documento completo do projeto (arquitetura, rotas, banco, regras de cálculo, custos e roadmap): [`docs/CEREBRO-NEMESIS.md`](docs/CEREBRO-NEMESIS.md)
+
 App de consultoria de treino: o treinador monta a ficha, acompanha evolução, check-ins, avaliações, inscrições e financeiro. A aluna treina pelo celular, registra as cargas e manda o check-in da semana.
 
 Funciona como app instalável no celular (PWA). Não precisa de loja de aplicativos.
@@ -16,10 +18,11 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 - Painel com o que precisa de atenção: check-ins sem resposta, planos vencendo, parcelas em atraso, alunas sem treinar há 7 dias, inscrições novas
 - Alunas: ficha de treino, copiar ficha de outra aluna, evolução, check-ins, avaliações, anamnese, financeiro e dados
 - Ficha: treinos em abas, exercício por tipo (aquecimento, aeróbico, musculação, crossfit), séries, séries de aquecimento, faixa de repetições, cadência, descanso exato/em faixa/livre, método (drop-set, rest-pause, bi-set...), RIR/RPE, tempo estimado do treino, "replicar valores" do 1º exercício e volume semanal por músculo com mapa do corpo (frente e costas)
-- Avaliação física com 7 dobras (Jackson & Pollock + Siri), circunferências e comparação com a anterior
+- Avaliação física com Pollock 3 ou 7 dobras + Siri, circunferências e diâmetros ósseos; composição corporal automática (massa gorda, magra, óssea e muscular), comparação de várias avaliações lado a lado e gráficos
+- Ficha 360 da aluna: engajamento, progressão e risco no topo, status, "aluna desde", copiar link de acesso, formulários atribuídos com status (pendente, respondido, atrasado) e respostas, arquivos (fotos de evolução, exames, PDFs), feed de atividades e progressão geral de carga
 - Check-ins: responder pelo app ou mandar no WhatsApp, lembrete para quem não enviou
 - Inscrições do formulário da bio, com status (novo, contatado, fechado, perdido) e botão de WhatsApp
-- Relatório de evolução (mês, ficha ou período livre): resumo, carga e força estimada, recordes, volume por grupamento, frequência, corpo e bem-estar. Baixa em PDF e manda no WhatsApp
+- Relatório de evolução (mês, ficha ou período livre): capa com a deusa do período (Nike, Ártemis, Sekhmet, Atena ou Héstia, escolhida pelos números), o mês em uma página (calendário dia a dia, momentos e semana a semana), comparativo com o período anterior, carga e força estimada, recordes e volume, frequência, mapa do corpo, bem-estar × desempenho e dor, avaliação física, metas e conquistas, jornada mês a mês, missão do próximo mês com a palavra do treinador e um card 9:16 para a aluna postar nos Stories. Baixa em PDF e manda no WhatsApp
 - Financeiro: planos (Ágora, Delfos, Ítaca, Olimpo), parcelas geradas mês a mês, despesas, saldo do mês, atrasos e renovações
 - Biblioteca de exercícios com link de vídeo e instruções
 
@@ -27,7 +30,7 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 - Treinos da semana, com o próximo treino destacado
 - Execução: carga e reps por série, "última vez" de cada exercício, cronômetro de descanso, aviso de recorde
 - Evolução: gráfico de carga por exercício, recordes, peso, % de gordura, tonelagem acumulada
-- Relatório de evolução do mês, o mesmo que o treinador manda
+- Relatório de evolução do mês, o mesmo que o treinador manda, com a missão e a palavra do treinador
 - Check-in semanal (peso, sono, energia, estresse, fome, dor, alimentação) e a sua resposta
 - Anamnese com PAR-Q no primeiro acesso
 
@@ -69,19 +72,21 @@ A chave do `config.js` é pública por natureza. Quem protege os dados são as r
 Troque os arquivos no GitHub e mude o número em `sw.js` (`nemesis-v1` para `nemesis-v2`), para os celulares buscarem a versão nova.
 
 ## Atualizações do banco
-Quando vier um arquivo `supabase/atualizacao-N.sql` novo, rode ele no Supabase (**SQL Editor > New query**, cole tudo, **Run**). Pode rodar mais de uma vez sem problema. A `atualizacao-5.sql` liga a ficha completa (tipo de exercício, cadência, formato do descanso, método, RIR/RPE, aeróbico e músculos da biblioteca). A `atualizacao-6.sql` liga modelos, presets, progressão do mesociclo, etiquetas e substituição de exercícios, pacote de entregas dos planos e os tipos novos da agenda.
+Quando vier um arquivo `supabase/atualizacao-N.sql` novo, rode ele no Supabase (**SQL Editor > New query**, cole tudo, **Run**). Pode rodar mais de uma vez sem problema. A `atualizacao-5.sql` liga a ficha completa (tipo de exercício, cadência, formato do descanso, método, RIR/RPE, aeróbico e músculos da biblioteca). A `atualizacao-7.sql` liga os arquivos da aluna (cria a pasta privada no Storage) e o protocolo/diâmetros da avaliação. A `atualizacao-6.sql` liga modelos, presets, progressão do mesociclo, etiquetas e substituição de exercícios, pacote de entregas dos planos e os tipos novos da agenda. A `atualizacao-8.sql` liga a cadência americana/simplificada, grupos de bi-set/circuito, séries detalhadas, RIR real por série, vídeos de execução com correção, todos os protocolos de avaliação e a autoavaliação da aluna, dia de revisão, combo com nutri e aulas presenciais do plano. A `atualizacao-9.sql` liga o convite com link único (7 dias), prazo nos formulários, objetivo/frequência/duração nos modelos e a pose das fotos para o antes e depois. A `atualizacao-10.sql` guarda a palavra do treinador e a missão do relatório no banco, para a aluna também ver (sem ela o relatório abre normalmente, só não salva a missão). A `atualizacao-11.sql` aplica as correções da auditoria: quem cria conta sem convite fica aguardando a sua aprovação (aviso na Acrópole, botões Liberar/Recusar em Alunas), a biblioteca e os formulários só abrem para aluna ativa e o formulário de inscrição ganha limites contra robôs. A `atualizacao-12.sql` liga a LGPD: a aluna aceita os termos e dá o consentimento de saúde (e, se quiser, o de fotos e vídeos) antes de usar o app, menores precisam do responsável, ela baixa os próprios dados e faz pedidos em Perfil > Privacidade, e você exclui todos os dados de uma aluna pela aba Dados. **Antes de publicar, preencha o campo `LEGAL` do `config.js`** (nome e e-mail obrigatórios; CNPJ e CREF quando tiver): ele aparece nos termos.
 
 ## Estrutura
 ```
 index.html        app (treinador e aluna)
 form.html         formulário de inscrição
-config.js         endereço e chave do Supabase
+legal.html        Política de Privacidade e Termos de Uso (públicos)
+config.js         endereço e chave do Supabase, e a assinatura do card de Stories
 supabase/schema.sql  banco completo (tabelas, segurança, planos, exercícios)
 js/app.js         entrada, login e rotas
 js/coach.js       telas do treinador
 js/aluna.js       telas da aluna
 js/comum.js       evolução, anamnese e avaliação (usadas pelos dois lados)
 js/relatorio.js   relatório de evolução (métricas do período e PDF)
+js/relatorio-paginas.js  deusa, visão macro, comparativo, mapa do corpo, bem-estar, metas, conquistas, jornada, missão e card de Stories
 js/ficha.js       editor da ficha (treinador)
 js/musculos.js    músculos, volume, tempo estimado e métodos
 js/corpo.js       mapa do corpo em SVG
@@ -90,10 +95,14 @@ js/biblioteca.js  biblioteca de exercícios
 js/tesouro.js     financeiro (Tesouro)
 js/chronos.js     agenda (Chronos)
 js/radar.js       Radar da Guerreira e score das alunas
+js/aluna360.js    formulários, arquivos e atividades da aluna
 js/api.js         conexão com o Supabase
 js/demo.js        modo demonstração
 js/util.js        datas, números, gráficos, componentes
 css/              visual
 lib/              Preact, Supabase e fontes (tudo local, abre sem internet)
+docs/             CEREBRO-NEMESIS.md (fonte única do projeto) e decisoes.md (o porquê de cada escolha)
+ferramentas/checar.mjs  checagem antes do commit: node ferramentas/checar.mjs
+CLAUDE.md, .claude/     regras, skills, comandos e revisor para programar com o Claude Code
 ```
 Sem etapa de build: o que está no repositório é exatamente o que roda.

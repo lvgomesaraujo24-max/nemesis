@@ -4,7 +4,7 @@ import { html, useState } from '../lib/preact-htm.js';
 import { api, DEMO } from './api.js';
 import { descrever, OPERADORES } from './motor.js';
 import { ResponderFormulario } from './vivo.js';
-import { useCarregar, Estado, Vazio, Modal, Campo, Abas, toast, dataBR, relativo } from './util.js';
+import { useCarregar, Estado, Vazio, Modal, Campo, Abas, toast, dataBR, relativo, hoje, somaDias, segundaDe } from './util.js';
 
 const TIPOS_FORM = [['oraculo', 'Oráculo (check-in)'], ['alistamento', 'Alistamento (entrada)'], ['livre', 'Livre']];
 const NOME_TIPO = Object.fromEntries(TIPOS_FORM);
@@ -63,7 +63,7 @@ function ModalFormulario({ form, onFechar, onFeito }) {
   </form><//>`;
 }
 
-const ABAS = [['perguntas', 'Perguntas'], ['dicas', 'Dicas'], ['aberturas', 'Aberturas'], ['atribuicoes', 'Atribuições'], ['respostas', 'Respostas'], ['previa', 'Prévia']];
+const ABAS = [['perguntas', 'Perguntas'], ['dicas', 'Dicas'], ['aberturas', 'Aberturas'], ['atribuicoes', 'Atribuições'], ['pendencias', 'Pendências'], ['respostas', 'Respostas'], ['previa', 'Prévia']];
 function Editor({ id, aba, ir }) {
   const e = useCarregar(async () => {
     const [form, perguntas, dicas, aberturas, atribs, alunas] = await Promise.all([api.um('formularios', { id }), api.q('perguntas', { eq: { formulario_id: id }, order: 'ordem' }),
@@ -81,6 +81,7 @@ function Editor({ id, aba, ir }) {
     ${aba === 'dicas' && html`<${Dicas} d=${d} recarregar=${e.recarregar}/>`}
     ${aba === 'aberturas' && html`<${Aberturas} d=${d} recarregar=${e.recarregar}/>`}
     ${aba === 'atribuicoes' && html`<${Atribuicoes} d=${d} recarregar=${e.recarregar}/>`}
+    ${aba === 'pendencias' && html`<${Pendencias} d=${d} ir=${ir}/>`}
     ${aba === 'respostas' && html`<${Respostas} d=${d}/>`}
     ${aba === 'previa' && html`<${Previa} d=${d}/>`}
     ${editForm && html`<${ModalFormulario} form=${d.form} onFechar=${() => setEditForm(false)} onFeito=${(r) => { setEditForm(false); if (!r) ir('formularios'); else e.recarregar(); }}/>`}
@@ -252,20 +253,21 @@ function Atribuicoes({ d, recarregar }) {
     <button class="btn primario" onClick=${() => setNovo(true)}>+ Atribuir</button>
     ${!d.atribs.length && html`<${Vazio} titulo="Ninguém recebe este formulário ainda"/>`}
     ${d.atribs.map((a) => html`<section class=${'card' + (a.ativa ? '' : ' apagado')}><div class="card-topo"><div><h3>${nome(a.aluna_id)}</h3>
-      <small>${desc(a)} · ${a.entrega === 'fim_treino' ? 'ao finalizar o treino' : 'aparece no app'}${a.bloqueia_app ? ' · bloqueia o app até responder' : ''}</small></div>
+      <small>${desc(a)}${a.prazo ? ` · prazo ${dataBR(a.prazo)}` : ''} · ${a.entrega === 'fim_treino' ? 'ao finalizar o treino' : 'aparece no app'}${a.bloqueia_app ? ' · bloqueia o app até responder' : ''}</small></div>
       <label class="toggle"><input type="checkbox" checked=${a.ativa} onChange=${() => alternar(a)} aria-label="Ativa"/></label></div>
       <button class="btn-texto perigo" onClick=${() => apagar(a)}>Apagar</button></section>`)}
     ${novo && html`<${ModalAtribuicao} d=${d} onFechar=${() => setNovo(false)} onFeito=${() => { setNovo(false); recarregar(); }}/>`}
   </div>`;
 }
 function ModalAtribuicao({ d, onFechar, onFeito }) {
-  const [f, setF] = useState({ aluna_id: '', entrega: 'manual', quando: d.form.tipo === 'oraculo' ? 'recorrente' : 'agora', dias: [5], dia: '', hora: '08:00', bloqueia_app: d.form.tipo === 'alistamento' });
+  const [f, setF] = useState({ aluna_id: '', entrega: 'manual', quando: d.form.tipo === 'oraculo' ? 'recorrente' : 'agora', dias: [5], dia: '', hora: '08:00', bloqueia_app: d.form.tipo === 'alistamento', prazo: '' });
   const salvar = async (ev) => {
     ev.preventDefault();
     if (f.quando === 'recorrente' && !f.dias.length) { toast('Escolha pelo menos um dia.', 'erro'); return; }
     if (f.quando === 'programado' && !f.dia) { toast('Escolha a data.', 'erro'); return; }
     const linha = { formulario_id: d.form.id, aluna_id: f.aluna_id || null, entrega: f.entrega, quando: f.quando, bloqueia_app: f.bloqueia_app, ativa: true,
-      recorrencia: f.quando === 'recorrente' ? { dias_semana: f.dias } : null, agendado_para: f.quando === 'programado' ? new Date(`${f.dia}T${f.hora}:00`).toISOString() : null };
+      recorrencia: f.quando === 'recorrente' ? { dias_semana: f.dias } : null, agendado_para: f.quando === 'programado' ? new Date(`${f.dia}T${f.hora}:00`).toISOString() : null,
+      ...(f.prazo && f.quando !== 'recorrente' ? { prazo: f.prazo } : {}) };
     try { await api.ins('atribuicoes', linha); onFeito(); } catch (e) { toast(e.message, 'erro'); }
   };
   const chips = (k, ops) => html`<div class="chips">${ops.map(([v, r]) => html`<button type="button" class=${f[k] === v ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, [k]: v })}>${r}</button>`)}</div>`;
@@ -276,9 +278,60 @@ function ModalAtribuicao({ d, onFechar, onFeito }) {
     ${f.quando === 'recorrente' && html`<div class="chips">${DIAS.map((r, i) => html`<button type="button" class=${f.dias.includes(i) ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, dias: f.dias.includes(i) ? f.dias.filter((x) => x !== i) : [...f.dias, i].sort() })}>${r}</button>`)}</div>`}
     ${f.quando === 'programado' && html`<div class="grade2"><${Campo} rotulo="Dia"><input class="input" type="date" value=${f.dia} onInput=${(ev) => setF({ ...f, dia: ev.target.value })}/><//>
       <${Campo} rotulo="Hora"><input class="input" type="time" value=${f.hora} onInput=${(ev) => setF({ ...f, hora: ev.target.value })}/><//></div>`}
+    ${f.quando !== 'recorrente' && html`<${CampoPrazo} f=${f} setF=${setF}/>`}
     <label class="toggle"><input type="checkbox" checked=${f.bloqueia_app} onChange=${(ev) => setF({ ...f, bloqueia_app: ev.target.checked })}/> Exigir resposta antes de usar o app</label>
     <button class="btn primario grande">Atribuir</button>
   </form><//>`;
+}
+
+// ---------- pendências: quem já respondeu e quem está devendo ----------
+// [classe da tag, rótulo, detalhe]
+export function statusAtribuicao(a, envios) {
+  const doForm = envios.filter((x) => x.formulario_id === a.formulario_id);
+  if (!a.ativa) return ['', 'pausada', null];
+  if (a.quando === 'recorrente') {
+    const semana = doForm.find((x) => String(x.enviado_em).slice(0, 10) >= segundaDe());
+    return semana ? ['ok', 'respondido esta semana', `em ${dataBR(semana.enviado_em)}`] : ['atencao', 'pendente esta semana', doForm[0] ? `última resposta ${relativo(doForm[0].enviado_em)}` : 'nunca respondeu'];
+  }
+  if (a.quando === 'programado' && a.agendado_para && new Date(a.agendado_para) > new Date()) return ['', 'agendado', `libera em ${dataBR(a.agendado_para)}${a.prazo ? ' · prazo ' + dataBR(a.prazo) : ''}`];
+  const resp = doForm.find((x) => x.atribuicao_id === a.id) || doForm.find((x) => x.enviado_em >= a.created_at);
+  if (resp) return ['ok', 'respondido', `em ${dataBR(resp.enviado_em)}${a.prazo && String(resp.enviado_em).slice(0, 10) > a.prazo ? ' · fora do prazo' : ''}`];
+  const desde = String(a.agendado_para || a.created_at).slice(0, 10);
+  // com prazo: atrasado depois do prazo. Sem prazo: atrasado depois de 3 dias.
+  if (a.prazo) return a.prazo < hoje() ? ['perigo', 'atrasado', `prazo era ${dataBR(a.prazo)}`] : ['atencao', 'pendente', `prazo ${dataBR(a.prazo)}`];
+  return desde < somaDias(hoje(), -3) ? ['perigo', 'atrasado', `pendente desde ${dataBR(desde)}`] : ['atencao', 'pendente', `desde ${dataBR(desde)}`];
+}
+
+function Pendencias({ d, ir }) {
+  const e = useCarregar(() => api.q('envios', { eq: { formulario_id: d.form.id }, order: 'enviado_em', asc: false }), [d.form.id]);
+  const [filtro, setFiltro] = useState('pendentes');
+  return html`<${Estado} e=${e}>${(envios) => {
+    const linhas = [];
+    d.atribs.filter((a) => a.ativa).forEach((a) => {
+      const alvo = a.aluna_id ? d.alunas.filter((x) => x.id === a.aluna_id) : d.alunas.filter((x) => x.ativo);
+      alvo.forEach((al) => { if (!linhas.some((l) => l.aluna.id === al.id)) linhas.push({ aluna: al, st: statusAtribuicao(a, envios.filter((x) => x.aluna_id === al.id)) }); });
+    });
+    if (!linhas.length) return html`<${Vazio} titulo="Ninguém recebe este formulário" texto="Atribua na aba Atribuições para acompanhar quem respondeu."/>`;
+    const ordem = { perigo: 0, atencao: 1, '': 2, ok: 3 };
+    const pend = linhas.filter((l) => ['perigo', 'atencao'].includes(l.st[0]));
+    const vis = (filtro === 'pendentes' ? pend : linhas).sort((x, y) => ordem[x.st[0]] - ordem[y.st[0]] || x.aluna.nome.localeCompare(y.aluna.nome));
+    return html`<div class="pilha">
+      <div class="stats"><div class="stat"><b>${linhas.length}</b><span>recebem</span></div><div class="stat"><b>${linhas.filter((l) => l.st[0] === 'ok').length}</b><span>responderam</span></div>
+        <div class="stat"><b>${pend.length}</b><span>pendentes</span></div><div class=${'stat' + (linhas.some((l) => l.st[0] === 'perigo') ? ' neg' : '')}><b>${linhas.filter((l) => l.st[0] === 'perigo').length}</b><span>atrasadas (3+ dias)</span></div></div>
+      <${Abas} abas=${[['pendentes', 'Pendentes'], ['todas', 'Todas']]} atual=${filtro} onMuda=${setFiltro}/>
+      ${vis.length ? html`<ul class="itens">${vis.map((l) => html`<li><div class="item-info"><b>${l.aluna.nome}</b>${l.st[2] && html`<small>${l.st[2]}</small>`}</div>
+        <div class="mini-acoes"><span class=${'tag ' + l.st[0]}>${l.st[1]}</span><button class="btn-texto" onClick=${() => ir(`aluna/${l.aluna.id}/formularios`)}>Abrir</button></div></li>`)}</ul>`
+        : html`<${Vazio} titulo="Ninguém devendo resposta"/>`}
+    </div>`;
+  }}<//>`;
+}
+
+// prazo opcional (atualização 9): depois dele a atribuição aparece como atrasada
+export function CampoPrazo({ f, setF }) {
+  const atalhos = [[2, '2 dias'], [7, '1 semana'], [14, '2 semanas']];
+  return html`<${Campo} rotulo="Prazo para responder (opcional)" dica="Sem prazo, fica atrasado 3 dias depois de liberado.">
+    <div class="chips">${atalhos.map(([n, r]) => { const v = somaDias(hoje(), n); return html`<button type="button" class=${f.prazo === v ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, prazo: f.prazo === v ? '' : v })}>${r}</button>`; })}
+      <input class="input curto" type="date" aria-label="Prazo" value=${f.prazo} onInput=${(ev) => setF({ ...f, prazo: ev.target.value })}/></div><//>`;
 }
 
 // ---------- respostas ----------

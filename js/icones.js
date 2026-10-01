@@ -35,6 +35,8 @@ const P = {
   radar: html`<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12 18 6"/>`,
   lista: html`<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>`,
   relatorio: html`<path d="M4 20.5h16"/><path d="M7 17V11M12 17V6M17 17v-4"/>`,
+  trofeu: html`<path d="M7.5 3.5h9v6a4.5 4.5 0 0 1-9 0z"/><path d="M7.5 5.5H4.5v1.5a3 3 0 0 0 3 3M16.5 5.5h3v1.5a3 3 0 0 1-3 3"/><path d="M12 14v3.5M8.5 20.5h7l-1-3h-5z"/>`,
+  pedra: html`<path d="M4 15.5 6.5 9l5-2.5 6 1.5 2.5 6-3 4h-10z"/>`,
 };
 
 export const Icone = ({ nome, tam = 20, class: c }) => html`<svg class=${'ico ' + (c || '')} width=${tam} height=${tam} viewBox="0 0 24 24" fill="none" stroke="currentColor"

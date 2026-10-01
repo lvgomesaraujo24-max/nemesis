@@ -101,13 +101,26 @@ export function tipoDoTreino(itens) {
 }
 
 export const METODOS = [['padrao', 'Padrão'], ['falha_conc', 'Falha concêntrica'], ['falha_exc', 'Falha excêntrica'], ['falha_tec', 'Falha técnica'],
-  ['parciais', 'Parciais'], ['forcadas', 'Repetições forçadas'], ['negativas', 'Negativas'], ['dropset', 'Drop-set'], ['stripset', 'Strip-set'],
+  ['parciais', 'Parciais'], ['forcadas', 'Repetições forçadas'], ['roubadas', 'Repetições roubadas'], ['negativas', 'Excêntrica / negativa'], ['dropset', 'Drop-set'], ['stripset', 'Strip-set'],
   ['cluster', 'Cluster'], ['restpause', 'Rest-pause'], ['myoreps', 'Myo-reps'], ['circuito', 'Circuito'], ['superset', 'Super-set'],
   ['biset', 'Bi-set'], ['triset', 'Tri-set'], ['giantset', 'Giant-set'], ['pre_exaustao', 'Pré-exaustão'], ['pos_exaustao', 'Pós-exaustão'],
   ['pre_ativacao', 'Pré-ativação'], ['piramide', 'Pirâmide'], ['tempo_controlado', 'Tempo controlado'], ['isometria', 'Isometria'],
   ['fst7', 'FST-7'], ['gvt', 'GVT (10×10)'], ['amrap', 'AMRAP'], ['emom', 'EMOM'], ['tabata', 'Tabata']];
 export const METODOS_AEROBICO = [['continuo', 'Contínuo'], ['intervalado', 'Intervalado'], ['hiit', 'HIIT'], ['fartlek', 'Fartlek']];
 export const nomeMetodo = (k) => ([...METODOS, ...METODOS_AEROBICO].find(([x]) => x === k) || [null, 'Padrão'])[1];
+
+// métodos que ligam exercícios entre si: ganham um número de grupo (1), (2)...
+export const METODOS_GRUPO = ['superset', 'biset', 'triset', 'giantset', 'circuito', 'pre_exaustao', 'pos_exaustao', 'pre_ativacao'];
+// cadência: padrão (excêntrica/concêntrica), americana (4 dígitos) ou simplificada
+export const CADENCIAS = [['padrao', 'Cadência'], ['americana', 'Cadência americana'], ['simplificada', 'Cadência simplificada']];
+export const CAD_SIMPLES = [['lenta', 'Lenta', 5], ['moderada', 'Moderada', 3], ['rapida', 'Rápida', 2], ['explosiva', 'Explosiva', 1]];
+export function segundosPorRep(it) {
+  const t = it.cadencia_tipo || 'padrao';
+  if (t === 'americana') { const ns = String(it.cadencia_texto || '').match(/\d/g); if (ns && ns.length) return Math.max(1, ns.map(Number).reduce((a, b) => a + b, 0)); }
+  if (t === 'simplificada') { const c = CAD_SIMPLES.find(([k]) => k === it.cadencia_texto); if (c) return c[2]; }
+  // padrão: excêntrica 2s, concêntrica 0s
+  return Math.max(1, Number(it.cadencia_exc ?? 2) + Number(it.cadencia_con ?? 0));
+}
 
 export const DESCANSOS = [['exato', 'Descanso exato (s)'], ['faixa', 'Descanso faixa (s)'], ['livre', 'Descanso livre']];
 
@@ -141,7 +154,12 @@ export function lerFaixa(reps) {
 }
 export const juntarFaixa = (min, max) => { const a = String(min || '').trim(), b = String(max || '').trim(); return a && b && a !== b ? `${a}-${b}` : a || b; };
 
-export const textoCadencia = (it) => (it.cadencia_exc == null && it.cadencia_con == null ? '' : `Excêntrica ${fmt(it.cadencia_exc)}s / Concêntrica ${fmt(it.cadencia_con)}s`);
+export function textoCadencia(it) {
+  const t = it.cadencia_tipo || 'padrao';
+  if (t === 'americana' && it.cadencia_texto) return `cadência ${it.cadencia_texto}`;
+  if (t === 'simplificada' && it.cadencia_texto) return `cadência ${((CAD_SIMPLES.find(([k]) => k === it.cadencia_texto) || [])[1] || '').toLowerCase()}`;
+  return it.cadencia_exc == null && it.cadencia_con == null ? '' : `cadência ${fmt(it.cadencia_exc ?? 2)}s descida / ${fmt(it.cadencia_con ?? 0)}s subida`;
+}
 export const textoDescanso = (it) => {
   const t = it.descanso_tipo || 'exato';
   if (t === 'livre') return 'descanso livre';
@@ -161,8 +179,7 @@ const descansoMedio = (it) => {
 export function tempoItem(it) {
   if (it.tipo === 'aerobico') return Number(it.duracao || 0) * 60;
   const reps = String(it.reps || '').trim();
-  // cadência padrão: excêntrica 2s, concêntrica 0s
-  const porRep = Math.max(1, Number(it.cadencia_exc ?? 2) + Number(it.cadencia_con ?? 0));
+  const porRep = segundosPorRep(it);
   let porSerie;
   const seg = reps.match(/^(\d+)\s*s/);
   const tipo = tipoReps(it);

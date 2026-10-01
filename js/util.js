@@ -11,6 +11,8 @@ export const dataBR = (s) => { if (!s) return '·'; const [y, m, d] = String(s).
 export const dataCurta = (s) => { if (!s) return ''; const [, m, d] = String(s).slice(0, 10).split('-'); return `${d}/${m}`; };
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 export const mesNome = (ym) => { const [y, m] = ym.split('-'); return `${MESES[+m - 1]} ${y}`; };
+// idade numa data (avaliação feita em outro dia usa a idade daquele dia)
+export const idadeEm = (nasc, data) => { if (!nasc || !data) return null; const [y, m, d] = data.split('-').map(Number); const [ny, nm, nd] = nasc.slice(0, 10).split('-').map(Number); return y - ny - (m < nm || (m === nm && d < nd) ? 1 : 0); };
 export const idadeDe = (nasc) => { if (!nasc) return null; const n = new Date(nasc + 'T12:00:00'), h = new Date(); let i = h.getFullYear() - n.getFullYear(); if (h < new Date(h.getFullYear(), n.getMonth(), n.getDate())) i--; return i; };
 export const relativo = (s) => {
   if (!s) return 'nunca';
@@ -31,29 +33,117 @@ export const lerNum = (s) => {
 export const soDigitos = (s) => String(s || '').replace(/\D/g, '');
 export const linkWhats = (tel, texto = '') => { let d = soDigitos(tel); if (d.length <= 11) d = '55' + d; return `https://wa.me/${d}${texto ? '?text=' + encodeURIComponent(texto) : ''}`; };
 
-// ---------- avaliação: Jackson & Pollock 7 dobras + Siri ----------
-export const DOBRAS = [['peitoral', 'Peitoral'], ['axilar', 'Axilar média'], ['triceps', 'Tríceps'], ['subescapular', 'Subescapular'], ['abdominal', 'Abdominal'], ['suprailiaca', 'Suprailíaca'], ['coxa', 'Coxa']];
-export const MEDIDAS = [['cintura', 'Cintura'], ['abdomen', 'Abdômen'], ['quadril', 'Quadril'], ['coxa', 'Coxa'], ['panturrilha', 'Panturrilha'], ['braco', 'Braço']];
+// ---------- avaliação física ----------
+// 9 dobras (mm)
+export const DOBRAS = [['triceps', 'Tríceps'], ['subescapular', 'Subescapular'], ['biceps', 'Bíceps'], ['peitoral', 'Peitoral'], ['axilar', 'Axilar média'],
+  ['suprailiaca', 'Suprailíaca'], ['abdominal', 'Abdominal'], ['coxa', 'Coxa média'], ['panturrilha', 'Panturrilha medial']];
+const DOBRAS_JP7 = ['peitoral', 'axilar', 'triceps', 'subescapular', 'abdominal', 'suprailiaca', 'coxa'];
+export const DOBRAS_JP3 = { F: ['triceps', 'suprailiaca', 'coxa'], M: ['peitoral', 'abdominal', 'coxa'] };
+// 20 perímetros (cm): os 17 do escopo + pescoço e antebraços; os 3 antigos continuam aparecendo nas avaliações já feitas
+export const MEDIDAS = [['pescoco', 'Pescoço'], ['braco_rel_d', 'Braço D relaxado'], ['braco_rel_e', 'Braço E relaxado'], ['braco_con_d', 'Braço D contraído'], ['braco_con_e', 'Braço E contraído'],
+  ['antebraco_d', 'Antebraço D'], ['antebraco_e', 'Antebraço E'], ['ombros', 'Ombro a ombro'], ['torax', 'Tórax'], ['cintura', 'Cintura'], ['abdomen', 'Abdômen'], ['quadril', 'Quadril'],
+  ['coxa_prox_d', 'Coxa proximal D'], ['coxa_prox_e', 'Coxa proximal E'], ['coxa_med_d', 'Coxa média D'], ['coxa_med_e', 'Coxa média E'],
+  ['coxa_dist_d', 'Coxa distal D'], ['coxa_dist_e', 'Coxa distal E'], ['pant_d', 'Panturrilha D'], ['pant_e', 'Panturrilha E']];
+export const MEDIDAS_TODAS = [...MEDIDAS, ['coxa', 'Coxa'], ['braco', 'Braço'], ['panturrilha', 'Panturrilha']];
+// diâmetros ósseos (mm)
+export const DIAMETROS = [['punho', 'Biestiloide (punho)'], ['umero', 'Biepicondiliano do úmero'], ['femur', 'Biepicondiliano do fêmur']];
+
+const siri = (D) => Math.round((495 / D - 450) * 10) / 10;
+const soma = (dobras, ks) => { const v = ks.map((k) => lerNum(dobras[k])); return v.some((x) => x == null) ? null : v.reduce((a, b) => a + b, 0); };
 export function percentualJP7(dobras, idade, sexo = 'F') {
-  const vals = DOBRAS.map(([k]) => lerNum(dobras[k]));
-  if (vals.some((v) => v == null) || !idade) return null;
-  const S = vals.reduce((a, b) => a + b, 0);
-  const D = sexo === 'M'
-    ? 1.112 - 0.00043499 * S + 0.00000055 * S * S - 0.00028826 * idade
-    : 1.097 - 0.00046971 * S + 0.00000056 * S * S - 0.00012828 * idade;
-  return Math.round((495 / D - 450) * 10) / 10;
+  const S = soma(dobras, DOBRAS_JP7); if (S == null || !idade) return null;
+  return siri(sexo === 'M' ? 1.112 - 0.00043499 * S + 0.00000055 * S * S - 0.00028826 * idade : 1.097 - 0.00046971 * S + 0.00000056 * S * S - 0.00012828 * idade);
+}
+export function percentualJP3(dobras, idade, sexo = 'F') {
+  const S = soma(dobras, DOBRAS_JP3[sexo === 'M' ? 'M' : 'F']); if (S == null || !idade) return null;
+  return siri(sexo === 'M' ? 1.10938 - 0.0008267 * S + 0.0000016 * S * S - 0.0002574 * idade : 1.0994921 - 0.0009929 * S + 0.0000023 * S * S - 0.0001392 * idade);
+}
+
+// protocolos de composição: [chave, nome, o que pede, para quem]
+export const PROTOCOLOS = [
+  ['jp7', 'Pollock 7 dobras', 'peitoral, axilar, tríceps, subescapular, abdominal, suprailíaca e coxa', 'adultos'],
+  ['jp3', 'Pollock 3 dobras', 'mulher: tríceps, suprailíaca e coxa · homem: peitoral, abdominal e coxa', 'adultos'],
+  ['weltman', 'Weltman (sobrepeso)', 'perímetro do abdômen, peso e (mulher) estatura', 'sobrepeso · Weltman 1987 (homens) e 1988 (mulheres)'],
+  ['tran', 'Tran & Weltman', 'abdômen, quadril, estatura e idade', 'mulheres acima de 51 anos · Tran e Weltman 1989'],
+  ['slaughter', 'Slaughter (crianças)', 'dobras do tríceps e da panturrilha', 'crianças e adolescentes · Slaughter 1988'],
+  ['perimetria', 'Só perimetria', 'perímetros, peso e fotos (sem adipômetro)', 'autoavaliação online'],
+];
+// campos que cada protocolo exige, para a tela mostrar só o necessário
+export function camposProtocolo(p, sexo = 'F') {
+  if (p === 'jp7') return { dobras: DOBRAS_JP7 };
+  if (p === 'jp3') return { dobras: DOBRAS_JP3[sexo === 'M' ? 'M' : 'F'] };
+  if (p === 'slaughter') return { dobras: ['triceps', 'panturrilha'] };
+  if (p === 'weltman') return { medidas: ['abdomen'] };
+  if (p === 'tran') return { medidas: ['abdomen', 'quadril'] };
+  return {};
+}
+export function percentualGordura(p, { dobras = {}, medidas = {}, peso, altura, idade }, sexo = 'F') {
+  const P = lerNum(peso), H = lerNum(altura), I = lerNum(idade), AB = lerNum(medidas.abdomen), QD = lerNum(medidas.quadril);
+  const r1 = (x) => Math.round(x * 10) / 10;
+  if (p === 'jp7') return percentualJP7(dobras, I, sexo);
+  if (p === 'jp3') return percentualJP3(dobras, I, sexo);
+  if (p === 'weltman') {
+    if (!AB || !P) return null;
+    if (sexo === 'M') return r1(0.31457 * AB - 0.10969 * P + 10.8336);
+    return H ? r1(0.11077 * AB - 0.17666 * H + 0.14354 * P + 51.03301) : null;
+  }
+  if (p === 'tran') {
+    if (!AB || !QD || !H || !I) return null;
+    return siri(1.168297 - 0.002824 * AB + 0.0000122098 * AB * AB - 0.000733128 * QD + 0.000510477 * H - 0.000216161 * I);
+  }
+  if (p === 'slaughter') {
+    const S = soma(dobras, ['triceps', 'panturrilha']); if (S == null) return null;
+    return r1(sexo === 'M' ? 0.735 * S + 1.0 : 0.610 * S + 5.1);
+  }
+  return null;
+}
+// protocolo sugerido pelo cadastro (sexo e idade), para não abrir o errado
+export const protocoloSugerido = (sexo, idade) => (idade && idade < 18 ? 'slaughter' : sexo !== 'M' && idade > 51 ? 'tran' : 'jp7');
+
+// composição em 4 componentes: gordura, óssea (Von Döbeln/Rocha), residual (Würch) e muscular (o que sobra)
+export function composicao(a, sexo = 'F') {
+  const peso = lerNum(a.peso); const pct = a.percentual_gordura != null ? Number(a.percentual_gordura) : null;
+  if (!peso) return {};
+  const gorda = pct != null ? (peso * pct) / 100 : null;
+  // diâmetros em mm (avaliações antigas em cm são convertidas: valor menor que 20 = cm)
+  const mm = (v) => { const n = lerNum(v); return n == null ? null : n < 20 ? n * 10 : n; };
+  const d = a.diametros || {}; const h = lerNum(a.altura); const r = mm(d.punho); const f = mm(d.femur);
+  const ossea = h && r && f ? 3.02 * Math.pow((h / 100) ** 2 * (r / 1000) * (f / 1000) * 400, 0.712) : null;
+  const residual = peso * (sexo === 'M' ? 0.241 : 0.209);
+  const muscular = gorda != null && ossea != null ? peso - gorda - ossea - residual : null;
+  const m = a.medidas || {};
+  return { gorda, magra: gorda != null ? peso - gorda : null, ossea, residual, muscular,
+    imc: h ? peso / (h / 100) ** 2 : null, rcq: m.cintura && m.quadril ? Number(m.cintura) / Number(m.quadril) : null };
 }
 
 // ---------- treino ----------
+// ---------- semáforo do check-in ----------
+// soma de 4 escalas de 1 a 5, todas no sentido "quanto maior, pior": (6 - sono) + (6 - energia) + estresse + dor
+// 4 a 9 verde, 10 a 14 amarelo, 15 a 20 vermelho
+export function semaforo(c) {
+  if (!c) return null;
+  const dor = c.dor != null ? c.dor : Math.max(c.dor_muscular || 0, c.dor_articular || 0) || null;
+  if (c.sono == null || c.energia == null || c.estresse == null || dor == null) return null;
+  const soma = (6 - c.sono) + (6 - c.energia) + c.estresse + dor;
+  const cor = soma <= 9 ? 'verde' : soma <= 14 ? 'amarelo' : 'vermelho';
+  return { soma, cor, rotulo: { verde: 'Recuperando bem', amarelo: 'Atenção', vermelho: 'Sinal vermelho' }[cor] };
+}
+
 export const tonelagem = (series) => series.reduce((t, s) => t + (s.aquecimento || s.carga == null || s.reps == null ? 0 : s.carga * s.reps), 0);
+// 1RM estimado (Epley), só com séries de até 12 repetições para não inflar a estimativa
+export const umRM = (carga, reps) => (carga == null || !reps || reps > 12 ? null : reps === 1 ? carga : carga * (1 + reps / 30));
+// Olimpo: por exercício, a maior carga (desempate: mais reps nessa carga) e o maior 1RM estimado
 export function recordes(series, exercicios) {
   const porEx = {};
   for (const s of series) {
     if (s.aquecimento || s.carga == null) continue;
-    const r = porEx[s.exercicio_id];
-    if (!r || s.carga > r.carga || (s.carga === r.carga && (s.reps || 0) > (r.reps || 0))) porEx[s.exercicio_id] = s;
+    const r = porEx[s.exercicio_id] || (porEx[s.exercicio_id] = { max: null, rm: null, rmSerie: null, vezes: 0 });
+    r.vezes++;
+    if (!r.max || s.carga > r.max.carga || (s.carga === r.max.carga && (s.reps || 0) > (r.max.reps || 0))) r.max = s;
+    const e = umRM(s.carga, s.reps);
+    if (e != null && (r.rm == null || e > r.rm)) { r.rm = e; r.rmSerie = s; }
   }
-  return Object.values(porEx).map((s) => ({ ...s, nome: (exercicios.find((e) => e.id === s.exercicio_id) || {}).nome || 'Exercício' }))
+  return Object.entries(porEx).map(([id, r]) => ({ ...r.max, rm: r.rm, rmSerie: r.rmSerie, vezes: r.vezes, nome: (exercicios.find((e) => e.id === id) || {}).nome || 'Exercício' }))
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 }
 export function sequenciaSemanas(sessoes) {

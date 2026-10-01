@@ -1,6 +1,6 @@
 // MODO DEMONSTRAÇÃO: imita o Supabase com dados de exemplo guardados no navegador.
 // Serve para ver e testar o app antes de ligar o banco de verdade.
-const CHAVE = 'nemesis-demo-v2';
+const CHAVE = 'nemesis-demo-v3';
 let memoria = null;
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
@@ -82,6 +82,19 @@ function semear() {
     { id: uid(), aluna_id: 'aluna-ana', data: iso(diasAtras(75)), idade: 27, peso: 64.9, altura: 165, dobras: { peitoral: 12, axilar: 11, triceps: 20, subescapular: 14, abdominal: 22, suprailiaca: 18, coxa: 28 }, medidas: { cintura: 72, quadril: 100, coxa: 58, braco: 28 }, percentual_gordura: 25.1, obs: '' },
     { id: uid(), aluna_id: 'aluna-ana', data: iso(diasAtras(12)), idade: 27, peso: 63.4, altura: 165, dobras: { peitoral: 10, axilar: 10, triceps: 18, subescapular: 12, abdominal: 18, suprailiaca: 15, coxa: 25 }, medidas: { cintura: 69, quadril: 101, coxa: 58.5, braco: 27.5 }, percentual_gordura: 22.4, obs: 'Cintura caiu 3 cm, quadril subiu.' });
 
+  // metas, relatos de dor e ficha com progressão (aparecem no relatório de evolução)
+  const criada = diasAtras(75).toISOString();
+  db.metas = [
+    { id: uid(), aluna_id: 'aluna-ana', tipo: 'carga', titulo: 'Elevação pélvica: 60 kg', exercicio_id: ex['Elevação pélvica na máquina'].id, medida: null, valor_inicial: 40, valor_alvo: 60, prazo: iso(diasAtras(-45)), status: 'ativa', created_at: criada },
+    { id: uid(), aluna_id: 'aluna-ana', tipo: 'medida', titulo: 'Cintura: 67 cm', exercicio_id: null, medida: 'cintura', valor_inicial: 72, valor_alvo: 67, prazo: iso(diasAtras(-90)), status: 'ativa', created_at: criada },
+    { id: uid(), aluna_id: 'aluna-ana', tipo: 'gordura', titulo: 'Gordura corporal: 21%', exercicio_id: null, medida: null, valor_inicial: 25.1, valor_alvo: 21, prazo: iso(diasAtras(-120)), status: 'ativa', created_at: criada },
+  ];
+  db.dor_relatos = [[52, 5], [38, 4], [24, 3], [13, 2], [4, 1]].map(([dias, intensidade]) => ({ id: uid(), envio_id: null, aluna_id: 'aluna-ana', regiao: 'joelho', lado: 'D', intensidade, quando: ['agachando'], created_at: diasAtras(dias).toISOString() }));
+  db.mesociclos = [{ id: uid(), aluna_id: 'aluna-ana', nome: 'Bloco glúteo 2', inicio: iso(diasAtras(20)), fim: iso(diasAtras(-21)), status: 'ativo',
+    progressao: [{ rir: 3 }, { rir: 2 }, { rir: 2 }, { rir: 1 }, { rir: 1 }, { deload: true }], created_at: diasAtras(20).toISOString() }];
+
+  // aceite dos termos (LGPD) das alunas antigas; a Beatriz (nova) vê a tela de consentimento
+  db.consentimentos = ['aluna-ana', 'aluna-carol'].map((aluna_id) => ({ id: uid(), aluna_id, versao: '2026-10-01', termos: true, saude: true, imagem: true, menor: false, criado_em: diasAtras(30).toISOString() }));
   db.planos.push({ id: 'p1', nome: 'Ágora', meses: 1, valor: 247, ativo: true }, { id: 'p2', nome: 'Delfos', meses: 3, valor: 647, ativo: true }, { id: 'p3', nome: 'Ítaca', meses: 6, valor: 1197, ativo: true }, { id: 'p4', nome: 'Olimpo', meses: 12, valor: 1997, ativo: true });
 
   const somaMes = (d, m) => { const x = new Date(d); x.setMonth(x.getMonth() + m); return x; };
@@ -156,6 +169,8 @@ export function criarDemo() {
       await espera();
       const m = carregar(); const linhas = (Array.isArray(linha) ? linha : [linha]).map((r) => ({ id: uid(), created_at: new Date().toISOString(), ...r }));
       if (tabela === 'leads') linhas.forEach((r) => { r.status = r.status || 'novo'; });
+      if (tabela === 'arquivos_aluna') linhas.forEach((r) => { r.enviado_por = r.enviado_por || (m.usuario && m.usuario.id) || null; });
+      if (tabela === 'solicitacoes_privacidade') linhas.forEach((r) => { r.status = r.status || 'aberta'; r.criada_em = r.criada_em || r.created_at; });
       (m.db[tabela] = m.db[tabela] || []).push(...linhas); salvar(); return copia(linhas);
     },
     async enviar(tabela, linha) { await this.ins(tabela, linha); },
@@ -180,7 +195,30 @@ export function criarDemo() {
       if (tabela === 'modelos') { m.db.treinos = m.db.treinos.filter((r) => r.modelo_id !== id); m.db.treino_itens = m.db.treino_itens.filter((r) => r.modelo_id !== id); }
       salvar();
     },
-    async rpc() { throw new Error('Esta parte (Acrópole, formulários vivos) só funciona com o banco ligado.'); },
+    async rpc(nome, args = {}) {
+      if (nome === 'eliminar_aluna') { // mesma regra do banco: apaga tudo da aluna, o financeiro fica sem o vínculo
+        await espera(); const m = carregar(); const id = args.p_aluna;
+        const p = m.db.profiles.find((x) => x.id === id) || {};
+        (m.db.lancamentos || []).forEach((l) => { if (l.aluna_id === id) { l.aluna_id = null; l.assinatura_id = null; if (p.nome) l.descricao = String(l.descricao).replace(p.nome, 'aluna excluída'); } });
+        (m.db.solicitacoes_privacidade || []).forEach((x) => { if (x.aluna_id === id) { x.aluna_id = null; x.detalhe = null; if (x.status === 'aberta') x.status = 'atendida'; } });
+        const envios = new Set((m.db.envios || []).filter((x) => x.aluna_id === id).map((x) => x.id));
+        const notas = new Set((m.db.dossie || []).filter((x) => x.aluna_id === id).map((x) => x.id));
+        m.db.respostas = (m.db.respostas || []).filter((x) => !envios.has(x.envio_id));
+        m.db.dossie_versoes = (m.db.dossie_versoes || []).filter((x) => !notas.has(x.nota_id));
+        Object.keys(m.db).forEach((t) => { if (Array.isArray(m.db[t]) && !['lancamentos', 'solicitacoes_privacidade'].includes(t)) m.db[t] = m.db[t].filter((r) => r.aluna_id !== id); });
+        m.db.profiles = m.db.profiles.filter((p) => p.id !== id); salvar(); return { conta_autenticacao_apagada: true };
+      }
+      throw new Error('Esta parte (Acrópole, formulários vivos) só funciona com o banco ligado.');
+    },
+    async subirArquivo(caminho, arquivo) {
+      if (arquivo.size > 1.5 * 1024 * 1024) throw new Error('No modo demonstração, só arquivos de até 1,5 MB.');
+      const url = await new Promise((ok, falha) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = falha; r.readAsDataURL(arquivo); });
+      const m = carregar(); (m.db._blobs = m.db._blobs || {})[caminho] = url; salvar();
+    },
+    async linkArquivo(caminho) { return (carregar().db._blobs || {})[caminho] || ''; },
+    async listarArquivos(pasta) { return Object.keys(carregar().db._blobs || {}).filter((k) => k.startsWith(pasta + '/')); },
+    async todos(tabela, o = {}) { return this.q(tabela, o); },
+    async apagarArquivo(caminho) { const m = carregar(); if (m.db._blobs) delete m.db._blobs[caminho]; salvar(); },
     aoInserir() { return () => {}; },
   };
 }

@@ -15,6 +15,8 @@ import { Modelos } from './modelos.js';
 import { Exercicios } from './biblioteca.js';
 import { Financeiro, FinanceiroAluna } from './tesouro.js';
 import { Radar, Score, carregarRadar, saudeDa } from './radar.js';
+import { FormulariosAluna, ArquivosAluna, AtividadesAluna, VideosAluna } from './aluna360.js';
+import { PrivacidadeCoach } from './legal.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Abas, Barras, toast, num, brl, dataBR, hoje, segundaDe, somaDias,
   somaMeses, diasEntre, lerNum, relativo, linkWhats, copiar, mesNome, idadeDe } from './util.js';
 
@@ -29,7 +31,7 @@ const CHAVE_MENU = 'nemesis-menu-recolhido';
 export function AppCoach({ perfil, rota, ir }) {
   const [base, id, sub] = rota;
   let tela;
-  if (base === 'aluna' && id) tela = html`<${AlunaDetalhe} id=${id} aba=${sub || 'ficha'} ir=${ir} coachNome=${perfil.nome} onAluna=${(a) => setAlunaAtual(a)}/>`;
+  if (base === 'aluna' && id) tela = html`<${AlunaDetalhe} id=${id} aba=${sub || 'geral'} ir=${ir} coachNome=${perfil.nome} onAluna=${(a) => setAlunaAtual(a)}/>`;
   else if (base === 'alunas') tela = html`<${Alunas} ir=${ir}/>`;
   else if (base === 'checkins') tela = html`<${CheckinsCoach} ir=${ir}/>`;
   else if (base === 'leads') tela = html`<${Leads}/>`;
@@ -143,11 +145,15 @@ function Alunas({ ir }) {
     <${Estado} e=${e}>${({ alunas, radar }) => {
       const ativas = alunas.filter((a) => a.ativo);
       const saude = Object.fromEntries(alunas.map((a) => [a.id, saudeDa(a, radar)]));
-      const lista = alunas.filter((a) => a.ativo !== inativas && (a.nome || '').toLowerCase().includes(busca.toLowerCase()));
-      const chave = { engajamento: (a) => saude[a.id].engajamento, progressao: (a) => (saude[a.id].progressao == null ? 99 : saude[a.id].progressao), risco: (a) => -saude[a.id].risco };
+      const aguardando = alunas.filter((a) => !a.ativo && a.aguardando);
+      const lista = alunas.filter((a) => a.ativo !== inativas && !(inativas && a.aguardando) && (a.nome || '').toLowerCase().includes(busca.toLowerCase()));
+      const chave = { engajamento: (a) => (saude[a.id].engajamento == null ? 999 : saude[a.id].engajamento), progressao: (a) => (saude[a.id].progIndice == null ? 999 : saude[a.id].progIndice), risco: (a) => -saude[a.id].risco };
       if (chave[ordem]) lista.sort((x, y) => chave[ordem](x) - chave[ordem](y));
-      const nInat = alunas.filter((a) => !a.ativo).length;
-      return html`${ativas.length > 0 && !inativas && html`<${Radar} alunas=${ativas} saude=${saude} ir=${ir}/>`}
+      const nInat = alunas.filter((a) => !a.ativo && !a.aguardando).length;
+      // guarda vencida: 12 meses depois do fim do último plano (ou do cadastro, se nunca teve plano), sem plano vigente
+      const guardaVencida = (a) => { if (a.aguardando) return false; const fim = (saude[a.id].plano || {}).fim || String(a.created_at || '').slice(0, 10); return !!fim && fim < somaDias(hoje(), -365); };
+      return html`${aguardando.length > 0 && html`<${Aguardando} lista=${aguardando} onFeito=${e.recarregar}/>`}
+        ${ativas.length > 0 && !inativas && html`<${Radar} alunas=${ativas} saude=${saude} ir=${ir}/>`}
         <div class="alunas-filtro"><input class="input" type="search" placeholder="Buscar pelo nome" value=${busca} onInput=${(ev) => setBusca(ev.target.value)}/>
           <select class="input" aria-label="Ordenar" onChange=${(ev) => mudaOrdem(ev.target.value)}>${ORDENS.map(([k, r]) => html`<option value=${k} selected=${ordem === k}>${r}</option>`)}</select></div>
         ${!lista.length ? html`<${Vazio} titulo=${alunas.length ? 'Ninguém encontrado' : 'Nenhuma aluna ainda'} texto=${alunas.length ? '' : 'Mande o link do app para a aluna criar a conta. Ela aparece aqui na hora.'}/>` : null}
@@ -156,7 +162,8 @@ function Alunas({ ir }) {
             <span class="avatar">${(a.nome || '?').slice(0, 1)}</span>
             <div class="aluna-info"><b>${a.nome || a.email}</b><small>Último treino: ${relativo(sd.ultimo)}${a.objetivo ? ' · ' + a.objetivo : ''}</small></div>
             <${Score} s=${sd} compacto=${true}/>
-            <div class="treino-tags">${!a.anamnese_ok ? html`<span class="tag atencao">sem anamnese</span>` : null}
+            <div class="treino-tags">${guardaVencida(a) ? html`<span class="tag perigo" title="Mais de 12 meses desde o fim do último plano: pela Política de Privacidade, os dados devem ser excluídos (aba Dados)">guarda vencida</span>` : null}
+              ${!a.anamnese_ok ? html`<span class="tag atencao">sem anamnese</span>` : null}
               ${s ? html`<span class=${'tag' + (d < 0 ? ' perigo' : d <= 10 ? ' atencao' : '')}>${s.plano_nome} · ${d < 0 ? 'vencido' : d + 'd'}</span>` : html`<span class="tag">sem plano</span>`}<span class="seta">›</span></div>
           </button>`; })}
         ${nInat > 0 && html`<button class="btn-texto" onClick=${() => setInativas(!inativas)}>${inativas ? 'Ver ativas' : `Ver inativas (${nInat})`}</button>`}`;
@@ -165,58 +172,124 @@ function Alunas({ ir }) {
   </div>`;
 }
 
+// convite com link único (#/convite/<token>), válido por 7 dias: a conta criada por ele já nasce ligada aos dados do convite
+const novoToken = () => { const b = new Uint8Array(16); crypto.getRandomValues(b); return [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); };
+const linkConvite = (token) => `${location.origin + location.pathname}#/convite/${token}`;
+const msgConvite = (c) => `Oi${c.nome ? ', ' + c.nome.split(' ')[0] : ''}! Seja bem-vinda ao time 💜\n\nSeu app de treino é o Nemesis. É por ele que você vai ver sua ficha, registrar as cargas e mandar o check-in da semana.\n\n1. Abra este link (vale por 7 dias): ${linkConvite(c.token)}\n2. Crie a sua senha\n3. Preencha o Alistamento (leva uns 5 minutos)\n\nNo celular, toque em "Adicionar à tela de início" para ele virar um app. Qualquer dúvida, me chama aqui.`;
+// cadastro feito sem convite: fica pausado até o treinador aprovar (atualização 11)
+function Aguardando({ lista, onFeito }) {
+  const decidir = async (a, aprovar) => {
+    if (!aprovar && !confirm(`Recusar o cadastro de ${a.nome || a.email}? A conta continua pausada e vai para as inativas.`)) return;
+    try { await api.upd('profiles', a.id, aprovar ? { ativo: true, aguardando: false, alistada_em: hoje() } : { aguardando: false }); toast(aprovar ? 'Acesso liberado' : 'Cadastro recusado', 'ok'); onFeito(); }
+    catch (err) { toast(err.message, 'erro'); }
+  };
+  return html`<section class="card aguardando"><div class="card-topo"><div><h3>Aguardando aprovação</h3><small>Contas criadas sem convite. Só entram depois que você liberar.</small></div><span class="tag atencao">${lista.length}</span></div>
+    <ul class="lista">${lista.map((a) => html`<li class="linha"><div><b>${a.nome || 'Sem nome'}</b><small>${a.email || ''} · cadastro ${relativo(a.created_at)}</small></div>
+      <div class="mini-acoes"><button class="btn mini" onClick=${() => decidir(a, true)}>Liberar</button><button class="btn-texto perigo" onClick=${() => decidir(a, false)}>Recusar</button></div></li>`)}</ul></section>`;
+}
+
 function Convite({ onFechar }) {
-  const link = location.origin + location.pathname;
-  const msg = `Oi! Seja bem-vinda ao time 💜\n\nSeu app de treino é o Nemesis. É por ele que você vai ver sua ficha, registrar as cargas e mandar o check-in da semana.\n\n1. Abra este link: ${link}\n2. Toque em "Criar conta" e use o seu e-mail\n3. Preencha a anamnese (leva uns 5 minutos)\n\nNo celular, toque em "Adicionar à tela de início" para ele virar um app. Qualquer dúvida, me chama aqui.`;
-  const [tel, setTel] = useState('');
+  const e = useCarregar(() => api.q('convites', { order: 'created_at', asc: false }).catch(() => null), []);
+  const [f, setF] = useState({ nome: '', email: '', telefone: '', objetivo: '' });
+  const [gerado, setGerado] = useState(null);
+  const gerar = async (ev) => {
+    ev.preventDefault();
+    if (!f.nome.trim()) { toast('Digite o nome da aluna.', 'erro'); return; }
+    try {
+      const [c] = await api.ins('convites', { token: novoToken(), nome: f.nome.trim(), email: f.email.trim().toLowerCase() || null, telefone: f.telefone || null, objetivo: f.objetivo || null,
+        expira_em: new Date(Date.now() + 7 * 86400000).toISOString() });
+      setGerado(c); e.recarregar();
+    } catch (err) { toast(err.message, 'erro'); }
+  };
+  const cancelar = async (c) => { if (!confirm(`Cancelar o convite de ${c.nome}? O link para de funcionar.`)) return; try { await api.del('convites', c.id); e.recarregar(); } catch (err) { toast(err.message, 'erro'); } };
+  const pendentes = (e.dados || []).filter((c) => !c.usado_em);
   return html`<${Modal} titulo="Convidar aluna" onFechar=${onFechar}>
-    <div class="pilha">
-      <p class="suave">A aluna cria a conta pelo link e aparece na sua lista. Depois é só montar a ficha e registrar o plano.</p>
-      <textarea class="input" rows="9" readonly value=${msg}></textarea>
-      <button class="btn" onClick=${() => copiar(msg)}>Copiar mensagem</button>
-      <${Campo} rotulo="Ou mande direto no WhatsApp"><input class="input" inputmode="tel" placeholder="(11) 99999-9999" value=${tel} onInput=${(ev) => setTel(ev.target.value)}/><//>
-      <a class="btn primario" target="_blank" rel="noopener" href=${linkWhats(tel, msg)}>Abrir no WhatsApp</a>
-    </div><//>`;
+    ${e.dados === null ? html`<p class="nota">Os convites com link precisam da atualização 9 do banco (pasta supabase). Enquanto isso, mande o link do app: ${location.origin + location.pathname}</p>`
+    : gerado ? html`<div class="pilha">
+        <p class="suave">Link criado para <b>${gerado.nome}</b>. Vale até ${dataBR(String(gerado.expira_em).slice(0, 10))} e só pode ser usado uma vez.</p>
+        <textarea class="input" rows="9" readonly value=${msgConvite(gerado)}></textarea>
+        <div class="acoes"><button class="btn" onClick=${() => copiar(msgConvite(gerado))}>Copiar mensagem</button><button class="btn" onClick=${() => copiar(linkConvite(gerado.token))}>Copiar só o link</button>
+          ${gerado.telefone && html`<a class="btn primario" target="_blank" rel="noopener" href=${linkWhats(gerado.telefone, msgConvite(gerado))}>Mandar no WhatsApp</a>`}</div>
+        <button class="btn-texto" onClick=${() => { setGerado(null); setF({ nome: '', email: '', telefone: '', objetivo: '' }); }}>Convidar outra</button></div>`
+    : html`<form class="pilha" onSubmit=${gerar}>
+        <p class="suave">Cada aluna recebe um link único, válido por 7 dias. Quando ela cria a senha, a conta já entra com o nome, o WhatsApp e o objetivo que você preencheu.</p>
+        <${Campo} rotulo="Nome"><input class="input" value=${f.nome} onInput=${(ev) => setF({ ...f, nome: ev.target.value })}/><//>
+        <div class="grade2"><${Campo} rotulo="E-mail (opcional)"><input class="input" type="email" value=${f.email} onInput=${(ev) => setF({ ...f, email: ev.target.value })}/><//>
+          <${Campo} rotulo="WhatsApp (opcional)"><input class="input" inputmode="tel" placeholder="(11) 99999-9999" value=${f.telefone} onInput=${(ev) => setF({ ...f, telefone: ev.target.value })}/><//></div>
+        <${Campo} rotulo="Objetivo (opcional)"><input class="input" placeholder="Ex.: glúteo e definição" value=${f.objetivo} onInput=${(ev) => setF({ ...f, objetivo: ev.target.value })}/><//>
+        <button class="btn primario grande">Gerar link de convite</button>
+      </form>`}
+    ${pendentes.length > 0 && !gerado && html`<section class="pilha-curta"><span class="rotulo">Convites em aberto</span>
+      <ul class="lista">${pendentes.map((c) => { const vencido = new Date(c.expira_em) < new Date();
+        return html`<li class="linha"><div><b>${c.nome}</b><small>${vencido ? 'venceu em ' : 'vale até '}${dataBR(String(c.expira_em).slice(0, 10))}</small></div>
+          <div class="mini-acoes">${!vencido && html`<button class="btn-texto" onClick=${() => setGerado(c)}>Ver link</button>`}<button class="btn-texto perigo" onClick=${() => cancelar(c)}>${vencido ? 'Apagar' : 'Cancelar'}</button></div></li>`; })}</ul></section>`}
+  <//>`;
 }
 
 // ============================================================
 // DETALHE DA ALUNA
 // ============================================================
-const ABAS_ALUNA = [['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['relatorio', 'Relatório'], ['checkins', 'Oráculo'], ['dossie', 'Dossiê'], ['metas', 'Metas'], ['cardio', 'Cardio'], ['testes', 'Testes'],
-  ['avaliacoes', 'Avaliações'], ['anamnese', 'Alistamento'], ['financeiro', 'Financeiro'], ['dados', 'Dados']];
+const ABAS_ALUNA = [['geral', 'Visão geral'], ['ficha', 'Ficha'], ['evolucao', 'Evolução'], ['relatorio', 'Relatório'], ['avaliacoes', 'Avaliações'], ['checkins', 'Oráculo'], ['formularios', 'Formulários'],
+  ['atividades', 'Crônica'], ['videos', 'Vídeos'], ['dossie', 'Dossiê'], ['arquivos', 'Arquivos'], ['metas', 'Metas'], ['cardio', 'Cardio'], ['testes', 'Testes'],
+  ['anamnese', 'Alistamento'], ['financeiro', 'Financeiro'], ['dados', 'Dados']];
+// mensagem com o link de acesso da aluna ao app
+const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const mesAno = (d) => (d ? `${MESES_CURTOS[+d.slice(5, 7) - 1]}/${d.slice(0, 4)}` : '·');
+const linkAcesso = (a) => `Oi, ${(a.nome || '').split(' ')[0]}! Este é o seu acesso ao Nemesis: ${location.origin + location.pathname}\n\nEntre com o e-mail ${a.email || 'que você cadastrou'}. Se esquecer a senha, toque em "Esqueci a senha" na tela de entrada. No celular, use "Adicionar à tela de início" para ele virar um app.`;
 function AlunaDetalhe({ id, aba, ir, onAluna, coachNome }) {
   const e = useCarregar(async () => { const a = await api.um('profiles', { id }); if (a && onAluna) onAluna({ id: a.id, nome: a.nome }); return a; }, [id]);
   const r = useCarregar(() => carregarRadar(id), [id]);
   return html`<${Estado} e=${e}>${(a) => (!a ? html`<${Vazio} titulo="Aluna não encontrada"/>` : html`<div class="pilha">
     <button class="btn-texto" onClick=${() => ir('alunas')}>‹ Alunas</button>
     <div class="aluna-cab"><span class="avatar grande">${(a.nome || '?').slice(0, 1)}</span>
-      <div><h1>${a.nome || a.email}</h1><p class="suave">${[idadeDe(a.nascimento) && idadeDe(a.nascimento) + ' anos', a.objetivo].filter(Boolean).join(' · ') || a.email}</p></div>
-      ${a.telefone && html`<a class="btn" target="_blank" rel="noopener" href=${linkWhats(a.telefone)}>WhatsApp</a>`}</div>
+      <div><h1>${a.nome || a.email}</h1><p class="suave">${[idadeDe(a.nascimento) && idadeDe(a.nascimento) + ' anos', a.objetivo].filter(Boolean).join(' · ') || a.email}</p>
+        <p class="aluna-meta"><span class=${'tag ' + (a.ativo ? 'ok' : '')}>${a.ativo ? 'Ativa' : 'Pausada'}</span><small>Guerreira desde ${mesAno(a.alistada_em || String(a.created_at || '').slice(0, 10))}</small>
+          ${r.dados && (() => { const sn = saudeDa(a, r.dados).sinal; return html`<small class="sinal-cab" title="Soma do último check-in: (6 − sono) + (6 − energia) + estresse + dor">${sn ? html`<span class=${'ponto-sinal ' + sn.cor}></span>Último check-in: ${sn.cor}` : 'Sem check-in com sinal'}</small>`; })()}</p></div>
+      <div class="acoes"><button class="btn" onClick=${() => copiar(linkAcesso(a))}><${Icone} nome="copiar" tam=${16}/>Copiar link</button>
+        ${a.telefone && html`<a class="btn" target="_blank" rel="noopener" href=${linkWhats(a.telefone)}>WhatsApp</a>`}</div></div>
     ${r.dados && html`<${Score} s=${saudeDa(a, r.dados)}/>`}
     <${Abas} abas=${ABAS_ALUNA} atual=${aba} onMuda=${(k) => ir(`aluna/${id}/${k}`)}/>
+    ${aba === 'geral' && html`<div class="visao-geral"><section><h2 class="bloco">Dossiê</h2><${DossieAluna} aluna=${a}/></section>
+      <section><h2 class="bloco">Estrada</h2><${AtividadesAluna} aluna=${a}/></section></div>`}
     ${aba === 'ficha' && html`<${Ficha} aluna=${a}/>`}
     ${aba === 'evolucao' && html`<${Evolucao} alunaId=${a.id}/>`}
     ${aba === 'relatorio' && html`<${Relatorio} aluna=${a} coachNome=${coachNome} podeEditar=${true}/>`}
     ${aba === 'checkins' && html`<${CheckinsDaAluna} aluna=${a}/>`}
     ${aba === 'dossie' && html`<${DossieAluna} aluna=${a}/>`}
+    ${aba === 'formularios' && html`<${FormulariosAluna} aluna=${a}/>`}
+    ${aba === 'atividades' && html`<${AtividadesAluna} aluna=${a}/>`}
+    ${aba === 'arquivos' && html`<${ArquivosAluna} aluna=${a}/>`}
+    ${aba === 'videos' && html`<${VideosAluna} aluna=${a}/>`}
     ${aba === 'metas' && html`<${MetasAluna} aluna=${a}/>`}
     ${aba === 'cardio' && html`<${CardioAluna} aluna=${a}/>`}
     ${aba === 'testes' && html`<${TestesAluna} aluna=${a}/>`}
     ${aba === 'avaliacoes' && html`<${Avaliacoes} aluna=${a} podeEditar=${true}/>`}
     ${aba === 'anamnese' && html`<${Anamnese} alunaId=${a.id} leitura=${true}/>`}
     ${aba === 'financeiro' && html`<${FinanceiroAluna} aluna=${a}/>`}
-    ${aba === 'dados' && html`<${DadosAluna} aluna=${a} onSalvo=${e.recarregar}/>`}
+    ${aba === 'dados' && html`<${DadosAluna} aluna=${a} onSalvo=${e.recarregar}/><${PrivacidadeCoach} aluna=${a} ir=${ir}/>`}
   </div>`)}<//>`;
 }
 
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 function DadosAluna({ aluna, onSalvo }) {
   const [f, setF] = useState({ nome: aluna.nome || '', telefone: aluna.telefone || '', nascimento: aluna.nascimento || '', sexo: aluna.sexo || 'F', objetivo: aluna.objetivo || '', ativo: aluna.ativo,
     alistada_em: aluna.alistada_em || String(aluna.created_at || '').slice(0, 10), treinos_semana_alvo: aluna.treinos_semana_alvo || '' });
+  // campos da atualização 8: só vão no salvar se mudaram (quem ainda não rodou o SQL continua salvando o resto)
+  const [n, setN] = useState({ dia_revisao: aluna.dia_revisao != null ? aluna.dia_revisao : null, combo_nutri: !!aluna.combo_nutri });
+  const [enviandoSenha, setEnviandoSenha] = useState(false);
   const salvar = async (ev) => {
     ev.preventDefault();
     const alvo = lerNum(f.treinos_semana_alvo);
-    try { await api.upd('profiles', aluna.id, { ...f, telefone: f.telefone || null, nascimento: f.nascimento || null, alistada_em: f.alistada_em || null, treinos_semana_alvo: alvo ? Math.min(7, Math.max(1, Math.round(alvo))) : null }); toast('Dados salvos', 'ok'); onSalvo(); }
+    const novos = {};
+    if (n.dia_revisao !== (aluna.dia_revisao != null ? aluna.dia_revisao : null)) novos.dia_revisao = n.dia_revisao;
+    if (n.combo_nutri !== !!aluna.combo_nutri) novos.combo_nutri = n.combo_nutri;
+    try { await api.upd('profiles', aluna.id, { ...f, ...novos, telefone: f.telefone || null, nascimento: f.nascimento || null, alistada_em: f.alistada_em || null, treinos_semana_alvo: alvo ? Math.min(7, Math.max(1, Math.round(alvo))) : null }); toast('Dados salvos', 'ok'); onSalvo(); }
     catch (err) { toast(err.message, 'erro'); }
+  };
+  const novaSenha = async () => {
+    if (!aluna.email || !confirm(`Enviar para ${aluna.email} um link para criar uma senha nova?`)) return;
+    setEnviandoSenha(true);
+    try { await api.recuperar(aluna.email); toast('Link enviado para o e-mail da aluna', 'ok'); } catch (err) { toast(err.message, 'erro'); } finally { setEnviandoSenha(false); }
   };
   return html`<form class="card pilha" onSubmit=${salvar}>
     <${Campo} rotulo="Nome"><input class="input" value=${f.nome} onInput=${(ev) => setF({ ...f, nome: ev.target.value })}/><//>
@@ -230,8 +303,12 @@ function DadosAluna({ aluna, onSalvo }) {
       <${Campo} rotulo="Alistada em" dica="Dia zero da jornada"><input class="input" type="date" value=${f.alistada_em} onInput=${(ev) => setF({ ...f, alistada_em: ev.target.value })}/><//>
       <${Campo} rotulo="Treinos por semana (meta)" dica="Vazio = treinos obrigatórios da ficha"><input class="input" inputmode="numeric" value=${f.treinos_semana_alvo} onInput=${(ev) => setF({ ...f, treinos_semana_alvo: ev.target.value })}/><//>
     </div>
+    <${Campo} rotulo="Dia de revisão" dica="Dia fixo em que você olha o Oráculo dela e ajusta a ficha. Entra na Fila do dia e no Chronos."><div class="chips">
+      ${[[null, 'Nenhum'], ...DIAS_SEMANA.map((r, i) => [i, r])].map(([k, r]) => html`<button type="button" class=${n.dia_revisao === k ? 'chip on' : 'chip'} onClick=${() => setN({ ...n, dia_revisao: k })}>${r}</button>`)}</div><//>
+    <label class="toggle"><input type="checkbox" checked=${n.combo_nutri} onChange=${(ev) => setN({ ...n, combo_nutri: ev.target.checked })}/> Combo com nutricionista (treino + dieta)</label>
     <label class="toggle"><input type="checkbox" checked=${f.ativo} onChange=${(ev) => setF({ ...f, ativo: ev.target.checked })}/> Aluna ativa</label>
-    <p class="suave">E-mail de acesso: ${aluna.email}</p>
+    <div class="linha-acao"><p class="suave">E-mail de acesso: ${aluna.email}</p>
+      ${aluna.email && html`<button type="button" class="btn-texto" disabled=${enviandoSenha} onClick=${novaSenha}>${enviandoSenha ? 'Enviando…' : 'Enviar e-mail de nova senha'}</button>`}</div>
     <button class="btn primario">Salvar</button>
   </form>`;
 }
@@ -251,7 +328,7 @@ function CartaoResposta({ c, aluna, envio, onFeito }) {
   return html`<section class="card">
     <div class="card-topo"><div>${aluna && html`<a href=${`#/aluna/${aluna.id}/checkins`}><h3>${aluna.nome}</h3></a>`}<small class="suave">Semana de ${dataBR(c.semana)} · enviado ${relativo(c.created_at)}</small></div>
       ${c.resposta ? html`<span class="tag roxo">respondido</span>` : html`<span class="tag atencao">aguardando</span>`}</div>
-    <${ResumoCheckin} c=${c}/>
+    <${ResumoCheckin} c=${c} sinal/>
     ${envio && html`<button class="btn-texto" onClick=${() => setVerEnvio(true)}>Ver o Oráculo completo (dores, ciclo, RIR)</button>`}
     ${verEnvio && html`<${ModalEnvio} envio=${envio} nome=${aluna ? aluna.nome : 'Oráculo'} onFechar=${() => setVerEnvio(false)}/>`}
     ${editando ? html`<textarea class="input" rows="3" placeholder="Sua resposta (a aluna vê no app)" value=${txt} onInput=${(ev) => setTxt(ev.target.value)}></textarea>
@@ -312,10 +389,15 @@ function Leads() {
   const linkForm = location.origin + location.pathname.replace(/index\.html$/, '').replace(/\/?$/, '/') + 'form.html';
   const muda = async (l, status) => { try { await api.upd('leads', l.id, { status }); e.recarregar(); } catch (err) { toast(err.message, 'erro'); } };
   const apagar = async (l) => { if (!confirm(`Apagar a inscrição de ${l.nome}?`)) return; await api.del('leads', l.id); e.recarregar(); };
+  // Política de Privacidade: inscrição que não virou matrícula é apagada em até 6 meses
+  const antigas = (leads) => leads.filter((l) => l.status !== 'fechado' && String(l.created_at).slice(0, 10) < somaDias(hoje(), -180));
+  const limpar = async (l) => { if (!confirm(`Apagar ${l.length} inscrição(ões) com mais de 6 meses que não viraram matrícula? A Política de Privacidade promete isso às inscritas.`)) return;
+    try { for (const x of l) await api.del('leads', x.id); toast('Inscrições antigas apagadas', 'ok'); e.recarregar(); } catch (err) { toast(err.message, 'erro'); } };
   return html`<div class="pilha">
     <div class="titulo-acoes"><h1 class="titulo">Inscrições</h1><button class="btn" onClick=${() => copiar(linkForm)}>Copiar link do formulário</button></div>
     <p class="suave">Link para colocar na bio: <a href=${linkForm} target="_blank" rel="noopener">${linkForm.replace(/^https?:\/\//, '')}</a></p>
     <${Estado} e=${e}>${(leads) => html`
+      ${antigas(leads).length > 0 && html`<p class="nota atencao">${antigas(leads).length} inscrição(ões) com mais de 6 meses que não viraram matrícula. <button class="btn-texto" onClick=${() => limpar(antigas(leads))}>Apagar agora</button></p>`}
       <div class="chips">${STATUS.map(([k, r]) => html`<button class=${filtro === k ? 'chip on' : 'chip'} onClick=${() => setFiltro(k)}>${r} (${leads.filter((l) => l.status === k).length})</button>`)}</div>
       ${leads.filter((l) => l.status === filtro).map((l) => html`<section class="card lead">
         <div class="card-topo"><div><h3>${l.nome}${l.idade ? `, ${l.idade}` : ''}</h3><small class="suave">${relativo(l.created_at)}${l.instagram ? ' · ' + l.instagram : ''}</small></div>

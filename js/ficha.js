@@ -6,7 +6,7 @@ import { api } from './api.js';
 import { Mesociclo } from './extras.js';
 import { Icone } from './icones.js';
 import { MapaCorpo } from './corpo.js';
-import { MUSCULOS, GRUPOS_MUSC, TIPOS, METODOS, METODOS_AEROBICO, DESCANSOS, REPS_TIPOS, NIVEIS, GRUPOS_TREINO, musculosDe, tipoDoTreino,
+import { MUSCULOS, GRUPOS_MUSC, TIPOS, METODOS, METODOS_AEROBICO, METODOS_GRUPO, CADENCIAS, CAD_SIMPLES, DESCANSOS, REPS_TIPOS, NIVEIS, GRUPOS_TREINO, musculosDe, tipoDoTreino,
   lerFaixa, juntarFaixa, tipoReps, repsPara, numeroReps, tempoTreino, fmtTempo, volumePorMusculo, volumePorGrupo, faixaGrupo, statusFaixa,
   seriesValidas, nivelVolume, REF_VOLUME } from './musculos.js';
 import { useCarregar, Estado, Modal, Campo, toast, lerNum } from './util.js';
@@ -20,18 +20,20 @@ const PADRAO = {
 };
 // o que o "Replicar valores" copia do 1º exercício para os outros
 const REPLICAR = [['reps', 'Repetições', ['reps', 'reps_tipo']], ['metodo', 'Método', ['metodo', 'tecnica']], ['series', 'Séries', ['series']],
-  ['cadencia', 'Cadência', ['cadencia_exc', 'cadencia_con']], ['intervalo', 'Intervalo', ['descanso', 'descanso_tipo', 'descanso_max']],
+  ['cadencia', 'Cadência', ['cadencia_exc', 'cadencia_con', 'cadencia_tipo', 'cadencia_texto']], ['intervalo', 'Intervalo', ['descanso', 'descanso_tipo', 'descanso_max']],
   ['aquecimento', 'Séries de aquecimento', ['aquecimento']], ['esforco', 'RIR/RPE', ['esforco_tipo', 'esforco_alvo']]];
 // o que um preset de linha guarda
-const CAMPOS_PRESET = ['series', 'aquecimento', 'reps', 'reps_tipo', 'cadencia_exc', 'cadencia_con', 'descanso', 'descanso_tipo', 'descanso_max', 'metodo', 'tecnica', 'esforco_tipo', 'esforco_alvo'];
+const CAMPOS_PRESET = ['series', 'aquecimento', 'reps', 'reps_tipo', 'cadencia_exc', 'cadencia_con', 'cadencia_tipo', 'cadencia_texto', 'descanso', 'descanso_tipo', 'descanso_max', 'metodo', 'tecnica', 'esforco_tipo', 'esforco_alvo'];
 
 // dono dos treinos: uma aluna (ficha) ou um modelo
 const donoDe = (aluna, modelo) => (aluna ? { campo: 'aluna_id', id: aluna.id, tabela: 'profiles', nivel: aluna.nivel, aluna } : { campo: 'modelo_id', id: modelo.id, tabela: 'modelos', nivel: modelo.nivel, modelo });
 const colunasDono = (dono) => ({ aluna_id: dono.campo === 'aluna_id' ? dono.id : null, modelo_id: dono.campo === 'modelo_id' ? dono.id : null });
 
 // copia todos os treinos de um dono para outro (aluna -> aluna, modelo -> aluna, aluna -> modelo)
-export async function copiarTreinos(origem, destino, ordemInicial = 0) {
-  const [ts, its] = await Promise.all([api.q('treinos', { eq: { [origem.campo]: origem.id }, order: 'ordem' }), api.q('treino_itens', { eq: { [origem.campo]: origem.id } })]);
+// cópia independente: mexer na cópia não altera a origem (e vice-versa). soIds limita a alguns treinos.
+export async function copiarTreinos(origem, destino, ordemInicial = 0, soIds = null) {
+  const [todos, its] = await Promise.all([api.q('treinos', { eq: { [origem.campo]: origem.id }, order: 'ordem' }), api.q('treino_itens', { eq: { [origem.campo]: origem.id } })]);
+  const ts = soIds ? todos.filter((t) => soIds.includes(t.id)) : todos;
   for (const [k, t] of ts.entries()) {
     const [novo] = await api.ins('treinos', { ...colunasDono(destino), nome: t.nome, ordem: ordemInicial + k, opcional: t.opcional, observacoes: t.observacoes, ativo: t.ativo });
     const linhas = its.filter((i) => i.treino_id === t.id).map(({ id, treino_id, aluna_id, modelo_id, created_at, ...r }) => ({ ...r, ...colunasDono(destino), treino_id: novo.id }));
@@ -135,7 +137,7 @@ function Editor({ dono, d, recarregar }) {
         return html`<button class=${'treino-aba' + (t.id === atual ? ' on' : '') + (t.ativo ? '' : ' apagado')} onClick=${() => setAtual(t.id)}>
           <b>${t.nome}</b><small>${tipoDoTreino(its)}${t.opcional ? ' · opcional' : ''}</small></button>`; })}
       <button class="treino-aba nova" onClick=${() => setModal({ tipo: 'treino' })}><${Icone} nome="mais" tam=${16}/>Criar treino</button>
-      <button class="treino-aba nova" onClick=${() => setModal({ tipo: 'importar' })}><${Icone} nome="copiar" tam=${16}/>Importar</button>
+      <button class="treino-aba nova" onClick=${() => setModal({ tipo: 'importar' })}><${Icone} nome="copiar" tam=${16}/>Importar modelo</button>
       ${dono.aluna && treinos.length > 0 && html`<button class="treino-aba nova" onClick=${() => setModal({ tipo: 'salvarModelo' })}><${Icone} nome="forja" tam=${16}/>Salvar como modelo</button>`}
     </div>
 
@@ -237,6 +239,9 @@ function Item({ it, ex, i, n, presets, salvar, mover, remover, trocar, salvarPre
   const dt = it.descanso_tipo || 'exato';
   const et = it.esforco_tipo || 'rir';
   const mus = musculosDe(ex);
+  const ct = it.cadencia_tipo || 'padrao';
+  const [verSeries, setVerSeries] = useState(false);
+  const emGrupo = METODOS_GRUPO.includes(it.metodo);
   const cel = (rotulo, corpo, extra) => html`<div class="cel"><div class="cel-rot">${rotulo}</div><div class=${'cel-corpo' + (extra ? ' ' + extra : '')}>${corpo}</div></div>`;
   const num = (campo, ph = '—') => html`<input class="cel-in" inputmode="numeric" placeholder=${ph} value=${it[campo] ?? ''} onChange=${(ev) => salvar({ [campo]: numOuNull(ev.target.value) ?? (campo === 'series' ? 1 : campo === 'aquecimento' ? 0 : null) })}/>`;
   const sobre = arrasto && arrasto.sobre === i && arrasto.de !== i;
@@ -250,10 +255,13 @@ function Item({ it, ex, i, n, presets, salvar, mover, remover, trocar, salvarPre
       <span class="ex-ordem"><button class="icone" aria-label="Subir" disabled=${i === 0} onClick=${() => mover(-1)}><${Icone} nome="subir" tam=${15}/></button>
         <button class="icone" aria-label="Descer" disabled=${i === n - 1} onClick=${() => mover(1)}><${Icone} nome="abaixo" tam=${15}/></button></span>
       <button class="icone" title="Trocar exercício" aria-label="Trocar exercício" onClick=${trocar}><${Icone} nome="trocar" tam=${18}/></button>
+      ${emGrupo && html`<select class=${'grupo-num g' + (it.grupo || 1)} aria-label="Grupo do método" title="Exercícios com o mesmo número são feitos juntos" onChange=${(ev) => salvar({ grupo: ev.target.value })}>
+        ${['1', '2', '3', '4', '5'].map((g) => html`<option value=${g} selected=${String(it.grupo || '1') === g}>(${g})</option>`)}</select>`}
       <div class="ex-nome"><b>${ex ? ex.nome : '(exercício removido)'}</b>
         <small>${tipo !== 'musculacao' ? html`<span class="tipo-ponto" style=${`background:${TIPOS[tipo].cor}`}></span>${TIPOS[tipo].nome} · ` : ''}${mus.primarios.map((m) => MUSCULOS[m].nome).join(', ') || (ex && ex.grupo) || ''}</small></div>
       <div class="ex-acoes">
         ${tipo !== 'aerobico' && html`<${Presets} presets=${presets} aplicar=${(p) => salvar(p.dados)} salvarPreset=${salvarPreset} apagarPreset=${apagarPreset}/>`}
+        ${tipo !== 'aerobico' && html`<button class=${'icone' + (verSeries || (it.series_detalhe || []).length ? ' on' : '')} title="Detalhar série por série (carga, reps e RIR)" aria-label="Detalhar séries" onClick=${() => setVerSeries(!verSeries)}><${Icone} nome="lista" tam=${17}/></button>`}
         <button class=${'icone' + (it.obs || verObs ? ' on' : '')} title="Observação para a aluna" aria-label="Observação" onClick=${() => setVerObs(!verObs)}><${Icone} nome="comentario" tam=${17}/></button>
         ${ex && ex.video_url ? html`<a class="icone" title="Ver vídeo" aria-label="Ver vídeo" href=${ex.video_url} target="_blank" rel="noopener"><${Icone} nome="video" tam=${17}/></a>`
           : html`<span class="icone apagado" title="Sem vídeo na biblioteca"><${Icone} nome="video" tam=${17}/></span>`}
@@ -269,8 +277,11 @@ function Item({ it, ex, i, n, presets, salvar, mover, remover, trocar, salvarPre
         ${cel('Séries', num('series'))}
         ${cel('Aquec.', num('aquecimento', '0'))}
         <${CelReps} it=${it} salvar=${salvar} cel=${cel}/>
-        ${cel('Cadência', html`<label class="cad">Exc<select class="cel-in" onChange=${(ev) => salvar({ cadencia_exc: Number(ev.target.value), cadencia_con: it.cadencia_con ?? 0 })}>${opcoes(CAD, it.cadencia_exc ?? 2)}</select></label>
-          <label class="cad">Con<select class="cel-in" onChange=${(ev) => salvar({ cadencia_con: Number(ev.target.value), cadencia_exc: it.cadencia_exc ?? 2 })}>${opcoes(CAD, it.cadencia_con ?? 0)}</select></label>`, 'duplo')}
+        ${cel(html`<select class="cel-sel" aria-label="Tipo de cadência" onChange=${(ev) => salvar({ cadencia_tipo: ev.target.value, cadencia_texto: ev.target.value === 'americana' ? '3-0-1-0' : ev.target.value === 'simplificada' ? 'moderada' : null })}>${opcoes(CADENCIAS, ct)}</select>`,
+          ct === 'americana' ? html`<input class="cel-in" placeholder="3-0-1-0" title="Descida, pausa embaixo, subida, pausa em cima (segundos)" value=${it.cadencia_texto || ''} onChange=${(ev) => salvar({ cadencia_texto: ev.target.value.replace(/[^\dX]/gi, '').slice(0, 4).split('').join('-') || null })}/>`
+          : ct === 'simplificada' ? html`<select class="cel-in" onChange=${(ev) => salvar({ cadencia_texto: ev.target.value })}>${opcoes(CAD_SIMPLES.map(([k, r]) => [k, r]), it.cadencia_texto || 'moderada')}</select>`
+          : html`<label class="cad">Exc<select class="cel-in" onChange=${(ev) => salvar({ cadencia_exc: Number(ev.target.value), cadencia_con: it.cadencia_con ?? 0 })}>${opcoes(CAD, it.cadencia_exc ?? 2)}</select></label>
+          <label class="cad">Con<select class="cel-in" onChange=${(ev) => salvar({ cadencia_con: Number(ev.target.value), cadencia_exc: it.cadencia_exc ?? 2 })}>${opcoes(CAD, it.cadencia_con ?? 0)}</select></label>`, ct === 'padrao' ? 'duplo' : '')}
         ${cel(html`<select class="cel-sel" aria-label="Formato do descanso" onChange=${(ev) => salvar({ descanso_tipo: ev.target.value })}>${opcoes(DESCANSOS, dt)}</select>`,
           dt === 'livre' ? html`<span class="cel-txt">o quanto precisar</span>`
           : dt === 'faixa' ? html`${num('descanso')}<span class="cel-div"></span>${num('descanso_max')}` : num('descanso'), dt === 'faixa' ? 'duplo' : '')}
@@ -279,11 +290,28 @@ function Item({ it, ex, i, n, presets, salvar, mover, remover, trocar, salvarPre
           html`<select class="cel-in" onChange=${(ev) => salvar({ esforco_tipo: et, esforco_alvo: ev.target.value === '' ? null : Number(ev.target.value) })}>
             <option value="" selected=${it.esforco_alvo == null}>—</option>${opcoes(et === 'rpe' ? RPE : RIR, it.esforco_alvo)}</select>`)}
       </div>`}
+    ${verSeries && tipo !== 'aerobico' && html`<${SeriesDetalhe} it=${it} salvar=${salvar}/>`}
     ${(verObs || it.obs || (it.metodo && it.metodo !== 'padrao' && it.tecnica)) && html`<div class="ex-obs">
       ${it.metodo && it.metodo !== 'padrao' && tipo !== 'aerobico' && html`<input class="input" placeholder="Detalhe do método (ex.: 2 drops de 20%)" value=${it.tecnica || ''} onChange=${(ev) => salvar({ tecnica: ev.target.value || null })}/>`}
       ${(verObs || it.obs) && html`<textarea class="input" rows="2" placeholder="Observação para a aluna" value=${it.obs || ''} onChange=${(ev) => salvar({ obs: ev.target.value || null })}></textarea>`}
     </div>`}
   </article>`;
+}
+
+// ---------- séries detalhadas: carga, reps e RIR de cada série ----------
+function SeriesDetalhe({ it, salvar }) {
+  const n = Math.max(1, Number(it.series || 1));
+  const base = it.series_detalhe || [];
+  const linhas = [...Array(n)].map((_, i) => base[i] || {});
+  const muda = (i, k, v) => { const l = linhas.map((x, j) => (j === i ? { ...x, [k]: v === '' ? null : v } : x)); salvar({ series_detalhe: l.some((x) => x.carga || x.reps || x.rir != null) ? l : null }); };
+  return html`<div class="series-det">
+    <div class="sd-cab"><span>Série</span><span>Carga (kg)</span><span>Reps</span><span>RIR</span></div>
+    ${linhas.map((x, i) => html`<div class="sd-linha"><b>${i + 1}</b>
+      <input class="input" inputmode="decimal" placeholder="livre" value=${x.carga ?? ''} onChange=${(ev) => muda(i, 'carga', lerNum(ev.target.value))}/>
+      <input class="input" placeholder=${it.reps || '—'} value=${x.reps ?? ''} onChange=${(ev) => muda(i, 'reps', ev.target.value.trim())}/>
+      <select class="input" onChange=${(ev) => muda(i, 'rir', ev.target.value === '' ? '' : Number(ev.target.value))}><option value="" selected=${x.rir == null}>${it.esforco_alvo != null ? `igual (${it.esforco_alvo})` : '—'}</option>${[0, 1, 2, 3, 4, 5].map((r) => html`<option value=${r} selected=${x.rir === r}>${r}</option>`)}</select></div>`)}
+    <small>Em branco, vale o que está na linha do exercício. A aluna vê a meta de cada série na execução.</small>
+  </div>`;
 }
 
 // ---------- presets de linha ----------
@@ -452,36 +480,69 @@ function ModalImportar({ dono, ordemInicial, onFechar, onFeito }) {
   }, []);
   const [fonte, setFonte] = useState('modelo');
   const [origem, setOrigem] = useState('');
+  const [treinosOrigem, setTreinosOrigem] = useState([]);
+  const [marcados, setMarcados] = useState([]);
+  const [substituir, setSubstituir] = useState(false);
   const [copiando, setCopiando] = useState(false);
+  const campo = fonte === 'modelo' ? 'modelo_id' : 'aluna_id';
+  useEffect(() => {
+    if (!origem) { setTreinosOrigem([]); setMarcados([]); return; }
+    api.q('treinos', { eq: { [campo]: origem }, order: 'ordem' }).then((l) => { setTreinosOrigem(l); setMarcados(l.map((t) => t.id)); }).catch(() => setTreinosOrigem([]));
+  }, [origem, fonte]);
   const importar = async () => {
+    if (!marcados.length) { toast('Marque pelo menos um treino.', 'erro'); return; }
     setCopiando(true);
     try {
-      const n = await copiarTreinos({ campo: fonte === 'modelo' ? 'modelo_id' : 'aluna_id', id: origem }, dono, ordemInicial);
+      let ordem = ordemInicial;
+      if (substituir && dono.aluna) { const atuais = await api.q('treinos', { eq: { aluna_id: dono.id } }); for (const t of atuais.filter((x) => x.ativo)) await api.upd('treinos', t.id, { ativo: false }); }
+      const n = await copiarTreinos({ campo, id: origem }, dono, ordem, marcados.length === treinosOrigem.length ? null : marcados);
       if (!n) { toast('Não há treinos para importar aí.', 'erro'); setCopiando(false); return; }
       toast(`${n} treino(s) importado(s)`, 'ok'); onFeito();
     } catch (err) { toast(err.message, 'erro'); setCopiando(false); }
   };
+  const alterna = (id) => setMarcados(marcados.includes(id) ? marcados.filter((x) => x !== id) : [...marcados, id]);
   return html`<${Modal} titulo="Importar treinos" onFechar=${onFechar}>
     <${Estado} e=${e}>${({ modelos, alunas }) => { const lista = fonte === 'modelo' ? modelos : alunas;
       return html`<div class="pilha">
         <div class="chips">${[['modelo', 'De um modelo'], ['aluna', 'Da ficha de outra aluna']].map(([k, r]) => html`<button class=${fonte === k ? 'chip on' : 'chip'} onClick=${() => { setFonte(k); setOrigem(''); }}>${r}</button>`)}</div>
-        <p class="suave">Os treinos são adicionados ${dono.aluna ? `à ficha de ${dono.aluna.nome}` : 'a este modelo'}. Depois você ajusta o que precisar.</p>
+        <p class="suave">É uma cópia independente: ajustar ${dono.aluna ? `a ficha de ${dono.aluna.nome}` : 'este modelo'} não muda a origem.</p>
         ${lista.length ? html`<select class="input" value=${origem} onChange=${(ev) => setOrigem(ev.target.value)}><option value="">${fonte === 'modelo' ? 'Escolha o modelo' : 'Escolha a aluna'}</option>
           ${lista.map((x) => html`<option value=${x.id}>${x.nome}${x.nivel ? ` · ${(NIVEIS.find(([k]) => k === x.nivel) || [, ''])[1]}` : ''}</option>`)}</select>`
           : html`<p class="nota">${fonte === 'modelo' ? 'Nenhum modelo ainda. Crie em Modelos, no menu, ou salve uma ficha como modelo.' : 'Nenhuma outra aluna.'}</p>`}
-        <button class="btn primario grande" disabled=${!origem || copiando} onClick=${importar}>${copiando ? 'Importando...' : 'Importar treinos'}</button>
+        ${treinosOrigem.length > 0 && html`<div class="pilha-curta"><span class="rotulo">Quais treinos</span>
+          ${treinosOrigem.map((t) => html`<label class="toggle"><input type="checkbox" checked=${marcados.includes(t.id)} onChange=${() => alterna(t.id)}/> ${t.nome}${t.ativo === false ? ' (oculto)' : ''}</label>`)}</div>`}
+        ${dono.aluna && treinosOrigem.length > 0 && html`<label class="toggle"><input type="checkbox" checked=${substituir} onChange=${(ev) => setSubstituir(ev.target.checked)}/> Substituir a ficha atual (os treinos de hoje ficam ocultos e salvos)</label>`}
+        <button class="btn primario grande" disabled=${!origem || !marcados.length || copiando} onClick=${importar}>${copiando ? 'Importando...' : `Importar ${marcados.length && marcados.length < treinosOrigem.length ? marcados.length + ' treino(s)' : 'treinos'}`}</button>
       </div>`; }}<//><//>`;
 }
 
 // criar modelo sempre pede nome e nível antes (e pode nascer de uma ficha)
+// objetivo, frequência e duração do modelo (atualização 9): só vão para o banco quando preenchidos
+export const OBJETIVOS_MODELO = [['hipertrofia', 'Hipertrofia'], ['gluteo', 'Glúteo foco'], ['emagrecimento', 'Emagrecimento'], ['forca', 'Força'], ['condicionamento', 'Condicionamento']];
+export function extrasModelo(f, antes = {}) {
+  const o = {};
+  const n = (v) => (v === '' || v == null ? null : Math.round(Number(v)) || null);
+  if ((f.objetivo || null) !== (antes.objetivo || null)) o.objetivo = f.objetivo || null;
+  if (n(f.frequencia_semanal) !== (antes.frequencia_semanal || null)) o.frequencia_semanal = n(f.frequencia_semanal);
+  if (n(f.duracao_semanas) !== (antes.duracao_semanas || null)) o.duracao_semanas = n(f.duracao_semanas);
+  return o;
+}
+export function CamposModelo({ f, setF }) {
+  return html`<${Campo} rotulo="Objetivo"><div class="chips">${OBJETIVOS_MODELO.map(([k, r]) => html`<button type="button" class=${f.objetivo === k ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, objetivo: f.objetivo === k ? '' : k })}>${r}</button>`)}</div><//>
+    <div class="grade2">
+      <${Campo} rotulo="Treinos por semana"><input class="input" inputmode="numeric" placeholder="ex.: 4" value=${f.frequencia_semanal || ''} onInput=${(ev) => setF({ ...f, frequencia_semanal: ev.target.value.replace(/\D/g, '') })}/><//>
+      <${Campo} rotulo="Duração (semanas)"><input class="input" inputmode="numeric" placeholder="ex.: 8" value=${f.duracao_semanas || ''} onInput=${(ev) => setF({ ...f, duracao_semanas: ev.target.value.replace(/\D/g, '') })}/><//>
+    </div>`;
+}
+
 export function ModalNovoModelo({ origem, nomeInicial = '', nivelInicial = 'intermediaria', onFechar, onFeito }) {
-  const [f, setF] = useState({ nome: nomeInicial, nivel: nivelInicial, descricao: '' });
+  const [f, setF] = useState({ nome: nomeInicial, nivel: nivelInicial, descricao: '', objetivo: '', frequencia_semanal: '', duracao_semanas: '' });
   const [salvando, setSalvando] = useState(false);
   const salvar = async (ev) => {
     ev.preventDefault(); if (!f.nome.trim()) { toast('Dê um nome ao modelo.', 'erro'); return; }
     setSalvando(true);
     try {
-      const [m] = await api.ins('modelos', { nome: f.nome.trim(), nivel: f.nivel, descricao: f.descricao || null });
+      const [m] = await api.ins('modelos', { nome: f.nome.trim(), nivel: f.nivel, descricao: f.descricao || null, ...extrasModelo(f) });
       if (origem) await copiarTreinos(origem, { campo: 'modelo_id', id: m.id }, 0);
       onFeito(m);
     } catch (err) { toast(err.message, 'erro'); setSalvando(false); }
@@ -489,6 +550,7 @@ export function ModalNovoModelo({ origem, nomeInicial = '', nivelInicial = 'inte
   return html`<${Modal} titulo=${origem ? 'Salvar ficha como modelo' : 'Novo modelo'} onFechar=${onFechar}><form class="pilha" onSubmit=${salvar}>
     <${Campo} rotulo="Nome" dica="Ex.: Glúteo 4x · intermediária"><input class="input" value=${f.nome} onInput=${(ev) => setF({ ...f, nome: ev.target.value })} autofocus/><//>
     <${Campo} rotulo="Nível"><div class="chips">${NIVEIS.map(([k, r]) => html`<button type="button" class=${f.nivel === k ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, nivel: k })}>${r}</button>`)}</div><//>
+    <${CamposModelo} f=${f} setF=${setF}/>
     <${Campo} rotulo="Descrição (opcional)"><textarea class="input" rows="2" value=${f.descricao} onInput=${(ev) => setF({ ...f, descricao: ev.target.value })}></textarea><//>
     <button class="btn primario grande" disabled=${salvando}>${salvando ? 'Salvando...' : origem ? 'Salvar modelo' : 'Criar modelo'}</button>
   </form><//>`;

@@ -14,9 +14,9 @@ const DIAS_NOME = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const pn = (n) => (n || '').split(' ')[0];
 
-export const TIPOS_EVENTO = [['video', 'Call'], ['avaliacao', 'Avaliação'], ['ritual', 'Ritual'], ['lembrete', 'Lembrete'], ['outro', 'Outro']];
+export const TIPOS_EVENTO = [['video', 'Call'], ['presencial', 'Aula presencial'], ['avaliacao', 'Avaliação'], ['ritual', 'Ritual'], ['lembrete', 'Lembrete'], ['outro', 'Outro']];
 export const CAMADAS = [['compromissos', 'Compromissos', '#c38bea'], ['checkin', 'Check-in semanal', '#5fd4a0'], ['avaliacao', 'Avaliações', '#5b8def'],
-  ['ficha', 'Fim de ficha', '#f2c14e'], ['plano', 'Vencimento de plano', '#ff6b81'], ['aniversario', 'Aniversários', '#e08a3c'], ['metas', 'Prazos de metas', '#a0a0a0']];
+  ['ficha', 'Fim de ficha', '#f2c14e'], ['plano', 'Vencimento de plano', '#ff6b81'], ['aniversario', 'Aniversários', '#e08a3c'], ['metas', 'Prazos de metas', '#a0a0a0'], ['revisao', 'Dia de revisão', '#8fb0f5']];
 const cor = (c) => (CAMADAS.find(([k]) => k === c) || [])[2] || '#999';
 const ler = (k, padrao) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? padrao : v; } catch (e) { return padrao; } };
 const gravar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* */ } };
@@ -94,6 +94,8 @@ function montarItens({ ag, alunas, mesos, metas, ass, avals, planos }, ini, fim,
     .forEach((a) => add(dia, { k: 'n' + a.id + dia, hora: '🎂', txt: 'Aniversário', sub: nome(a.id), camada: 'aniversario', rota: `aluna/${a.id}`, aluna: a.id, telefone: a.telefone, whats: `${pn(a.nome)}, feliz aniversário! Que seja um ano forte, em todos os sentidos.` }));
   if (on('checkin')) for (let dia = ini; dia <= fim; dia = somaDias(dia, 1)) if (new Date(dia + 'T12:00:00').getDay() === diaCheckin && alunas.length)
     add(dia, { k: 'c' + dia, hora: '✓', txt: 'Check-in semanal', sub: `${alunas.length} aluna(s)`, camada: 'checkin', rota: 'checkins' });
+  if (on('revisao')) for (let dia = ini; dia <= fim; dia = somaDias(dia, 1)) { const dow = new Date(dia + 'T12:00:00').getDay();
+    alunas.filter((a) => a.dia_revisao === dow).forEach((a) => add(dia, { k: 'r' + a.id + dia, hora: '✎', txt: 'Revisão', sub: nome(a.id), camada: 'revisao', rota: `aluna/${a.id}/ficha`, aluna: a.id })); }
   if (on('avaliacao')) alunas.forEach((a) => {
     // próxima avaliação: última + intervalo do plano vigente (8 semanas se o plano não disser)
     const ult = avals.filter((v) => v.aluna_id === a.id).map((v) => v.data).sort().pop();

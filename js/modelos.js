@@ -2,12 +2,14 @@
 import { html, useState } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { Icone } from './icones.js';
-import { Ficha, ModalNovoModelo, copiarTreinos } from './ficha.js';
+import { Ficha, ModalNovoModelo, copiarTreinos, CamposModelo, extrasModelo, OBJETIVOS_MODELO } from './ficha.js';
 import { ComoFunciona } from './comum.js';
 import { NIVEIS, tipoDoTreino } from './musculos.js';
 import { useCarregar, Estado, Modal, Campo, toast } from './util.js';
 
 const nomeNivel = (k) => (NIVEIS.find(([x]) => x === k) || [null, ''])[1];
+const extrasTexto = (m) => [(OBJETIVOS_MODELO.find(([k]) => k === m.objetivo) || [])[1], m.frequencia_semanal && `${m.frequencia_semanal}x por semana`, m.duracao_semanas && `${m.duracao_semanas} semanas`].filter(Boolean);
+const resumoModelo = (m) => [nomeNivel(m.nivel), (OBJETIVOS_MODELO.find(([k]) => k === m.objetivo) || [])[1], m.frequencia_semanal && `${m.frequencia_semanal}x por semana`, m.duracao_semanas && `${m.duracao_semanas} semanas`].filter(Boolean);
 
 export function Modelos({ id, ir }) {
   const e = useCarregar(async () => {
@@ -30,6 +32,7 @@ export function Modelos({ id, ir }) {
       : html`<div class="modelos-grade">${modelos.map((m) => { const ts = treinos.filter((t) => t.modelo_id === m.id); const its = itens.filter((i) => i.modelo_id === m.id);
           return html`<button class="card modelo" onClick=${() => ir('modelos/' + m.id)}>
             <div class="card-topo"><b>${m.nome}</b>${m.nivel && html`<span class="tag roxo">${nomeNivel(m.nivel)}</span>`}</div>
+            ${extrasTexto(m).length > 0 && html`<small>${extrasTexto(m).join(' · ')}</small>`}
             ${m.descricao && html`<small>${m.descricao}</small>`}
             <div class="modelo-treinos">${ts.map((t) => html`<span class="tag">${t.nome}</span>`)}</div>
             <small>${ts.length} treino(s) · ${its.length} exercício(s) · ${tipoDoTreino(its)}</small></button>`; })}</div>`}
@@ -42,7 +45,7 @@ function ModeloDetalhe({ m, ir, recarregar }) {
   const [modal, setModal] = useState(null);
   const duplicar = async () => {
     try {
-      const [n] = await api.ins('modelos', { nome: `${m.nome} (cópia)`, nivel: m.nivel, descricao: m.descricao });
+      const [n] = await api.ins('modelos', { nome: `${m.nome} (cópia)`, nivel: m.nivel, descricao: m.descricao, ...extrasModelo(m) });
       await copiarTreinos({ campo: 'modelo_id', id: m.id }, { campo: 'modelo_id', id: n.id }, 0);
       toast('Modelo duplicado', 'ok'); ir('modelos/' + n.id);
     } catch (err) { toast(err.message, 'erro'); }
@@ -53,7 +56,7 @@ function ModeloDetalhe({ m, ir, recarregar }) {
   };
   return html`<div class="pilha">
     <button class="btn-texto" onClick=${() => ir('modelos')}>‹ Modelos</button>
-    <div class="titulo-acoes"><div><h1 class="titulo">${m.nome}</h1><p class="suave">${[nomeNivel(m.nivel), m.descricao].filter(Boolean).join(' · ') || 'Modelo de ficha'}</p></div>
+    <div class="titulo-acoes"><div><h1 class="titulo">${m.nome}</h1><p class="suave">${[...resumoModelo(m), m.descricao].filter(Boolean).join(' · ') || 'Modelo de ficha'}</p></div>
       <div class="acoes"><button class="btn primario" onClick=${() => setModal('aplicar')}><${Icone} nome="alunas" tam=${16}/>Aplicar em aluna</button>
         <button class="btn" onClick=${() => setModal('editar')}>Editar</button><button class="btn" onClick=${duplicar}>Duplicar</button>
         <button class="btn-texto perigo" onClick=${apagar}>Apagar</button></div></div>
@@ -85,14 +88,15 @@ function ModalAplicar({ m, onFechar, onFeito }) {
 }
 
 function ModalEditarModelo({ m, onFechar, onFeito }) {
-  const [f, setF] = useState({ nome: m.nome, nivel: m.nivel || 'intermediaria', descricao: m.descricao || '' });
+  const [f, setF] = useState({ nome: m.nome, nivel: m.nivel || 'intermediaria', descricao: m.descricao || '', objetivo: m.objetivo || '', frequencia_semanal: m.frequencia_semanal || '', duracao_semanas: m.duracao_semanas || '' });
   const salvar = async (ev) => {
     ev.preventDefault(); if (!f.nome.trim()) return;
-    try { await api.upd('modelos', m.id, { nome: f.nome.trim(), nivel: f.nivel, descricao: f.descricao || null }); onFeito(); } catch (err) { toast(err.message, 'erro'); }
+    try { await api.upd('modelos', m.id, { nome: f.nome.trim(), nivel: f.nivel, descricao: f.descricao || null, ...extrasModelo(f, m) }); onFeito(); } catch (err) { toast(err.message, 'erro'); }
   };
   return html`<${Modal} titulo="Editar modelo" onFechar=${onFechar}><form class="pilha" onSubmit=${salvar}>
     <${Campo} rotulo="Nome"><input class="input" value=${f.nome} onInput=${(ev) => setF({ ...f, nome: ev.target.value })}/><//>
     <${Campo} rotulo="Nível"><div class="chips">${NIVEIS.map(([k, r]) => html`<button type="button" class=${f.nivel === k ? 'chip on' : 'chip'} onClick=${() => setF({ ...f, nivel: k })}>${r}</button>`)}</div><//>
+    <${CamposModelo} f=${f} setF=${setF}/>
     <${Campo} rotulo="Descrição"><textarea class="input" rows="2" value=${f.descricao} onInput=${(ev) => setF({ ...f, descricao: ev.target.value })}></textarea><//>
     <button class="btn primario grande">Salvar</button></form><//>`;
 }
