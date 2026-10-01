@@ -679,10 +679,10 @@ Menor de 18 anos (pela data de nascimento ou pela resposta): nome, parentesco e 
 - **Authentication > URL Configuration:** Site URL = `https://lvgomesaraujo24-max.github.io/nemesis/` e, em Redirect URLs, `https://lvgomesaraujo24-max.github.io/nemesis/**` (sem isso, confirmação de e-mail e "esqueci a senha" caem num 404 do GitHub Pages). O cadastro e o "esqueci a senha" mandam `emailRedirectTo`/`redirectTo` com o endereço atual do app.
 - **Authentication > Providers > Email:** "Confirm email" pode ser desligado se a aluna não precisar confirmar.
 - **E-mails (Resend):** o SMTP embutido do Supabase manda pouquíssimos e-mails por hora e só serve para teste. O envio de verdade é pelo **Resend** (SMTP), com os modelos da marca em `supabase/emails/`.
-  1. **Domínio próprio:** o Resend só envia para qualquer pessoa a partir de um domínio verificado (ex.: `lvteam.com.br`). Sem domínio, ele só manda teste para o e-mail da própria conta.
-  2. **Resend > Domains > Add domain:** de preferência um subdomínio (ex.: `mail.lvteam.com.br`). Copiar os registros DNS (SPF, DKIM e MX de retorno) para onde o domínio foi comprado e clicar em Verify.
+  1. **Domínio:** `nemesis.wiki.br`, comprado pelo Luiz em 01/10/2026 (registro.br). Os e-mails saem do subdomínio **`mail.nemesis.wiki.br`**, para a reputação de envio ficar separada do domínio principal.
+  2. **Resend > Domains > Add domain:** `mail.nemesis.wiki.br` (região: São Paulo, `sa-east-1`, se oferecida). O Resend mostra 3 ou 4 registros (MX e TXT de SPF em `send.mail`, TXT de DKIM em `resend._domainkey.mail`). Copiar **exatamente** os valores mostrados para o registro.br: Painel > domínio > DNS > Editar zona (se a zona não estiver ativa, ativar o "DNS do Registro.br" / modo avançado). No registro.br o nome vai **sem** `.nemesis.wiki.br` no final (ex.: `send.mail`). Acrescentar também um TXT `_dmarc` com `v=DMARC1; p=none;`. Salvar, esperar a propagação (minutos até algumas horas) e clicar em Verify no Resend.
   3. **Resend > API Keys:** criar uma chave só de envio ("Sending access") para esse domínio. **A chave fica só no painel do Supabase**: nunca em `config.js`, no repositório ou no chat.
-  4. **Supabase > Project Settings > Authentication > SMTP Settings > Enable custom SMTP:** remetente `nao-responda@<domínio>`, nome `Nemesis`, host `smtp.resend.com`, porta `465`, usuário `resend`, senha = a chave do passo 3. (O Resend também tem uma integração com o Supabase que preenche isso sozinha.)
+  4. **Supabase > Project Settings > Authentication > SMTP Settings > Enable custom SMTP:** remetente `nao-responda@mail.nemesis.wiki.br`, nome `Nemesis`, host `smtp.resend.com`, porta `465`, usuário `resend`, senha = a chave do passo 3. (O Resend também tem uma integração com o Supabase que preenche isso sozinha.)
   5. **Supabase > Authentication > Rate Limits:** subir "emails per hour" (ex.: 100).
   6. **Supabase > Authentication > Email Templates:** colar cada modelo com o assunto da tabela abaixo.
   7. **Testar:** cadastro com `seuemail+teste@gmail.com` e "Esqueci a senha".
@@ -695,6 +695,8 @@ Menor de 18 anos (pela data de nascimento ou pela resposta): nome, parentesco e 
   | Magic Link | `link-de-acesso.html` | Seu link para entrar no Nemesis |
   | Invite user | `convite.html` | Você foi convidada para o Nemesis |
   | Reauthentication | `codigo-de-confirmacao.html` | Seu código de confirmação do Nemesis |
+
+  **App no domínio (opcional, depois):** para abrir em `https://nemesis.wiki.br`, criar no registro.br 4 registros A na raiz (`185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`) e um CNAME `www` → `lvgomesaraujo24-max.github.io`. Só **depois** de o DNS responder, colocar o arquivo `CNAME` (com `nemesis.wiki.br`) na raiz do repositório, ligar "Enforce HTTPS" em Settings > Pages, trocar Site URL e Redirect URLs do Supabase para o domínio novo e os links dos modelos de e-mail. Colocar o `CNAME` antes do DNS tira o app do ar. O endereço `github.io` antigo passa a redirecionar sozinho.
 
   Os modelos usam as variáveis do Supabase (`{{ .ConfirmationURL }}`, `{{ .Token }}`, `{{ .Email }}`, `{{ .NewEmail }}`, `{{ .Data.nome }}`). E-mail não aceita CSS do app: as cores do manual (§8) vão escritas direto em cada modelo. Mudou a marca? Ajuste os seis arquivos e cole de novo no Supabase.
 - Senha do banco: **fica só com o Luiz** (guardar num gerenciador de senhas). Não está no repositório.

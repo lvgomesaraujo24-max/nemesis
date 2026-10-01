@@ -139,3 +139,6 @@ Modelo:
 **Por quê**: retorno de aluna testando o app: faltava o cardio na primeira página, a água podia ser mais interativa e o layout podia ser mais autêntico, com a marca do Nemesis. Os nomes das funções não mudaram (regra de não inventar nome grego novo sem aprovação); só o visual.
 **Próximo passo**: levar o mesmo visual às outras telas (roadmap, seção 13).
 
+## 2026-10-01 · Domínio nemesis.wiki.br
+**Decisão**: o Luiz comprou `nemesis.wiki.br`. Os e-mails saem de `nao-responda@mail.nemesis.wiki.br` (subdomínio só de envio, verificado no Resend). Levar o app para o domínio é um passo separado, feito só depois do DNS pronto, para não tirar o app do ar.
+
