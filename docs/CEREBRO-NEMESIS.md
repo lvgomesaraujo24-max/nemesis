@@ -2,7 +2,7 @@
 
 > Fonte primária do app Nemesis. Reúne o que o app é, como foi construído, onde cada coisa mora, todas as regras de cálculo ("inteligência") e o plano daqui para frente.
 > Dono do produto: **Luiz (LV TEAM · LV Coach)**. Repositório: `github.com/lvgomesaraujo24-max/nemesis`. Endereço do app: `https://lvgomesaraujo24-max.github.io/nemesis/`.
-> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v13`, banco até a `atualizacao-15.sql`).
+> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v14`, banco até a `atualizacao-15.sql`).
 
 ### Status real (leia antes de tudo)
 
@@ -147,7 +147,8 @@ Regras:
 | `js/chronos.js` | Agenda: semana, mês, fila, camadas automáticas, rituais |
 | `js/icones.js` | Ícones SVG de linha |
 | `supabase/schema.sql` | Banco base (rodar primeiro) |
-| `supabase/atualizacao-2.sql` … `-9.sql` | Atualizações do banco, em ordem |
+| `supabase/atualizacao-2.sql` … `-15.sql` | Atualizações do banco, em ordem |
+| `supabase/emails/*.html` | Modelos dos e-mails de login (Resend), colados em Supabase > Authentication > Email Templates (§9) |
 
 ### Padrões de código
 
@@ -188,7 +189,7 @@ Roteamento por hash: `#/base/id/sub`.
 
 | Rota | Tela |
 |---|---|
-| `#/` | Início: cartão do próximo treino (ou do treino em andamento) com tempo estimado, semana, Oráculo aberto, cardio, água do dia com meta, lista de treinos e pendências de formulário |
+| `#/` | Início: faixa grega, cartão do próximo treino (ou do treino em andamento) com tempo estimado, semana, Oráculo aberto, **Cardio sempre visível** (prescrito ou registro livre), metas da semana, **água numa ânfora** que enche (toque = 1 copo de 250 ml, copos até a meta, garrafinha de 500 ml, desfazer), lista de treinos e pendências de formulário |
 | `#/treino/:id` | Arena: um exercício por vez (seção 6.4) |
 | `#/form/:formularioId/:atribuicaoId` | Responder formulário |
 | `#/evolucao` · `#/relatorio` | Evolução (progressão de carga por série com filtro de ficha e treino, peso com a tabela de registros, Olimpo) e relatório |
@@ -660,6 +661,7 @@ Menor de 18 anos (pela data de nascimento ou pela resposta): nome, parentesco e 
   - ok `#5fd4a0` · atenção `#f2c14e` · perigo `#ff6b81`
   - raio 16 px
 - **Fontes:** Inter (texto) e Playfair Display (títulos), locais em `lib/fontes`.
+- **Grécia antiga (pedido de aluna, 01/10/2026):** ícones de linha em `js/icones.js` (`elmo` próximo treino, `coluna` semana, `tocha` cardio, `louros` metas, `anfora` água, `copo`), faixa de grega (`.grega`, meandro por máscara CSS na cor do token) e a ânfora da água. Por enquanto só na home da aluna; levar o mesmo cuidado às outras telas é um próximo passo (seção 13).
 - **Layout:** treinador com menu lateral recolhível (desktop) e gaveta (celular); aluna com menu inferior. KPIs grandes, painéis em 3 colunas, estados vazios que ensinam ("Como funciona" em passos).
 - **Tom:** português do Brasil, segunda pessoa, feminino para a aluna ("bem-vinda", "Guerreira"), frases curtas, sem jargão para a aluna. Mensagens de WhatsApp prontas em tom próximo.
 - Pendente: a especificação da ficha pediu fundo `#121212`; hoje é `#1a1a1a`.
@@ -673,10 +675,30 @@ Menor de 18 anos (pela data de nascimento ou pela resposta): nome, parentesco e 
 - **GitHub Pages:** Settings > Pages > Deploy from a branch > `main` > `/ (root)`. No plano grátis, o Pages exige repositório público.
 
 ### Supabase
-- Projeto em **South America (São Paulo)**. URL do projeto em `config.js`.
+- Projeto na região **us-east-2 (Ohio, EUA)**, conferido em 01/10/2026; os dados ficam fora do Brasil (transferência internacional, LGPD art. 33, citada na Política de Privacidade). URL do projeto em `config.js`.
 - **Authentication > URL Configuration:** Site URL = `https://lvgomesaraujo24-max.github.io/nemesis/` e, em Redirect URLs, `https://lvgomesaraujo24-max.github.io/nemesis/**` (sem isso, confirmação de e-mail e "esqueci a senha" caem num 404 do GitHub Pages). O cadastro e o "esqueci a senha" mandam `emailRedirectTo`/`redirectTo` com o endereço atual do app.
 - **Authentication > Providers > Email:** "Confirm email" pode ser desligado se a aluna não precisar confirmar.
-- **E-mails:** o SMTP embutido do Supabase tem limite baixo de envios por hora. Para uso real, configurar um SMTP próprio (seção 12).
+- **E-mails (Resend):** o SMTP embutido do Supabase manda pouquíssimos e-mails por hora e só serve para teste. O envio de verdade é pelo **Resend** (SMTP), com os modelos da marca em `supabase/emails/`.
+  1. **Domínio:** `nemesis.wiki.br`, comprado pelo Luiz em 01/10/2026 (registro.br). Os e-mails saem do subdomínio **`mail.nemesis.wiki.br`**, para a reputação de envio ficar separada do domínio principal.
+  2. **Resend > Domains > Add domain:** `mail.nemesis.wiki.br` (região: São Paulo, `sa-east-1`, se oferecida). O Resend mostra 3 ou 4 registros (MX e TXT de SPF em `send.mail`, TXT de DKIM em `resend._domainkey.mail`). Copiar **exatamente** os valores mostrados para o registro.br: Painel > domínio > DNS > Editar zona (se a zona não estiver ativa, ativar o "DNS do Registro.br" / modo avançado). No registro.br o nome vai **sem** `.nemesis.wiki.br` no final (ex.: `send.mail`). Acrescentar também um TXT `_dmarc` com `v=DMARC1; p=none;`. Salvar, esperar a propagação (minutos até algumas horas) e clicar em Verify no Resend.
+  3. **Resend > API Keys:** criar uma chave só de envio ("Sending access") para esse domínio. **A chave fica só no painel do Supabase**: nunca em `config.js`, no repositório ou no chat.
+  4. **Supabase > Project Settings > Authentication > SMTP Settings > Enable custom SMTP:** remetente `nao-responda@mail.nemesis.wiki.br`, nome `Nemesis`, host `smtp.resend.com`, porta `465`, usuário `resend`, senha = a chave do passo 3. (O Resend também tem uma integração com o Supabase que preenche isso sozinha.)
+  5. **Supabase > Authentication > Rate Limits:** subir "emails per hour" (ex.: 100).
+  6. **Supabase > Authentication > Email Templates:** colar cada modelo com o assunto da tabela abaixo.
+  7. **Testar:** cadastro com `seuemail+teste@gmail.com` e "Esqueci a senha".
+
+  | Modelo no Supabase | Arquivo | Assunto |
+  |---|---|---|
+  | Confirm signup | `confirmar-cadastro.html` | Confirme seu e-mail para entrar no Nemesis |
+  | Reset Password | `redefinir-senha.html` | Crie uma nova senha no Nemesis |
+  | Change Email Address | `trocar-email.html` | Confirme o seu novo e-mail no Nemesis |
+  | Magic Link | `link-de-acesso.html` | Seu link para entrar no Nemesis |
+  | Invite user | `convite.html` | Você foi convidada para o Nemesis |
+  | Reauthentication | `codigo-de-confirmacao.html` | Seu código de confirmação do Nemesis |
+
+  **App no domínio (opcional, depois):** para abrir em `https://nemesis.wiki.br`, criar no registro.br 4 registros A na raiz (`185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`) e um CNAME `www` → `lvgomesaraujo24-max.github.io`. Só **depois** de o DNS responder, colocar o arquivo `CNAME` (com `nemesis.wiki.br`) na raiz do repositório, ligar "Enforce HTTPS" em Settings > Pages, trocar Site URL e Redirect URLs do Supabase para o domínio novo e os links dos modelos de e-mail. Colocar o `CNAME` antes do DNS tira o app do ar. O endereço `github.io` antigo passa a redirecionar sozinho.
+
+  Os modelos usam as variáveis do Supabase (`{{ .ConfirmationURL }}`, `{{ .Token }}`, `{{ .Email }}`, `{{ .NewEmail }}`, `{{ .Data.nome }}`). E-mail não aceita CSS do app: as cores do manual (§8) vão escritas direto em cada modelo. Mudou a marca? Ajuste os seis arquivos e cole de novo no Supabase.
 - Senha do banco: **fica só com o Luiz** (guardar num gerenciador de senhas). Não está no repositório.
 
 ### Publicar uma versão nova (checklist)
@@ -812,6 +834,7 @@ React Native (Expo) ou Flutter. Custa uma reescrita das telas (as regras da seç
 |---|---|---|
 | **0. Colocar no ar o que já foi feito** | 1 a 3 dias | Merge do PR #2; rodar `atualizacao-7` a `-12`, em ordem; preencher `LEGAL` no `config.js`; conferir Auth URLs; configurar SMTP próprio; testar com 2 ou 3 alunas reais |
 | **1. Piloto** | semanas 1 e 2 | Uso real com a turma; correções; responder as decisões pendentes (seção 15) |
+| **1b. Visual grego no app todo** | junto com o piloto | Pedido de aluna: levar ícones gregos, faixa de grega e detalhes de marca da home para Arena, Evolução, Oráculo e Perfil |
 | **2. Robustez** | semanas 3 a 6 | Supabase Pro com backup; domínio próprio; LGPD (consentimento no Alistamento, política de privacidade, exclusão de dados); testes automáticos no GitHub Actions; regra de guarda dos vídeos |
 | **3. Lojas (Capacitor)** | semanas 6 a 10 | Empacotar; push; câmera; links profundos; contas nas lojas; enviar para revisão (Apple leva de dias a 2 semanas) |
 | **4. Automação e receita** | após a semana 10 | Cobrança automática; lembretes automáticos (WhatsApp/push); Petroski e outros protocolos; recursos de IA |

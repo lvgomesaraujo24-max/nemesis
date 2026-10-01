@@ -1329,7 +1329,6 @@ select.cel-in { cursor: pointer; appearance: none; font-size: 13px; }
 .agua-numero { display: flex; align-items: baseline; gap: 10px; }
 .agua-numero b { font-size: 28px; }
 .agua-numero small { color: var(--suave); }
-.agua-barra { width: 100%; accent-color: var(--roxo-forte); height: 28px; }
 .nota-ex { display: block; margin-top: 2px; color: var(--roxo-claro); }
 .metas-semana { display: flex; flex-direction: column; gap: 4px; border-left: 3px solid var(--roxo-claro); padding: 6px 10px; background: var(--roxo-fundo); border-radius: 8px; font-size: 14px; }
 
@@ -1343,3 +1342,32 @@ select.cel-in { cursor: pointer; appearance: none; font-size: 13px; }
 .filtros-evolucao { display: grid; grid-template-columns: 1fr; gap: 8px; }
 @media (min-width: 600px) { .filtros-evolucao { grid-template-columns: 1fr 1fr; } }
 .metas-card p, .metas-semana p { white-space: pre-line; }
+
+/* ---------- Grécia antiga na home da aluna ---------- */
+/* faixa de grega (meandro): a forma vem da máscara, a cor do token (o preto do SVG só define o recorte) */
+.grega { height: 10px; margin-top: 10px; background: var(--roxo-forte); opacity: .75;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='10' viewBox='0 0 20 10'%3E%3Cpath d='M0 9.2H20M2 9.2V1h12v5.5H6.5V4H11' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E") repeat-x left center / 20px 10px;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='10' viewBox='0 0 20 10'%3E%3Cpath d='M0 9.2H20M2 9.2V1h12v5.5H6.5V4H11' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E") repeat-x left center / 20px 10px; }
+.titulo-ico { display: flex; align-items: center; gap: 8px; }
+.titulo-ico .ico { color: var(--roxo-claro); flex-shrink: 0; }
+.emblema { width: 54px; height: 54px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: var(--roxo-claro); background: var(--roxo-fundo); border: 1px solid var(--roxo-forte); }
+.cardio-card { gap: 4px; }
+/* ânfora da água */
+.agua-corpo { display: flex; align-items: center; gap: 16px; }
+.agua-lado { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+.anfora { background: none; border: 0; padding: 0; flex-shrink: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .15s; }
+.anfora:active { transform: scale(.95); }
+.anfora-fundo { fill: var(--fundo); }
+.anfora-contorno { fill: none; stroke: var(--roxo-claro); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.anfora-grega { fill: none; stroke: var(--roxo-claro); stroke-width: 1.4; opacity: .45; }
+.anfora-nivel { transition: transform .6s ease-out; }
+.anfora-onda { animation: onda 2.4s linear infinite; }
+@keyframes onda { from { transform: translateX(0); } to { transform: translateX(50px); } }
+.anfora.cheia svg { filter: drop-shadow(0 0 10px var(--roxo-forte)); }
+.copos { display: flex; flex-wrap: wrap; gap: 4px; }
+.copo { background: none; border: 0; padding: 2px; color: var(--linha); border-radius: 6px; }
+.copo.on { color: var(--roxo-claro); }
+.copo.on .ico { fill: var(--roxo-fundo); }
+.agua.cheia { border-color: var(--roxo-forte); }
+@media (prefers-reduced-motion: reduce) { .anfora-onda { animation: none; } .anfora-nivel { transition: none; } }
+

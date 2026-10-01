@@ -82,6 +82,7 @@ function ModalMeso({ aluna, m, novo, anterior, onFechar, onFeito }) {
 // ============================================================
 const MODALIDADES = [['esteira', 'Esteira'], ['bike', 'Bike'], ['eliptico', 'Elíptico'], ['escada', 'Escada'], ['remo', 'Remo'], ['rua', 'Rua']];
 const NOME_MOD = Object.fromEntries(MODALIDADES);
+export const NOME_MODALIDADE = NOME_MOD;
 // METs pelas equações do ACSM (caminhada, corrida e cicloergômetro); o resto é manual
 export function calcMets({ modalidade, modo, velocidade_kmh, inclinacao_pct, watts, mets_manual }, peso) {
   const v = lerNum(velocidade_kmh), g = (lerNum(inclinacao_pct) || 0) / 100, w = lerNum(watts);
@@ -108,7 +109,9 @@ export function CardioAluna({ aluna, podeEditar = true }) {
     const semana = regs.filter((r) => r.data >= somaDias(hoje(), -((new Date().getDay() + 6) % 7)));
     return html`<div class="pilha">
       ${podeEditar && html`<button class="btn primario" onClick=${() => setModal({})}>+ Prescrever cardio</button>`}
-      ${!presc.filter((p) => p.ativo).length && html`<${Vazio} titulo="Sem cardio prescrito"/>`}
+      ${!podeEditar && html`<button class="btn primario grande" onClick=${() => setRegistrar({ modalidade: 'esteira', modo: 'caminhada', duracao_min: 30 })}>+ Registrar cardio</button>`}
+      ${!presc.filter((p) => p.ativo).length && (podeEditar ? html`<${Vazio} titulo="Sem cardio prescrito"/>`
+        : html`<p class="suave">O treinador ainda não passou um cardio fixo. Fez caminhada, bike ou corrida por conta? Registre no botão acima: entra na sua evolução.</p>`)}
       ${presc.filter((p) => p.ativo || podeEditar).map((p) => { const feitos = semana.filter((r) => r.prescricao_id === p.id).length;
         return html`<section class=${'card' + (p.ativo ? '' : ' apagado')}><div class="card-topo"><div><h3>${NOME_MOD[p.modalidade]} · ${p.duracao_min} min</h3>
           <small>${descCardio(p)}${p.mets ? ` · ${num(p.mets, 1)} METs` : ''} · ${p.vezes_semana}x por semana${p.momento ? ' · ' + p.momento.replace('_', ' ') : ''}</small></div>

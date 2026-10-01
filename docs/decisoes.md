@@ -129,3 +129,16 @@ Modelo:
 **Decisão**: o gráfico de progressão por série usa quatro cores novas em `:root` (`--serie-1` a `--serie-4`: azul, laranja, verde-água e amarelo).
 **Por quê**: o roxo da marca não serve para separar várias linhas. As quatro cores passaram pelo validador de paleta no fundo escuro do app: diferença para daltonismo ΔE ≥ 8 e contraste ≥ 3:1. Os tons de estado (`--ok`, `--atencao`, `--perigo`) continuam reservados para estado.
 
+## 2026-10-01 · E-mails pelo Resend, com a marca do Nemesis
+**Decisão**: os e-mails de login (confirmação, nova senha, troca de e-mail, código) saem pelo Resend via SMTP do Supabase, com modelos próprios em `supabase/emails/` no visual do app (escuro, roxo, logo, tom da §8).
+**Por quê**: o SMTP embutido do Supabase manda poucos e-mails por hora e é só para teste; o Resend tem plano grátis para alguns milhares de e-mails por mês e deixa o remetente com o domínio da consultoria.
+**Consequências**: precisa de um domínio próprio verificado no Resend. A chave da API fica só no painel do Supabase. A Política de Privacidade passou a citar o Resend pelo nome entre os operadores (antes dizia "o serviço que envia os e-mails"), sem nova versão dos termos.
+
+## 2026-10-01 · Home da aluna com cara de Grécia antiga
+**Decisão**: a home da aluna ganhou ícones gregos (elmo, coluna, tocha, louros, ânfora), uma faixa de grega e a água virou uma ânfora que enche, com copos de 250 ml. O Cardio aparece sempre, mesmo sem prescrição, e a aluna pode registrar cardio livre.
+**Por quê**: retorno de aluna testando o app: faltava o cardio na primeira página, a água podia ser mais interativa e o layout podia ser mais autêntico, com a marca do Nemesis. Os nomes das funções não mudaram (regra de não inventar nome grego novo sem aprovação); só o visual.
+**Próximo passo**: levar o mesmo visual às outras telas (roadmap, seção 13).
+
+## 2026-10-01 · Domínio nemesis.wiki.br
+**Decisão**: o Luiz comprou `nemesis.wiki.br`. Os e-mails saem de `nao-responda@mail.nemesis.wiki.br` (subdomínio só de envio, verificado no Resend). Levar o app para o domínio é um passo separado, feito só depois do DNS pronto, para não tirar o app do ar.
+
