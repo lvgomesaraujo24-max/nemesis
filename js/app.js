@@ -41,6 +41,7 @@ function App() {
   else if (erro) tela = html`<div class="entrada"><div class="card vazio"><p>${erro}</p><button class="btn" onClick=${() => carregarPerfil()}>Tentar de novo</button><button class="btn-texto" onClick=${() => api.sair()}>Sair</button></div></div>`;
   else if (!perfil) tela = html`<div class="carregando cheio"><span class="spin"></span></div>`;
   else if (perfil.role === 'coach') tela = html`<${AppCoach} perfil=${perfil} rota=${rota} ir=${ir}/>`;
+  else if (!perfil.ativo && perfil.aguardando) tela = html`<div class="entrada"><div class="card vazio"><h3>Cadastro recebido</h3><p>Seu treinador vai conferir e liberar o seu acesso. Assim que ele liberar, é só abrir o app de novo.</p><button class="btn" onClick=${() => carregarPerfil()}>Já fui liberada</button><button class="btn-texto" onClick=${() => api.sair()}>Sair</button></div></div>`;
   else if (!perfil.ativo) tela = html`<div class="entrada"><div class="card vazio"><h3>Acesso pausado</h3><p>Seu acesso está pausado no momento. Fale com o seu treinador para reativar.</p><button class="btn" onClick=${() => api.sair()}>Sair</button></div></div>`;
   else tela = html`<${AppAluna} perfil=${perfil} rota=${rota} ir=${ir} recarregarPerfil=${() => carregarPerfil()}/>`;
 

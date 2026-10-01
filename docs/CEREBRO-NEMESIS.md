@@ -1,8 +1,17 @@
 # NEMESIS · Cérebro do projeto
 
 > Fonte primária do app Nemesis. Reúne o que o app é, como foi construído, onde cada coisa mora, todas as regras de cálculo ("inteligência") e o plano daqui para frente.
-> Dono do produto: **Luiz (LV TEAM · LV Coach)**. Repositório: `github.com/lvgomesaraujo24-max/nemesis`. App no ar: `https://lvgomesaraujo24-max.github.io/nemesis/`.
-> Versão deste documento: **30/09/2026**, cache do app `nemesis-v9`, banco até a `atualizacao-9.sql`.
+> Dono do produto: **Luiz (LV TEAM · LV Coach)**. Repositório: `github.com/lvgomesaraujo24-max/nemesis`. Endereço do app: `https://lvgomesaraujo24-max.github.io/nemesis/`.
+> Versão deste documento: **01/10/2026**. Descreve o código do PR #2 (cache `nemesis-v10`, banco até a `atualizacao-11.sql`).
+
+### Status real (leia antes de tudo)
+
+| Onde | Versão | Banco |
+|---|---|---|
+| **Produção** (branch `main`, o que as alunas usam hoje) | `nemesis-v6` | até a `atualizacao-6.sql` |
+| **PR #2** (branch `claude/compassionate-mccarthy-3py13z`, consolidado, aguardando merge) | `nemesis-v10` | até a `atualizacao-11.sql` |
+
+Enquanto o PR #2 não for juntado ao `main` e as atualizações 7 a 11 não forem rodadas no Supabase, **o que este documento descreve além da v6 não está no ar.** O PR #3 (relatório com deusa, missão e card de Stories) foi incorporado ao PR #2; a migração dele virou a `atualizacao-10.sql`. O branch `claude/happy-lovelace-qmbtuq` (CLAUDE.md, docs e skills para o Claude Code) existe, mas não faz parte do PR #2.
 
 ---
 
@@ -147,7 +156,7 @@ Regras:
 - Todo acesso ao banco passa por `api.*`. Nunca chamar o Supabase direto numa tela.
 - Todo recurso novo precisa funcionar também no modo demonstração (`demo.js` tem a mesma interface).
 - Campos novos do banco só vão no salvar quando preenchidos ou alterados, para o app não quebrar antes de o SQL novo ser rodado.
-- Erro de coluna ou tabela inexistente vira a mensagem "rode as atualizações 5 a 9" (`traduzErro` em `api.js`).
+- Erro de coluna ou tabela inexistente vira a mensagem "rode as atualizações 5 a 11" (`traduzErro` em `api.js`).
 
 ---
 
@@ -203,7 +212,7 @@ Um formulário com "bloqueia o app" (ex.: Alistamento) aparece antes de qualquer
 ### Ordem de instalação
 
 1. `supabase/schema.sql` (base)
-2. `atualizacao-2.sql` até `atualizacao-9.sql`, **nessa ordem**. Todas podem rodar mais de uma vez.
+2. `atualizacao-2.sql` até `atualizacao-11.sql`, **nessa ordem**. Todas podem rodar mais de uma vez (testado num Postgres 16 simulando o Supabase: o conjunto inteiro rodou duas vezes seguidas sem erro). **Não rode uma atualização antiga depois de uma nova**: a 2 recria funções que a 11 protege.
 
 | Arquivo | O que liga |
 |---|---|
@@ -216,12 +225,15 @@ Um formulário com "bloqueia o app" (ex.: Alistamento) aparece antes de qualquer
 | `atualizacao-7` | Protocolo e diâmetros da avaliação, arquivos da aluna, bucket `arquivos` |
 | `atualizacao-8` | Cadência por tipo, grupos de método, séries detalhadas, RIR real, vídeos de execução, todos os protocolos, autoavaliação, dia de revisão, combo nutri, aulas presenciais |
 | `atualizacao-9` | Modelos com objetivo/frequência/duração, prazo nos formulários, pose das fotos, convites |
+| `atualizacao-10` | Relatório: palavra do treinador e missão do mês salvas no banco (`relatorio_notas`) |
+| `atualizacao-11` | Correções da auditoria: cadastro sem convite aguardando aprovação, leitura da metodologia só por aluna ativa, limites contra robôs no formulário público |
 
-### Tabelas (38)
+### Tabelas (39)
 
 **Pessoas e acesso**
 - `profiles`: um por conta (id = `auth.users.id`). `role` (coach/student), `nome`, `email`, `telefone`, `nascimento`, `sexo` (F/M), `objetivo`, `ativo`, `anamnese_ok`, `alistada_em`, `treinos_semana_alvo`, `nivel` (iniciante/intermediaria/avancada), `ciclo_rastrear`, `ciclo_duracao_media`, `contracepcao`, `dia_revisao` (0 = domingo … 6), `combo_nutri`.
 - `convites`: `token`, `nome`, `email`, `telefone`, `objetivo`, `expira_em`, `usado_em`, `aluna_id`.
+- `profiles.aguardando`: conta criada sem convite, pausada até o treinador liberar.
 
 **Treino**
 - `exercicios`: biblioteca. `nome`, `grupo`, vídeo, instruções, `musculos` {primarios, secundarios}, `equipamento`, `articulacao`, `perfil_resistencia`, `substitutos[]`.
@@ -248,6 +260,7 @@ Um formulário com "bloqueia o app" (ex.: Alistamento) aparece antes de qualquer
 - `formularios` (tipo: oraculo, alistamento, livre; `versao`), `perguntas` (tipos: escala, multipla, caixas, sim_nao, numero, texto_curto, texto_longo, data, mapa_corporal, rir, ciclo; `mostrar_se`, `titulo_variantes`), `dicas_condicionais`, `mensagens_abertura`, `atribuicoes` (quando: agora, programado, recorrente; `entrega`: manual ou fim_treino; `bloqueia_app`; `prazo`), `envios`, `respostas`, `dica_exibicoes`, `alertas_coach`.
 
 **Treinador**
+- `relatorio_notas`: palavra do treinador e missão (até 3 focos) por aluna e período do relatório; a aluna lê, só o treinador escreve.
 - `dossie` (tags: lesao, pausa, psicologia, ajuste_rota) e `dossie_versoes`: só o treinador vê, ninguém apaga, toda edição vira versão.
 - `agenda`: `tipo` (video, presencial, avaliacao, ritual, lembrete, outro), `inicio`, `feito`, `link`, recorrência.
 - `visoes_estado`: o que foi visto, resolvido, adiado ou feito na Acrópole.
@@ -263,10 +276,12 @@ Um formulário com "bloqueia o app" (ex.: Alistamento) aparece antes de qualquer
 | Função | O que faz |
 |---|---|
 | `is_coach()` | Diz se quem está logado é o treinador (base de todas as regras de acesso) |
-| `handle_new_user()` (gatilho) | Cria o perfil no cadastro. Primeira conta = treinador. Com convite válido, já grava nome, WhatsApp e objetivo e marca o convite como usado |
-| `protege_perfil()` (gatilho) | Aluna não altera `role`, `ativo`, `treinos_semana_alvo`, `alistada_em`, `nivel`, `dia_revisao`, `combo_nutri` |
+| `handle_new_user()` (gatilho) | Cria o perfil no cadastro. Primeira conta = treinador. Com convite válido: aluna ativa com nome, WhatsApp e objetivo, e o convite é marcado como usado (depois de o perfil existir). Sem convite: aluna **pausada aguardando aprovação** |
+| `protege_perfil()` (gatilho) | Aluna não altera `role`, `ativo`, `aguardando`, `treinos_semana_alvo`, `alistada_em`, `nivel`, `dia_revisao`, `combo_nutri` |
+| `is_aluna_ativa()` | Diz se quem está logado é aluna ativa (base da leitura da metodologia) |
+| `leads_limites()` (gatilho) | Formulário público: nome de 2 a 120 letras, WhatsApp de 10 a 15 dígitos, até 3 inscrições por WhatsApp por hora e até 20 inscrições no total a cada 10 minutos |
 | `ver_convite(token)` | Tela de entrada lê nome, e-mail e validade de um convite sem estar logada |
-| `montar_formulario(formulario, aluna?)` | Monta o pacote do formulário vivo com o contexto da aluna (seção 6.11) |
+| `montar_formulario(formulario, aluna?)` | Monta o pacote do formulário vivo com o contexto da aluna (seção 6.11). Só treinador ou aluna ativa; a lógica fica em `montar_formulario_base`, fechada para chamada direta |
 | `enviar_formulario(...)` | Grava o envio, as respostas, as dores, o ciclo, as dicas mostradas e os alertas ao treinador. No Oráculo, também grava o `checkins` da semana |
 | `avaliar_regra(regra, fonte)` | Motor de regras no banco (igual ao `motor.js`) |
 | `fase_ciclo(aluna, dia)` | Fase estimada do ciclo menstrual (seção 6.12) |
@@ -515,6 +530,13 @@ Cada item pode ser marcado como visto, resolvido, feito ou adiado (3 dias), e so
 - **Recorde por exercício:** maior carga; empate na carga, mais repetições. Séries de aquecimento não contam.
 - **1RM estimado no Olimpo e no relatório:** Epley com teto de 12 repetições. No Olimpo, séries acima de 12 reps contam para a maior carga, mas não para o 1RM estimado; no relatório, contam como 12 reps. No índice de Progressão o teto é 20 (seção 6.7). As regras estão assim no código hoje.
 - Troféu "novo" = recorde dos últimos 7 dias.
+- **Deusa do período** (capa do relatório): a primeira regra que a aluna cumpre escolhe a deusa.
+  1. **Nike** (vitória): 5 ou mais recordes e aderência de 75% ou mais.
+  2. **Ártemis** (constância): 4 treinos ou mais e aderência de 90% ou mais.
+  3. **Sekhmet** (força): o exercício de maior ganho subiu 8% ou mais de força estimada.
+  4. **Atena** (estratégia): aderência de 70% ou mais.
+  5. **Héstia** (chama acesa): todos os outros casos, inclusive período sem treino.
+- **Páginas do relatório:** capa com a deusa, o mês em uma página (calendário, momentos, semana a semana), comparativo com o período anterior, carga e força, recordes e volume, frequência, mapa do corpo, bem-estar × desempenho e dor, avaliação física (20 medidas), metas e conquistas, jornada mês a mês, missão do próximo mês com a palavra do treinador e card 9:16 para os Stories (assinatura em `config.js`, campo `ASSINATURA`).
 - **Relatório** (mês, ficha/mesociclo ou período livre): treinos feitos contra previstos (meta × semanas), duração e esforço médios, tonelagem (carga × reps), séries efetivas, séries por grupamento, recordes (a melhor série de cada sessão contra tudo o que veio antes), força estimada (referência antes do período contra o melhor do período; destaques acima de +0,5%), peso, última avaliação contra a anterior e médias de bem-estar dos check-ins. Exporta PDF e envia pelo WhatsApp.
 
 ### 6.16 Crônica (Estrada)
@@ -547,7 +569,15 @@ Tags: lesão/desconforto (região, lado, dor EVA, mecanismo), pausa (início e f
 
 ### 6.21 Convite
 
-Link `#/convite/{token}`, com token de 128 bits aleatórios em hexadecimal, **válido por 7 dias** e de **uso único**. A conta criada já recebe nome, WhatsApp e objetivo. O cadastro sem convite continua aberto (decisão pendente).
+Link `#/convite/{token}`, com token de 128 bits aleatórios em hexadecimal, **válido por 7 dias** e de **uso único**. A conta criada já recebe nome, WhatsApp e objetivo e entra ativa.
+
+### 6.22 Cadastro sem convite (decisão do Luiz, 01/10/2026)
+
+Quem cria conta sem convite válido fica **pausada e aguardando aprovação**: vê a tela "Cadastro recebido" e não lê exercícios, formulários nem perguntas. O treinador vê o aviso na Acrópole e libera ou recusa na lista de Alunas ("Liberar" ativa a conta e marca hoje como dia do Alistamento; "Recusar" deixa a conta nas inativas).
+
+### 6.23 Formulário público contra robôs
+
+No aparelho: campo-isca invisível ("Empresa") e tempo mínimo de 5 segundos desde que a página abriu; se o robô cair na isca, a tela mostra sucesso e nada é gravado. No banco: os limites do gatilho `leads_limites` (seção 5).
 
 ---
 
@@ -556,6 +586,7 @@ Link `#/convite/{token}`, com token de 128 bits aleatórios em hexadecimal, **v�
 - A chave do `config.js` é **pública por natureza**. Quem protege os dados é o **RLS** (regras por linha no Postgres).
 - A aluna só lê e escreve o que é dela: execução, check-in, respostas, própria pasta de arquivos, autoavaliação (só protocolo "perimetria") e vídeos.
 - A aluna **não** edita ficha, avaliação do treinador, plano, financeiro nem os campos protegidos do perfil, e não vira treinadora.
+- Biblioteca de exercícios, formulários, perguntas, aberturas e dicas: só treinador e **aluna ativa** (conta pausada ou aguardando não lê).
 - Dossiê, financeiro, inscrições, convites, presets e modelos: só o treinador.
 - O formulário público só **insere** em `leads`, nunca lê.
 - Arquivos: bucket privado com link assinado de 1 hora.
@@ -592,7 +623,7 @@ Link `#/convite/{token}`, com token de 128 bits aleatórios em hexadecimal, **v�
 
 ### Publicar uma versão nova (checklist)
 1. Código no branch de trabalho → Pull Request → merge no `main`.
-2. Trocar `VERSAO` em `sw.js` (`nemesis-v9` → `nemesis-v10`) para os celulares baixarem a versão nova.
+2. Trocar `VERSAO` em `sw.js` (`nemesis-v10` → `nemesis-v11`) para os celulares baixarem a versão nova.
 3. Se houver SQL novo, rodar `supabase/atualizacao-N.sql` no SQL Editor.
 4. Em 1 ou 2 minutos o GitHub Pages atualiza. No celular, fechar e abrir o app.
 
@@ -704,7 +735,7 @@ React Native (Expo) ou Flutter. Custa uma reescrita das telas (as regras da seç
 
 | Fase | Prazo | Entregas |
 |---|---|---|
-| **0. Colocar no ar o que já foi feito** | 1 a 3 dias | Merge do PR #2; rodar `atualizacao-8` e `-9`; conferir Auth URLs; configurar SMTP próprio; testar com 2 ou 3 alunas reais |
+| **0. Colocar no ar o que já foi feito** | 1 a 3 dias | Merge do PR #2; rodar `atualizacao-7` a `-11`, em ordem; conferir Auth URLs; configurar SMTP próprio; testar com 2 ou 3 alunas reais |
 | **1. Piloto** | semanas 1 e 2 | Uso real com a turma; correções; responder as decisões pendentes (seção 15) |
 | **2. Robustez** | semanas 3 a 6 | Supabase Pro com backup; domínio próprio; LGPD (consentimento no Alistamento, política de privacidade, exclusão de dados); testes automáticos no GitHub Actions; regra de guarda dos vídeos |
 | **3. Lojas (Capacitor)** | semanas 6 a 10 | Empacotar; push; câmera; links profundos; contas nas lojas; enviar para revisão (Apple leva de dias a 2 semanas) |
@@ -724,7 +755,7 @@ O computador não guarda nada essencial. Tudo está na nuvem:
 4. **Acessos:** e-mail do GitHub, e-mail do Supabase, senha do banco. **Guardar num gerenciador de senhas**, fora do computador.
 5. **Este documento:** está em `docs/CEREBRO-NEMESIS.md` no repositório, então também fica salvo no GitHub.
 
-**Reconstruir do zero em outro lugar:** novo projeto Supabase → rodar `schema.sql` e as atualizações 2 a 9 → importar o backup → trocar URL e chave no `config.js` → publicar no GitHub Pages → ajustar as Auth URLs.
+**Reconstruir do zero em outro lugar:** novo projeto Supabase → rodar `schema.sql` e as atualizações 2 a 11 → importar o backup → trocar URL e chave no `config.js` → publicar no GitHub Pages → ajustar as Auth URLs.
 
 ---
 
@@ -733,13 +764,31 @@ O computador não guarda nada essencial. Tudo está na nuvem:
 1. **Petroski:** equação exata (feminina e masculina) para implementar.
 2. **FCmáx:** manter Tanaka (208 − 0,7 × idade) ou trocar por Shargal.
 3. **Semáforo:** confirmar a soma (6 − sono) + (6 − energia) + estresse + dor.
-4. **Cadastro:** passar a exigir convite (hoje qualquer pessoa com o link cria conta de aluna).
+4. ~~Cadastro~~: decidido em 01/10/2026, sem convite fica aguardando aprovação (seção 6.22).
 5. **Fundo:** escurecer de `#1a1a1a` para `#121212`.
 6. **Crônica:** mostrar também para a aluna ou manter só com o treinador.
 7. **Formulários:** recorrência quinzenal e mensal (hoje só semanal); pergunta com envio de imagem; link público genérico para qualquer formulário.
 8. **Guarda de vídeos:** por quanto tempo manter vídeos já corrigidos.
 
 ---
+
+## 15b. Auditoria técnica externa (AF Tecnologia, 30/09/2026)
+
+| Achado | Situação |
+|---|---|
+| Produção na v6, v9 em branches não publicados | Verdadeiro. PR #2 consolidado com o PR #3; falta o merge e rodar as atualizações 7 a 11 |
+| Duas "atualização-7" conflitantes | Verdadeiro. Resolvido: a do relatório virou `atualizacao-10.sql` |
+| Banco sem backup e com pausa (Supabase Free) | Verdadeiro. Depende de contratar o Supabase Pro |
+| Cadastro aberto lê a metodologia | Verdadeiro. Resolvido na `atualizacao-11.sql` |
+| Aluna edita a própria meta e nível | **Falso**: meta protegida desde a atualização 2 e nível desde a 6 |
+| Formulário público sem anti-robô | Verdadeiro. Resolvido (isca, tempo mínimo e limites no banco) |
+| E-mails limitados | Verdadeiro. Depende de configurar SMTP próprio |
+| "Primeira conta vira treinador" | Verdadeiro, risco só numa reconstrução do banco. Não alterado |
+| Sem monitoramento, publicação manual, código público | Verdadeiros. Não alterados |
+| Testes automáticos não estão no repositório | Verdadeiro. Os testes rodam no ambiente de desenvolvimento, fora do repositório |
+| LGPD (consentimento, privacidade, exclusão, menores, Dossiê imutável × eliminação) | Verdadeiros. Pendentes, com textos a validar por advogado |
+
+**Achado da própria correção:** o cadastro pelo convite falhava no banco (o convite apontava para um perfil que ainda não existia). Corrigido na `atualizacao-9.sql` e na `atualizacao-11.sql`, antes de ir para produção.
 
 ## 16. Histórico
 
@@ -750,5 +799,7 @@ O computador não guarda nada essencial. Tudo está na nuvem:
 | — | Relatório de evolução; painel minimalista estilo HypeFit; Forja (prescrição, tempo, volume, mapa do corpo) |
 | — | Modelos, presets, mesociclo com progressão; Tesouro, Chronos, biblioteca nível 3, Radar (PR #1, merge) |
 | 30/09/2026 | Ficha 360; Arena, Prova, Oráculo com semáforo, Olimpo, Crônica, Templo; índices 0–100 com tendência; convite com link; fotos lado a lado (PR #2, atualizações 8 e 9) |
+| 30/09/2026 | Relatório com deusa, missão e card de Stories (PR #3, outra sessão) |
+| 01/10/2026 | Auditoria técnica externa; PR #3 incorporado ao PR #2 (atualização 10); cadastro com aprovação e anti-robô (atualização 11); correção do convite |
 
-**Números do código (30/09/2026):** 25 arquivos JS (~5.900 linhas), CSS ~990 linhas, 10 arquivos SQL (~1.700 linhas), 38 tabelas.
+**Números do código (01/10/2026, PR #2):** 26 arquivos JS (~6.600 linhas), CSS ~1.210 linhas, 12 arquivos SQL (~1.870 linhas), 39 tabelas.

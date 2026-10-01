@@ -144,11 +144,13 @@ function Alunas({ ir }) {
     <${Estado} e=${e}>${({ alunas, radar }) => {
       const ativas = alunas.filter((a) => a.ativo);
       const saude = Object.fromEntries(alunas.map((a) => [a.id, saudeDa(a, radar)]));
-      const lista = alunas.filter((a) => a.ativo !== inativas && (a.nome || '').toLowerCase().includes(busca.toLowerCase()));
+      const aguardando = alunas.filter((a) => !a.ativo && a.aguardando);
+      const lista = alunas.filter((a) => a.ativo !== inativas && !(inativas && a.aguardando) && (a.nome || '').toLowerCase().includes(busca.toLowerCase()));
       const chave = { engajamento: (a) => (saude[a.id].engajamento == null ? 999 : saude[a.id].engajamento), progressao: (a) => (saude[a.id].progIndice == null ? 999 : saude[a.id].progIndice), risco: (a) => -saude[a.id].risco };
       if (chave[ordem]) lista.sort((x, y) => chave[ordem](x) - chave[ordem](y));
-      const nInat = alunas.filter((a) => !a.ativo).length;
-      return html`${ativas.length > 0 && !inativas && html`<${Radar} alunas=${ativas} saude=${saude} ir=${ir}/>`}
+      const nInat = alunas.filter((a) => !a.ativo && !a.aguardando).length;
+      return html`${aguardando.length > 0 && html`<${Aguardando} lista=${aguardando} onFeito=${e.recarregar}/>`}
+        ${ativas.length > 0 && !inativas && html`<${Radar} alunas=${ativas} saude=${saude} ir=${ir}/>`}
         <div class="alunas-filtro"><input class="input" type="search" placeholder="Buscar pelo nome" value=${busca} onInput=${(ev) => setBusca(ev.target.value)}/>
           <select class="input" aria-label="Ordenar" onChange=${(ev) => mudaOrdem(ev.target.value)}>${ORDENS.map(([k, r]) => html`<option value=${k} selected=${ordem === k}>${r}</option>`)}</select></div>
         ${!lista.length ? html`<${Vazio} titulo=${alunas.length ? 'Ninguém encontrado' : 'Nenhuma aluna ainda'} texto=${alunas.length ? '' : 'Mande o link do app para a aluna criar a conta. Ela aparece aqui na hora.'}/>` : null}
@@ -170,6 +172,18 @@ function Alunas({ ir }) {
 const novoToken = () => { const b = new Uint8Array(16); crypto.getRandomValues(b); return [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); };
 const linkConvite = (token) => `${location.origin + location.pathname}#/convite/${token}`;
 const msgConvite = (c) => `Oi${c.nome ? ', ' + c.nome.split(' ')[0] : ''}! Seja bem-vinda ao time 💜\n\nSeu app de treino é o Nemesis. É por ele que você vai ver sua ficha, registrar as cargas e mandar o check-in da semana.\n\n1. Abra este link (vale por 7 dias): ${linkConvite(c.token)}\n2. Crie a sua senha\n3. Preencha o Alistamento (leva uns 5 minutos)\n\nNo celular, toque em "Adicionar à tela de início" para ele virar um app. Qualquer dúvida, me chama aqui.`;
+// cadastro feito sem convite: fica pausado até o treinador aprovar (atualização 11)
+function Aguardando({ lista, onFeito }) {
+  const decidir = async (a, aprovar) => {
+    if (!aprovar && !confirm(`Recusar o cadastro de ${a.nome || a.email}? A conta continua pausada e vai para as inativas.`)) return;
+    try { await api.upd('profiles', a.id, aprovar ? { ativo: true, aguardando: false, alistada_em: hoje() } : { aguardando: false }); toast(aprovar ? 'Acesso liberado' : 'Cadastro recusado', 'ok'); onFeito(); }
+    catch (err) { toast(err.message, 'erro'); }
+  };
+  return html`<section class="card aguardando"><div class="card-topo"><div><h3>Aguardando aprovação</h3><small>Contas criadas sem convite. Só entram depois que você liberar.</small></div><span class="tag atencao">${lista.length}</span></div>
+    <ul class="lista">${lista.map((a) => html`<li class="linha"><div><b>${a.nome || 'Sem nome'}</b><small>${a.email || ''} · cadastro ${relativo(a.created_at)}</small></div>
+      <div class="mini-acoes"><button class="btn mini" onClick=${() => decidir(a, true)}>Liberar</button><button class="btn-texto perigo" onClick=${() => decidir(a, false)}>Recusar</button></div></li>`)}</ul></section>`;
+}
+
 function Convite({ onFechar }) {
   const e = useCarregar(() => api.q('convites', { order: 'created_at', asc: false }).catch(() => null), []);
   const [f, setF] = useState({ nome: '', email: '', telefone: '', objetivo: '' });

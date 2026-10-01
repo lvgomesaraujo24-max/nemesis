@@ -52,13 +52,17 @@ begin
     v_role := 'coach';
   end if;
   if v_role = 'student' and (new.raw_user_meta_data->>'convite') is not null then
-    update public.convites set usado_em = now(), aluna_id = new.id
+    select * into v_conv from public.convites
       where token = new.raw_user_meta_data->>'convite' and usado_em is null and expira_em > now()
-      returning * into v_conv;
+      for update;
   end if;
   insert into public.profiles (id, email, nome, role, telefone, objetivo)
   values (new.id, new.email, coalesce(nullif(new.raw_user_meta_data->>'nome', ''), v_conv.nome, ''), v_role, v_conv.telefone, v_conv.objetivo)
   on conflict (id) do nothing;
+  -- o perfil precisa existir antes de o convite apontar para ele
+  if v_conv.id is not null then
+    update public.convites set usado_em = now(), aluna_id = new.id where id = v_conv.id;
+  end if;
   return new;
 end $$;
 

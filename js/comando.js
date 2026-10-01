@@ -249,8 +249,9 @@ export function Acropole({ perfil, ir }) {
 // ---------- Templo: fila do dia (o que precisa de você antes de qualquer outra coisa) ----------
 async function carregarFila() {
   const pega = (t, o) => api.q(t, o).catch(() => []);
-  const [alunas, checkins, videos] = await Promise.all([pega('profiles', { eq: { role: 'student', ativo: true } }),
-    pega('checkins', { gte: { semana: somaDias(hoje(), -14) } }), pega('videos_execucao', { order: 'created_at' })]);
+  const [alunas, checkins, videos, aguardando] = await Promise.all([pega('profiles', { eq: { role: 'student', ativo: true } }),
+    pega('checkins', { gte: { semana: somaDias(hoje(), -14) } }), pega('videos_execucao', { order: 'created_at' }),
+    pega('profiles', { eq: { role: 'student', aguardando: true } })]);
   const ativas = new Set(alunas.map((a) => a.id));
   const ultimo = {};
   checkins.filter((c) => ativas.has(c.aluna_id)).forEach((c) => { if (!ultimo[c.aluna_id] || ultimo[c.aluna_id].semana < c.semana) ultimo[c.aluna_id] = c; });
@@ -261,6 +262,7 @@ async function carregarFila() {
     videos: videos.filter((v) => !v.correcao && ativas.has(v.aluna_id)),
     vermelhas,
     revisao: alunas.filter((a) => a.dia_revisao === dow),
+    aguardando: aguardando.filter((a) => !a.ativo),
   };
 }
 function FilaDoDia({ f, ir }) {
@@ -269,6 +271,8 @@ function FilaDoDia({ f, ir }) {
   const nomes = (l) => (l.length ? l.slice(0, 3).map((a) => pn(a.nome)).join(', ') + (l.length > 3 ? ` +${l.length - 3}` : '') : null);
   const umaSo = (l, aba) => (l.length === 1 ? () => ir(`aluna/${l[0].aluna_id || l[0].id}/${aba}`) : null);
   return html`<section class="templo">
+    ${f.aguardando.length > 0 && html`<button class="lacre aguardando-aviso" onClick=${() => ir('alunas')}><span class="lacre-ponto" aria-hidden="true"></span>
+      <span><b>${f.aguardando.length} cadastro(s) aguardando aprovação</b> · ${nomes(f.aguardando)}</span><span class="lacre-ver">Ver</span></button>`}
     <div class="templo-cab"><h2 class="bloco">Fila do dia</h2><small>${total ? `${total} coisa(s) esperando você` : 'Nada na fila. Dia limpo.'}</small></div>
     <div class="templo-itens">
       ${item(f.semResposta, 'check-ins sem resposta', null, () => ir('checkins'), 'atencao')}
