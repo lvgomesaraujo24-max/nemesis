@@ -42,6 +42,25 @@ function criarSupabase() {
     async subirArquivo(caminho, arquivo) { erro(await sb.storage.from('arquivos').upload(caminho, arquivo, { contentType: arquivo.type || undefined, upsert: false })); },
     async linkArquivo(caminho) { return erro(await sb.storage.from('arquivos').createSignedUrl(caminho, 3600)).signedUrl; },
     async apagarArquivo(caminho) { erro(await sb.storage.from('arquivos').remove([caminho])); },
+    // todos os arquivos de uma pasta e das subpastas (ex.: tudo da aluna, para a exclusão completa)
+    async listarArquivos(pasta) {
+      const out = [];
+      const ler = async (p) => {
+        const itens = erro(await sb.storage.from('arquivos').list(p, { limit: 1000 })) || [];
+        for (const it of itens) { if (it.id) out.push(`${p}/${it.name}`); else await ler(`${p}/${it.name}`); }
+      };
+      await ler(pasta); return out;
+    },
+    // como q, mas busca de 1.000 em 1.000 até o fim (o Supabase corta em 1.000 linhas por consulta)
+    async todos(tabela, { eq = {}, order = 'id', asc = true } = {}) {
+      const out = [];
+      for (let de = 0; ; de += 1000) {
+        let r = sb.from(tabela).select('*');
+        for (const [k, v] of Object.entries(eq)) r = v === null ? r.is(k, null) : r.eq(k, v);
+        const parte = erro(await r.order(order, { ascending: asc }).range(de, de + 999)) || [];
+        out.push(...parte); if (parte.length < 1000) return out;
+      }
+    },
     // tempo real: chama fn quando entra linha nova em alguma das tabelas; devolve a função que desliga
     aoInserir(tabelas, fn) {
       const canal = sb.channel('nemesis-' + tabelas.join('-') + '-' + Math.random().toString(36).slice(2, 7));
@@ -58,7 +77,8 @@ function traduzErro(m) {
   if (/Password should be at least/i.test(m)) return 'A senha precisa ter pelo menos 6 caracteres.';
   if (/Email not confirmed/i.test(m)) return 'Confirme seu e-mail pelo link que chegou na sua caixa de entrada.';
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Sem conexão com o servidor. Confira sua internet.';
-  if (/(column|coluna|relation|relação).*(does not exist|não existe)|Could not find the '.*' (column|table)|schema cache/i.test(m)) return 'O banco precisa das atualizações novas: rode no SQL Editor do Supabase as atualizações 5 a 11 (pasta supabase), nessa ordem.';
+  if (/row-level security.*(arquivos_aluna|videos_execucao)/i.test(m)) return 'Para enviar fotos e vídeos, autorize em Perfil > Privacidade.';
+  if (/(column|coluna|relation|relação).*(does not exist|não existe)|Could not find the '.*' (column|table)|schema cache/i.test(m)) return 'O banco precisa das atualizações novas: rode no SQL Editor do Supabase as atualizações 5 a 12 (pasta supabase), nessa ordem.';
   return m;
 }
 

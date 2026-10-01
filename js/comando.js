@@ -8,6 +8,7 @@ import { abrirSelo } from './dossie.js';
 import { Modal, Campo, toast, num, brl, dataBR, hoje, somaDias, diasEntre, linkWhats, semaforo } from './util.js';
 import { Icone } from './icones.js';
 import { ModalCompromisso, dataLocal } from './chronos.js';
+import { legalPreenchido } from './legal.js';
 
 const CACHE = 'nemesis-acropole';
 const PESO = { critica: 100, atencao: 60, tarefa: 40, gloria: 20 };
@@ -249,9 +250,9 @@ export function Acropole({ perfil, ir }) {
 // ---------- Templo: fila do dia (o que precisa de você antes de qualquer outra coisa) ----------
 async function carregarFila() {
   const pega = (t, o) => api.q(t, o).catch(() => []);
-  const [alunas, checkins, videos, aguardando] = await Promise.all([pega('profiles', { eq: { role: 'student', ativo: true } }),
+  const [alunas, checkins, videos, aguardando, pedidos] = await Promise.all([pega('profiles', { eq: { role: 'student', ativo: true } }),
     pega('checkins', { gte: { semana: somaDias(hoje(), -14) } }), pega('videos_execucao', { order: 'created_at' }),
-    pega('profiles', { eq: { role: 'student', aguardando: true } })]);
+    pega('profiles', { eq: { role: 'student', aguardando: true } }), pega('solicitacoes_privacidade', { eq: { status: 'aberta' }, order: 'criada_em' })]);
   const ativas = new Set(alunas.map((a) => a.id));
   const ultimo = {};
   checkins.filter((c) => ativas.has(c.aluna_id)).forEach((c) => { if (!ultimo[c.aluna_id] || ultimo[c.aluna_id].semana < c.semana) ultimo[c.aluna_id] = c; });
@@ -263,6 +264,7 @@ async function carregarFila() {
     vermelhas,
     revisao: alunas.filter((a) => a.dia_revisao === dow),
     aguardando: aguardando.filter((a) => !a.ativo),
+    pedidos,
   };
 }
 function FilaDoDia({ f, ir }) {
@@ -271,6 +273,9 @@ function FilaDoDia({ f, ir }) {
   const nomes = (l) => (l.length ? l.slice(0, 3).map((a) => pn(a.nome)).join(', ') + (l.length > 3 ? ` +${l.length - 3}` : '') : null);
   const umaSo = (l, aba) => (l.length === 1 ? () => ir(`aluna/${l[0].aluna_id || l[0].id}/${aba}`) : null);
   return html`<section class="templo">
+    ${f.pedidos.length > 0 && html`<button class="lacre pedidos-aviso" onClick=${() => ir(f.pedidos[0].aluna_id ? `aluna/${f.pedidos[0].aluna_id}/dados` : 'alunas')}><span class="lacre-ponto" aria-hidden="true"></span>
+      <span><b>${f.pedidos.length} pedido(s) de privacidade em aberto</b> · o mais antigo há ${diasEntre(String(f.pedidos[0].criada_em).slice(0, 10), hoje())} dia(s). A LGPD dá 15 dias para responder.</span><span class="lacre-ver">Ver</span></button>`}
+    ${!legalPreenchido() && html`<p class="nota atencao">Preencha os seus dados de responsável pelos dados (nome, CPF ou CNPJ, e-mail e CREF) em <b>config.js</b>, no campo LEGAL. Eles aparecem na Política de Privacidade e nos Termos de Uso que as alunas aceitam.</p>`}
     ${f.aguardando.length > 0 && html`<button class="lacre aguardando-aviso" onClick=${() => ir('alunas')}><span class="lacre-ponto" aria-hidden="true"></span>
       <span><b>${f.aguardando.length} cadastro(s) aguardando aprovação</b> · ${nomes(f.aguardando)}</span><span class="lacre-ver">Ver</span></button>`}
     <div class="templo-cab"><h2 class="bloco">Fila do dia</h2><small>${total ? `${total} coisa(s) esperando você` : 'Nada na fila. Dia limpo.'}</small></div>

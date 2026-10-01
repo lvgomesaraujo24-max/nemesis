@@ -2,6 +2,7 @@ import { html, render, useState, useEffect } from '../lib/preact-htm.js';
 import { api, DEMO } from './api.js';
 import { AppCoach } from './coach.js';
 import { AppAluna } from './aluna.js';
+import { PrivacidadeAluna, CONTROLADOR } from './legal.js';
 import { Toasts, Campo, Modal, toast } from './util.js';
 
 // convite com link único: guarda o token antes de a rota ser limpa
@@ -41,12 +42,24 @@ function App() {
   else if (erro) tela = html`<div class="entrada"><div class="card vazio"><p>${erro}</p><button class="btn" onClick=${() => carregarPerfil()}>Tentar de novo</button><button class="btn-texto" onClick=${() => api.sair()}>Sair</button></div></div>`;
   else if (!perfil) tela = html`<div class="carregando cheio"><span class="spin"></span></div>`;
   else if (perfil.role === 'coach') tela = html`<${AppCoach} perfil=${perfil} rota=${rota} ir=${ir}/>`;
-  else if (!perfil.ativo && perfil.aguardando) tela = html`<div class="entrada"><div class="card vazio"><h3>Cadastro recebido</h3><p>Seu treinador vai conferir e liberar o seu acesso. Assim que ele liberar, é só abrir o app de novo.</p><button class="btn" onClick=${() => carregarPerfil()}>Já fui liberada</button><button class="btn-texto" onClick=${() => api.sair()}>Sair</button></div></div>`;
-  else if (!perfil.ativo) tela = html`<div class="entrada"><div class="card vazio"><h3>Acesso pausado</h3><p>Seu acesso está pausado no momento. Fale com o seu treinador para reativar.</p><button class="btn" onClick=${() => api.sair()}>Sair</button></div></div>`;
+  else if (!perfil.ativo && perfil.aguardando) tela = html`<div class="entrada"><div class="card vazio"><h3>Cadastro recebido</h3><p>Seu treinador vai conferir e liberar o seu acesso. Assim que ele liberar, é só abrir o app de novo.</p><p class="entrada-legal"><a href="legal.html#privacidade" target="_blank" rel="noopener">Política de Privacidade</a></p><button class="btn" onClick=${() => carregarPerfil()}>Já fui liberada</button><button class="btn-texto" onClick=${() => api.sair()}>Sair</button></div></div>`;
+  else if (!perfil.ativo) tela = html`<${AcessoPausado} perfil=${perfil}/>`;
   else tela = html`<${AppAluna} perfil=${perfil} rota=${rota} ir=${ir} recarregarPerfil=${() => carregarPerfil()}/>`;
 
   return html`${DEMO && html`<div class="faixa-demo">Modo demonstração · dados de exemplo${usuario ? html` · <button class="btn-texto" onClick=${() => { api.reiniciar(); location.reload(); }}>restaurar dados</button>` : null}</div>`}
     ${tela}${recuperando && html`<${NovaSenha} onFeito=${() => setRecuperando(false)}/>`}<${Toasts}/>`;
+}
+
+// acesso pausado: o treino fica fechado, mas os direitos sobre os dados continuam (LGPD art. 18)
+function AcessoPausado({ perfil }) {
+  const [verDados, setVerDados] = useState(false);
+  return html`<div class="entrada"><div class="card pilha">
+    <h3>Acesso pausado</h3><p>Seu acesso está pausado no momento. Fale com o seu treinador para reativar.</p>
+    <small>Seus dados continuam seus: você pode baixar uma cópia ou pedir a exclusão. Contato do responsável pelos dados: ${CONTROLADOR.email}.</small>
+    <button class="btn" onClick=${() => setVerDados(!verDados)}>${verDados ? 'Fechar' : 'Meus dados e privacidade'}</button>
+    ${verDados && html`<${PrivacidadeAluna} perfil=${perfil}/>`}
+    <button class="btn-texto" onClick=${() => api.sair()}>Sair</button>
+  </div></div>`;
 }
 
 function NovaSenha({ onFeito }) {
@@ -86,6 +99,7 @@ function Entrada({ convite }) {
   };
   return html`<div class="entrada">
     <div class="entrada-marca"><h1 class="logo">NEMESIS</h1><p>Treino, evolução e acompanhamento no mesmo lugar.</p></div>
+    <p class="entrada-legal"><a href="legal.html#privacidade" target="_blank" rel="noopener">Política de Privacidade</a> · <a href="legal.html#termos" target="_blank" rel="noopener">Termos de Uso</a></p>
     ${DEMO ? html`<div class="card pilha">
         <p class="suave">O banco de dados ainda não foi ligado. Explore o app com dados de exemplo:</p>
         <button class="btn primario grande" onClick=${() => api.entrarComo('coach-demo')}>Entrar como treinador</button>

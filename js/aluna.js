@@ -6,6 +6,7 @@ import { ResponderFormulario, pendenciasDaAluna } from './vivo.js';
 import { CardioAluna, TestesAluna, MetasAluna, semanaDoMeso } from './extras.js';
 import { Relatorio } from './relatorio.js';
 import { ArquivosAluna } from './aluna360.js';
+import { TelaConsentimento, PrivacidadeAluna, consentimentoAtual, precisaConsentir, podeImagem, legalPreenchido } from './legal.js';
 import { Icone } from './icones.js';
 import { nomeMetodo, textoDescanso, textoEsforco, TIPOS, PERFIS, METODOS_GRUPO, textoCadencia } from './musculos.js';
 import { DEMO } from './api.js';
@@ -15,6 +16,17 @@ export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
   const [pulouAnamnese, setPulou] = useState(false);
   const [base, id, sub] = rota;
   const pend = useCarregar(() => (DEMO ? Promise.resolve([]) : pendenciasDaAluna(perfil.id).catch(() => [])), [perfil.id, base]);
+  // LGPD: sem o aceite dos termos e do consentimento de saúde (versão atual), nada do app abre
+  const cons = useCarregar(() => consentimentoAtual(perfil.id), [perfil.id]);
+  if (cons.carregando && cons.dados === null && !cons.erro) return html`<div class="carregando cheio"><span class="spin"></span></div>`;
+  // falha ao conferir o aceite (rede, sessão): não abre o app sem saber
+  if (cons.erro && (DEMO || legalPreenchido())) {
+    return html`<div class="tela"><header class="topo"><span class="marca">NEMESIS</span></header><main class="conteudo pilha">
+      <div class="boas-vindas"><h1>Não deu para carregar</h1><p class="suave">${cons.erro}</p></div>
+      <button class="btn primario grande" onClick=${cons.recarregar}>Tentar de novo</button>
+      <button class="btn-texto" onClick=${() => api.sair()}>Sair</button></main></div>`;
+  }
+  if (precisaConsentir(cons.dados)) return html`<${TelaConsentimento} perfil=${perfil} atual=${cons.dados || null} onFeito=${cons.recarregar}/>`;
   if (!perfil.anamnese_ok && !pulouAnamnese) {
     return html`<div class="tela"><header class="topo"><span class="marca">NEMESIS</span></header>
       <main class="conteudo">
@@ -42,7 +54,7 @@ export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
     <${Evolucao} alunaId=${perfil.id}/></div>`;
   else if (base === 'relatorio') tela = html`<div class="pilha"><button class="btn-texto" onClick=${() => ir('evolucao')}>‹ Evolução</button><h1 class="titulo">Relatório</h1><${Relatorio} aluna=${perfil}/></div>`;
   else if (base === 'checkin') tela = html`<${CheckinAluna} perfil=${perfil}/>`;
-  else if (base === 'perfil') tela = html`<${PerfilAluna} perfil=${perfil} recarregarPerfil=${recarregarPerfil}/>`;
+  else if (base === 'perfil') tela = html`<${PerfilAluna} perfil=${perfil} recarregarPerfil=${recarregarPerfil} onPrivacidade=${cons.recarregar}/>`;
   else tela = html`<${InicioAluna} perfil=${perfil} ir=${ir} pendentes=${(pend.dados || []).filter((p) => p.formulario.tipo !== 'oraculo')}/>`;
   const aba = base === 'treino' ? '' : base === 'relatorio' ? 'evolucao' : base || '';
   return html`<div class="tela com-nav">
@@ -154,6 +166,8 @@ function ExecucaoCorpo({ d, perfil, ir }) {
     const f = ev.target.files && ev.target.files[0]; ev.target.value = '';
     if (!f) return;
     if (f.size > 50 * 1024 * 1024) { toast('Vídeo muito grande (máximo 50 MB). Grave um trecho mais curto.', 'erro'); return; }
+    try { if (!(await podeImagem(perfil.id))) { toast('Para enviar vídeos, autorize fotos e vídeos em Perfil > Privacidade.', 'erro'); return; } }
+    catch (err) { toast(err.message, 'erro'); return; }
     const comentario = prompt('Quer deixar uma dúvida ou comentário para o treinador? (opcional)') || null;
     setEnviandoVideo(item.id);
     try {
@@ -395,7 +409,7 @@ function FormCheckin({ perfil, semana, treinos, onSalvo }) {
 }
 
 // ---------- perfil ----------
-function PerfilAluna({ perfil, recarregarPerfil }) {
+function PerfilAluna({ perfil, recarregarPerfil, onPrivacidade }) {
   const [aba, setAba] = useState('dados');
   const [f, setF] = useState({ nome: perfil.nome || '', telefone: perfil.telefone || '', nascimento: perfil.nascimento || '' });
   const ass = useCarregar(() => api.q('assinaturas', { eq: { aluna_id: perfil.id }, order: 'fim', asc: false, limit: 1 }), [perfil.id]);
@@ -405,7 +419,7 @@ function PerfilAluna({ perfil, recarregarPerfil }) {
     catch (err) { toast(err.message, 'erro'); }
   };
   return html`<div class="pilha"><h1 class="titulo">Perfil</h1>
-    <div class="abas">${[['dados', 'Dados'], ['metas', 'Metas'], ['avaliacoes', 'Avaliações'], ['arquivos', 'Fotos e arquivos'], ['testes', 'Testes'], ['anamnese', 'Alistamento']].map(([k, r]) => html`<button class=${aba === k ? 'on' : ''} onClick=${() => setAba(k)}>${r}</button>`)}</div>
+    <div class="abas">${[['dados', 'Dados'], ['metas', 'Metas'], ['avaliacoes', 'Avaliações'], ['arquivos', 'Fotos e arquivos'], ['testes', 'Testes'], ['anamnese', 'Alistamento'], ['privacidade', 'Privacidade']].map(([k, r]) => html`<button class=${aba === k ? 'on' : ''} onClick=${() => setAba(k)}>${r}</button>`)}</div>
     ${aba === 'dados' && html`
       <${Estado} e=${ass}>${(l) => { const a = l[0]; if (!a) return null; const resta = diasEntre(hoje(), a.fim);
         return html`<section class="card"><div class="card-topo"><h3>Plano ${a.plano_nome}</h3><span class=${'tag' + (resta < 0 ? ' perigo' : resta <= 10 ? ' atencao' : ' roxo')}>${resta < 0 ? 'vencido' : `${resta} dias`}</span></div>
@@ -419,7 +433,8 @@ function PerfilAluna({ perfil, recarregarPerfil }) {
       </form>
       <button class="btn" onClick=${() => api.sair()}>Sair da conta</button>`}
     ${aba === 'avaliacoes' && html`<${Avaliacoes} aluna=${perfil} podeEditar=${false}/>`}
-    ${aba === 'arquivos' && html`<${ArquivosAluna} aluna=${perfil} podeApagar=${false}/>`}
+    ${aba === 'arquivos' && html`<${ArquivosAluna} aluna=${perfil} daAluna=${true}/>`}
+    ${aba === 'privacidade' && html`<${PrivacidadeAluna} perfil=${perfil} onMudou=${onPrivacidade}/>`}
     ${aba === 'metas' && html`<${MetasAluna} aluna=${perfil} podeEditar=${false}/>`}
     ${aba === 'testes' && html`<${TestesAluna} aluna=${perfil} podeEditar=${false}/>`}
     ${aba === 'anamnese' && html`<${Anamnese} alunaId=${perfil.id} onSalvo=${recarregarPerfil}/>`}

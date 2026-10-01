@@ -93,6 +93,8 @@ function semear() {
   db.mesociclos = [{ id: uid(), aluna_id: 'aluna-ana', nome: 'Bloco glúteo 2', inicio: iso(diasAtras(20)), fim: iso(diasAtras(-21)), status: 'ativo',
     progressao: [{ rir: 3 }, { rir: 2 }, { rir: 2 }, { rir: 1 }, { rir: 1 }, { deload: true }], created_at: diasAtras(20).toISOString() }];
 
+  // aceite dos termos (LGPD) das alunas antigas; a Beatriz (nova) vê a tela de consentimento
+  db.consentimentos = ['aluna-ana', 'aluna-carol'].map((aluna_id) => ({ id: uid(), aluna_id, versao: '2026-10-01', termos: true, saude: true, imagem: true, menor: false, criado_em: diasAtras(30).toISOString() }));
   db.planos.push({ id: 'p1', nome: 'Ágora', meses: 1, valor: 247, ativo: true }, { id: 'p2', nome: 'Delfos', meses: 3, valor: 647, ativo: true }, { id: 'p3', nome: 'Ítaca', meses: 6, valor: 1197, ativo: true }, { id: 'p4', nome: 'Olimpo', meses: 12, valor: 1997, ativo: true });
 
   const somaMes = (d, m) => { const x = new Date(d); x.setMonth(x.getMonth() + m); return x; };
@@ -167,6 +169,8 @@ export function criarDemo() {
       await espera();
       const m = carregar(); const linhas = (Array.isArray(linha) ? linha : [linha]).map((r) => ({ id: uid(), created_at: new Date().toISOString(), ...r }));
       if (tabela === 'leads') linhas.forEach((r) => { r.status = r.status || 'novo'; });
+      if (tabela === 'arquivos_aluna') linhas.forEach((r) => { r.enviado_por = r.enviado_por || (m.usuario && m.usuario.id) || null; });
+      if (tabela === 'solicitacoes_privacidade') linhas.forEach((r) => { r.status = r.status || 'aberta'; r.criada_em = r.criada_em || r.created_at; });
       (m.db[tabela] = m.db[tabela] || []).push(...linhas); salvar(); return copia(linhas);
     },
     async enviar(tabela, linha) { await this.ins(tabela, linha); },
@@ -191,13 +195,29 @@ export function criarDemo() {
       if (tabela === 'modelos') { m.db.treinos = m.db.treinos.filter((r) => r.modelo_id !== id); m.db.treino_itens = m.db.treino_itens.filter((r) => r.modelo_id !== id); }
       salvar();
     },
-    async rpc() { throw new Error('Esta parte (Acrópole, formulários vivos) só funciona com o banco ligado.'); },
+    async rpc(nome, args = {}) {
+      if (nome === 'eliminar_aluna') { // mesma regra do banco: apaga tudo da aluna, o financeiro fica sem o vínculo
+        await espera(); const m = carregar(); const id = args.p_aluna;
+        const p = m.db.profiles.find((x) => x.id === id) || {};
+        (m.db.lancamentos || []).forEach((l) => { if (l.aluna_id === id) { l.aluna_id = null; l.assinatura_id = null; if (p.nome) l.descricao = String(l.descricao).replace(p.nome, 'aluna excluída'); } });
+        (m.db.solicitacoes_privacidade || []).forEach((x) => { if (x.aluna_id === id) { x.aluna_id = null; x.detalhe = null; if (x.status === 'aberta') x.status = 'atendida'; } });
+        const envios = new Set((m.db.envios || []).filter((x) => x.aluna_id === id).map((x) => x.id));
+        const notas = new Set((m.db.dossie || []).filter((x) => x.aluna_id === id).map((x) => x.id));
+        m.db.respostas = (m.db.respostas || []).filter((x) => !envios.has(x.envio_id));
+        m.db.dossie_versoes = (m.db.dossie_versoes || []).filter((x) => !notas.has(x.nota_id));
+        Object.keys(m.db).forEach((t) => { if (Array.isArray(m.db[t]) && !['lancamentos', 'solicitacoes_privacidade'].includes(t)) m.db[t] = m.db[t].filter((r) => r.aluna_id !== id); });
+        m.db.profiles = m.db.profiles.filter((p) => p.id !== id); salvar(); return { conta_autenticacao_apagada: true };
+      }
+      throw new Error('Esta parte (Acrópole, formulários vivos) só funciona com o banco ligado.');
+    },
     async subirArquivo(caminho, arquivo) {
       if (arquivo.size > 1.5 * 1024 * 1024) throw new Error('No modo demonstração, só arquivos de até 1,5 MB.');
       const url = await new Promise((ok, falha) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = falha; r.readAsDataURL(arquivo); });
       const m = carregar(); (m.db._blobs = m.db._blobs || {})[caminho] = url; salvar();
     },
     async linkArquivo(caminho) { return (carregar().db._blobs || {})[caminho] || ''; },
+    async listarArquivos(pasta) { return Object.keys(carregar().db._blobs || {}).filter((k) => k.startsWith(pasta + '/')); },
+    async todos(tabela, o = {}) { return this.q(tabela, o); },
     async apagarArquivo(caminho) { const m = carregar(); if (m.db._blobs) delete m.db._blobs[caminho]; salvar(); },
     aoInserir() { return () => {}; },
   };

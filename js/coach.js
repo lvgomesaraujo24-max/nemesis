@@ -16,6 +16,7 @@ import { Exercicios } from './biblioteca.js';
 import { Financeiro, FinanceiroAluna } from './tesouro.js';
 import { Radar, Score, carregarRadar, saudeDa } from './radar.js';
 import { FormulariosAluna, ArquivosAluna, AtividadesAluna, VideosAluna } from './aluna360.js';
+import { PrivacidadeCoach } from './legal.js';
 import { useCarregar, Estado, Vazio, Modal, Campo, Abas, Barras, toast, num, brl, dataBR, hoje, segundaDe, somaDias,
   somaMeses, diasEntre, lerNum, relativo, linkWhats, copiar, mesNome, idadeDe } from './util.js';
 
@@ -149,6 +150,8 @@ function Alunas({ ir }) {
       const chave = { engajamento: (a) => (saude[a.id].engajamento == null ? 999 : saude[a.id].engajamento), progressao: (a) => (saude[a.id].progIndice == null ? 999 : saude[a.id].progIndice), risco: (a) => -saude[a.id].risco };
       if (chave[ordem]) lista.sort((x, y) => chave[ordem](x) - chave[ordem](y));
       const nInat = alunas.filter((a) => !a.ativo && !a.aguardando).length;
+      // guarda vencida: 12 meses depois do fim do último plano (ou do cadastro, se nunca teve plano), sem plano vigente
+      const guardaVencida = (a) => { if (a.aguardando) return false; const fim = (saude[a.id].plano || {}).fim || String(a.created_at || '').slice(0, 10); return !!fim && fim < somaDias(hoje(), -365); };
       return html`${aguardando.length > 0 && html`<${Aguardando} lista=${aguardando} onFeito=${e.recarregar}/>`}
         ${ativas.length > 0 && !inativas && html`<${Radar} alunas=${ativas} saude=${saude} ir=${ir}/>`}
         <div class="alunas-filtro"><input class="input" type="search" placeholder="Buscar pelo nome" value=${busca} onInput=${(ev) => setBusca(ev.target.value)}/>
@@ -159,7 +162,8 @@ function Alunas({ ir }) {
             <span class="avatar">${(a.nome || '?').slice(0, 1)}</span>
             <div class="aluna-info"><b>${a.nome || a.email}</b><small>Último treino: ${relativo(sd.ultimo)}${a.objetivo ? ' · ' + a.objetivo : ''}</small></div>
             <${Score} s=${sd} compacto=${true}/>
-            <div class="treino-tags">${!a.anamnese_ok ? html`<span class="tag atencao">sem anamnese</span>` : null}
+            <div class="treino-tags">${guardaVencida(a) ? html`<span class="tag perigo" title="Mais de 12 meses desde o fim do último plano: pela Política de Privacidade, os dados devem ser excluídos (aba Dados)">guarda vencida</span>` : null}
+              ${!a.anamnese_ok ? html`<span class="tag atencao">sem anamnese</span>` : null}
               ${s ? html`<span class=${'tag' + (d < 0 ? ' perigo' : d <= 10 ? ' atencao' : '')}>${s.plano_nome} · ${d < 0 ? 'vencido' : d + 'd'}</span>` : html`<span class="tag">sem plano</span>`}<span class="seta">›</span></div>
           </button>`; })}
         ${nInat > 0 && html`<button class="btn-texto" onClick=${() => setInativas(!inativas)}>${inativas ? 'Ver ativas' : `Ver inativas (${nInat})`}</button>`}`;
@@ -262,7 +266,7 @@ function AlunaDetalhe({ id, aba, ir, onAluna, coachNome }) {
     ${aba === 'avaliacoes' && html`<${Avaliacoes} aluna=${a} podeEditar=${true}/>`}
     ${aba === 'anamnese' && html`<${Anamnese} alunaId=${a.id} leitura=${true}/>`}
     ${aba === 'financeiro' && html`<${FinanceiroAluna} aluna=${a}/>`}
-    ${aba === 'dados' && html`<${DadosAluna} aluna=${a} onSalvo=${e.recarregar}/>`}
+    ${aba === 'dados' && html`<${DadosAluna} aluna=${a} onSalvo=${e.recarregar}/><${PrivacidadeCoach} aluna=${a} ir=${ir}/>`}
   </div>`)}<//>`;
 }
 
@@ -385,10 +389,15 @@ function Leads() {
   const linkForm = location.origin + location.pathname.replace(/index\.html$/, '').replace(/\/?$/, '/') + 'form.html';
   const muda = async (l, status) => { try { await api.upd('leads', l.id, { status }); e.recarregar(); } catch (err) { toast(err.message, 'erro'); } };
   const apagar = async (l) => { if (!confirm(`Apagar a inscrição de ${l.nome}?`)) return; await api.del('leads', l.id); e.recarregar(); };
+  // Política de Privacidade: inscrição que não virou matrícula é apagada em até 6 meses
+  const antigas = (leads) => leads.filter((l) => l.status !== 'fechado' && String(l.created_at).slice(0, 10) < somaDias(hoje(), -180));
+  const limpar = async (l) => { if (!confirm(`Apagar ${l.length} inscrição(ões) com mais de 6 meses que não viraram matrícula? A Política de Privacidade promete isso às inscritas.`)) return;
+    try { for (const x of l) await api.del('leads', x.id); toast('Inscrições antigas apagadas', 'ok'); e.recarregar(); } catch (err) { toast(err.message, 'erro'); } };
   return html`<div class="pilha">
     <div class="titulo-acoes"><h1 class="titulo">Inscrições</h1><button class="btn" onClick=${() => copiar(linkForm)}>Copiar link do formulário</button></div>
     <p class="suave">Link para colocar na bio: <a href=${linkForm} target="_blank" rel="noopener">${linkForm.replace(/^https?:\/\//, '')}</a></p>
     <${Estado} e=${e}>${(leads) => html`
+      ${antigas(leads).length > 0 && html`<p class="nota atencao">${antigas(leads).length} inscrição(ões) com mais de 6 meses que não viraram matrícula. <button class="btn-texto" onClick=${() => limpar(antigas(leads))}>Apagar agora</button></p>`}
       <div class="chips">${STATUS.map(([k, r]) => html`<button class=${filtro === k ? 'chip on' : 'chip'} onClick=${() => setFiltro(k)}>${r} (${leads.filter((l) => l.status === k).length})</button>`)}</div>
       ${leads.filter((l) => l.status === filtro).map((l) => html`<section class="card lead">
         <div class="card-topo"><div><h3>${l.nome}${l.idade ? `, ${l.idade}` : ''}</h3><small class="suave">${relativo(l.created_at)}${l.instagram ? ' · ' + l.instagram : ''}</small></div>

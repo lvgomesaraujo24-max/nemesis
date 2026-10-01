@@ -2,14 +2,14 @@
 
 > Fonte primária do app Nemesis. Reúne o que o app é, como foi construído, onde cada coisa mora, todas as regras de cálculo ("inteligência") e o plano daqui para frente.
 > Dono do produto: **Luiz (LV TEAM · LV Coach)**. Repositório: `github.com/lvgomesaraujo24-max/nemesis`. Endereço do app: `https://lvgomesaraujo24-max.github.io/nemesis/`.
-> Versão deste documento: **01/10/2026**. Descreve o código do PR #2 (cache `nemesis-v10`, banco até a `atualizacao-11.sql`).
+> Versão deste documento: **01/10/2026**. Descreve o código do PR #2 (cache `nemesis-v11`, banco até a `atualizacao-12.sql`).
 
 ### Status real (leia antes de tudo)
 
 | Onde | Versão | Banco |
 |---|---|---|
 | **Produção** (branch `main`, o que as alunas usam hoje) | `nemesis-v6` | até a `atualizacao-6.sql` |
-| **PR #2** (branch `claude/compassionate-mccarthy-3py13z`, consolidado, aguardando merge) | `nemesis-v10` | até a `atualizacao-11.sql` |
+| **PR #2** (branch `claude/compassionate-mccarthy-3py13z`, consolidado, aguardando merge) | `nemesis-v11` | até a `atualizacao-12.sql` |
 
 Enquanto o PR #2 não for juntado ao `main` e as atualizações 7 a 11 não forem rodadas no Supabase, **o que este documento descreve além da v6 não está no ar.** O PR #3 (relatório com deusa, missão e card de Stories) foi incorporado ao PR #2; a migração dele virou a `atualizacao-10.sql`. O branch `claude/happy-lovelace-qmbtuq` (CLAUDE.md, `.claude/` e checagem) também foi incorporado, atualizado para a v10.
 
@@ -156,7 +156,7 @@ Regras:
 - Todo acesso ao banco passa por `api.*`. Nunca chamar o Supabase direto numa tela.
 - Todo recurso novo precisa funcionar também no modo demonstração (`demo.js` tem a mesma interface).
 - Campos novos do banco só vão no salvar quando preenchidos ou alterados, para o app não quebrar antes de o SQL novo ser rodado.
-- Erro de coluna ou tabela inexistente vira a mensagem "rode as atualizações 5 a 11" (`traduzErro` em `api.js`).
+- Erro de coluna ou tabela inexistente vira a mensagem "rode as atualizações 5 a 12" (`traduzErro` em `api.js`).
 
 ---
 
@@ -193,16 +193,17 @@ Roteamento por hash: `#/base/id/sub`.
 | `#/form/:formularioId/:atribuicaoId` | Responder formulário |
 | `#/evolucao` · `#/relatorio` | Evolução, Olimpo e relatório |
 | `#/checkin` | Oráculo |
-| `#/perfil` | Abas: Dados, Metas, Avaliações (e autoavaliação), Fotos e arquivos, Testes, Alistamento |
+| `#/perfil` | Abas: Dados, Metas, Avaliações (e autoavaliação), Fotos e arquivos, Testes, Alistamento, Privacidade |
 | `#/cardio` | Cardio |
 
-Um formulário com "bloqueia o app" (ex.: Alistamento) aparece antes de qualquer tela até ser respondido.
+Antes de tudo, a aluna sem o aceite da versão atual dos termos e do consentimento de saúde vê a tela de consentimento (seção 7.1). Um formulário com "bloqueia o app" (ex.: Alistamento) aparece antes de qualquer tela até ser respondido.
 
 ### Público (sem login)
 
 | Endereço | O que faz |
 |---|---|
 | `form.html` | Inscrição da bio → tabela `leads` |
+| `legal.html#privacidade` · `legal.html#termos` | Política de Privacidade e Termos de Uso (públicos, linkados no login e no formulário) |
 | `#/convite/:token` | Criar conta pelo convite (token de 32 caracteres hexadecimais, válido por 7 dias, uso único) |
 
 ---
@@ -212,7 +213,7 @@ Um formulário com "bloqueia o app" (ex.: Alistamento) aparece antes de qualquer
 ### Ordem de instalação
 
 1. `supabase/schema.sql` (base)
-2. `atualizacao-2.sql` até `atualizacao-11.sql`, **nessa ordem**. Todas podem rodar mais de uma vez (testado num Postgres 16 simulando o Supabase: o conjunto inteiro rodou duas vezes seguidas sem erro). **Não rode uma atualização antiga depois de uma nova**: a 2 recria funções que a 11 protege.
+2. `atualizacao-2.sql` até `atualizacao-12.sql`, **nessa ordem**. Todas podem rodar mais de uma vez (testado num Postgres 16 simulando o Supabase: o conjunto inteiro rodou duas vezes seguidas sem erro). **Não rode uma atualização antiga depois de uma nova**: a 2 recria funções que a 11 protege.
 
 | Arquivo | O que liga |
 |---|---|
@@ -226,9 +227,10 @@ Um formulário com "bloqueia o app" (ex.: Alistamento) aparece antes de qualquer
 | `atualizacao-8` | Cadência por tipo, grupos de método, séries detalhadas, RIR real, vídeos de execução, todos os protocolos, autoavaliação, dia de revisão, combo nutri, aulas presenciais |
 | `atualizacao-9` | Modelos com objetivo/frequência/duração, prazo nos formulários, pose das fotos, convites |
 | `atualizacao-10` | Relatório: palavra do treinador e missão do mês salvas no banco (`relatorio_notas`) |
+| `atualizacao-12` | LGPD: consentimentos sem edição, pedidos da aluna, exclusão completa (`eliminar_aluna`), foto e vídeo só com consentimento de imagem, aluna apaga os próprios arquivos |
 | `atualizacao-11` | Correções da auditoria: cadastro sem convite aguardando aprovação, leitura da metodologia só por aluna ativa, limites contra robôs no formulário público |
 
-### Tabelas (39)
+### Tabelas (42)
 
 **Pessoas e acesso**
 - `profiles`: um por conta (id = `auth.users.id`). `role` (coach/student), `nome`, `email`, `telefone`, `nascimento`, `sexo` (F/M), `objetivo`, `ativo`, `anamnese_ok`, `alistada_em`, `treinos_semana_alvo`, `nivel` (iniciante/intermediaria/avancada), `ciclo_rastrear`, `ciclo_duracao_media`, `contracepcao`, `dia_revisao` (0 = domingo … 6), `combo_nutri`.
@@ -260,6 +262,9 @@ Um formulário com "bloqueia o app" (ex.: Alistamento) aparece antes de qualquer
 - `formularios` (tipo: oraculo, alistamento, livre; `versao`), `perguntas` (tipos: escala, multipla, caixas, sim_nao, numero, texto_curto, texto_longo, data, mapa_corporal, rir, ciclo; `mostrar_se`, `titulo_variantes`), `dicas_condicionais`, `mensagens_abertura`, `atribuicoes` (quando: agora, programado, recorrente; `entrega`: manual ou fim_treino; `bloqueia_app`; `prazo`), `envios`, `respostas`, `dica_exibicoes`, `alertas_coach`.
 
 **Treinador**
+- `consentimentos`: cada aceite da aluna (versão dos textos, termos, saúde, imagem, menor e dados do responsável), com a hora do servidor. Só se acrescenta: nunca se edita nem se apaga (prova do consentimento, art. 8º, §2º).
+- `solicitacoes_privacidade`: pedidos da aluna (acesso, correção, exclusão, revogação), com status e resposta. Fica depois da exclusão, sem a aluna, como prova do atendimento.
+- `registro_eliminacoes`: data e motivo de cada exclusão feita, sem nenhum dado pessoal.
 - `relatorio_notas`: palavra do treinador e missão (até 3 focos) por aluna e período do relatório; a aluna lê, só o treinador escreve.
 - `dossie` (tags: lesao, pausa, psicologia, ajuste_rota) e `dossie_versoes`: só o treinador vê, ninguém apaga, toda edição vira versão.
 - `agenda`: `tipo` (video, presencial, avaliacao, ritual, lembrete, outro), `inicio`, `feito`, `link`, recorrência.
@@ -280,6 +285,8 @@ Um formulário com "bloqueia o app" (ex.: Alistamento) aparece antes de qualquer
 | `protege_perfil()` (gatilho) | Aluna não altera `role`, `ativo`, `aguardando`, `treinos_semana_alvo`, `alistada_em`, `nivel`, `dia_revisao`, `combo_nutri` |
 | `is_aluna_ativa()` | Diz se quem está logado é aluna ativa (base da leitura da metodologia) |
 | `leads_limites()` (gatilho) | Formulário público: nome de 2 a 120 letras, WhatsApp de 10 a 15 dígitos, até 3 inscrições por WhatsApp por hora e até 20 inscrições no total a cada 10 minutos |
+| `eliminar_aluna(aluna, motivo)` | Só o treinador. Desliga os lançamentos financeiros da aluna, apaga o perfil (e tudo o que depende dele, Dossiê inclusive) e o login, e grava em `registro_eliminacoes`. Os arquivos do Storage são apagados pelo app antes |
+| `consentiu_imagem(aluna)` | Último consentimento de imagem da aluna (regra de envio de foto e vídeo) |
 | `ver_convite(token)` | Tela de entrada lê nome, e-mail e validade de um convite sem estar logada |
 | `montar_formulario(formulario, aluna?)` | Monta o pacote do formulário vivo com o contexto da aluna (seção 6.11). Só treinador ou aluna ativa; a lógica fica em `montar_formulario_base`, fechada para chamada direta |
 | `enviar_formulario(...)` | Grava o envio, as respostas, as dores, o ciclo, as dicas mostradas e os alertas ao treinador. No Oráculo, também grava o `checkins` da semana |
@@ -590,7 +597,39 @@ No aparelho: campo-isca invisível ("Empresa") e tempo mínimo de 5 segundos des
 - Dossiê, financeiro, inscrições, convites, presets e modelos: só o treinador.
 - O formulário público só **insere** em `leads`, nunca lê.
 - Arquivos: bucket privado com link assinado de 1 hora.
-- **LGPD:** dados de saúde (dor, ciclo menstrual, composição corporal, fotos) são **dados pessoais sensíveis**. Antes de escalar é preciso ter termo de consentimento no Alistamento, política de privacidade, prazo de guarda e exclusão a pedido da aluna (ver seção 13).
+### 7.1 LGPD (atualização 12, textos em `js/legal.js`)
+
+> **Os textos são rascunho escrito a partir da Lei 13.709/2018 e não passaram por advogado.** O Luiz decidiu seguir assim e assume a responsabilidade pelo conteúdo e pelo cumprimento (`docs/decisoes.md`, 01/10/2026).
+
+**Bases legais:** dados de saúde, ciclo, fotos e vídeos = consentimento específico e destacado (art. 11, I); cadastro, treino e plano = execução de contrato (art. 7º, V); pagamentos = obrigação legal (art. 7º, II); inscrição = consentimento (art. 7º, I).
+
+**Consentimento (a aluna só usa o app depois):** três aceites separados, nunca um "aceito tudo" genérico (art. 8º, §4º):
+1. Termos de Uso e Política de Privacidade (obrigatório).
+2. Dados de saúde, em destaque (obrigatório: sem ele o acompanhamento não é possível, art. 9º, §3º).
+3. Fotos e vídeos (opcional; sem ele, o banco recusa foto, imagem e vídeo enviados pela aluna, e o app também não deixa o treinador subir foto de corpo dela).
+Menor de 18 anos (pela data de nascimento ou pela resposta): nome, parentesco e contato do responsável e a declaração dele (art. 14, §1º). Cada aceite fica em `consentimentos` com a versão (`VERSAO_TERMOS`) e a hora do servidor; ninguém edita nem apaga (só a exclusão da aluna). **Subir a versão faz todas aceitarem de novo.**
+
+**Trava desligada até preencher `LEGAL`:** fora do modo demonstração, a tela de consentimento só aparece depois que `config.js` > `LEGAL` tiver nome, documento e e-mail do responsável (ninguém aceita texto com campo em branco). Enquanto isso, sem consentimento registrado, o banco (com a atualização 12) recusa foto e vídeo enviados pela aluna. Se a leitura do consentimento falhar (rede, sessão), o app não abre: mostra "Tentar de novo".
+
+**Pastas no Storage:** `<aluna>/fotos/` (fotos de corpo, imagens e vídeos da aba Arquivos, fotos da autoavaliação) e `<aluna>/videos/` (vídeos de execução) exigem o consentimento de imagem para a aluna enviar. Exames e documentos ficam em `<aluna>/`.
+
+**Direitos da aluna (Perfil > Privacidade):** ver o que autorizou; autorizar ou retirar fotos e vídeos (retirar abre um pedido para o treinador apagar as que ele guardou e oferece apagar na hora as que ela enviou); revogar o consentimento de saúde (o app trava até ela autorizar de novo e o treinador é avisado); baixar os próprios dados em JSON; pedir acesso completo, correção ou exclusão; apagar os arquivos que ela mesma enviou (o que o treinador enviou ela pede por um pedido). Com a saúde revogada ou com o acesso pausado, a Privacidade continua acessível (baixar dados e fazer pedidos).
+
+**O que o Luiz se compromete a cumprir (está escrito na política):**
+
+| Compromisso | Onde o app ajuda |
+|---|---|
+| Responder pedidos em até **15 dias** (art. 19, II) | Aviso na Acrópole com os dias do pedido mais antigo; Atendido/Recusar na aba Dados da aluna |
+| Pedido de acesso completo: enviar a cópia com o Dossiê | "Baixar cópia completa dos dados" na aba Dados |
+| Excluir a pedido | "Excluir todos os dados da aluna" (digita o nome para confirmar): o banco apaga primeiro (perfil, convites, inscrição pelo WhatsApp, nome nos lançamentos), depois o app apaga a pasta dela no Storage |
+| Excluir **12 meses** depois do fim do último plano (ou do cadastro, se nunca teve plano) | Etiqueta "guarda vencida" na lista de Alunas |
+| Apagar inscrições não convertidas em **6 meses** | Aviso e botão "Apagar agora" em Inscrições |
+| Guardar registros de pagamento por 5 anos, sem saúde | A exclusão mantém os lançamentos sem o vínculo com a aluna |
+| Não usar fotos e vídeos em divulgação sem autorização separada e por escrito | Fora do app |
+| Comunicar incidente de segurança à ANPD e às alunas (art. 48) | Fora do app |
+| Preencher os dados do controlador | `config.js` > `LEGAL`; a Acrópole avisa enquanto estiver vazio |
+
+**Dossiê × direito de eliminação:** durante o acompanhamento o Dossiê continua imutável (ninguém apaga pelo app). Na exclusão da aluna ele é apagado inteiro, com as versões, pela função `eliminar_aluna`.
 
 ---
 
@@ -623,7 +662,7 @@ No aparelho: campo-isca invisível ("Empresa") e tempo mínimo de 5 segundos des
 
 ### Publicar uma versão nova (checklist)
 1. Código no branch de trabalho → Pull Request → merge no `main`.
-2. Trocar `VERSAO` em `sw.js` (`nemesis-v10` → `nemesis-v11`) para os celulares baixarem a versão nova.
+2. Trocar `VERSAO` em `sw.js` (`nemesis-v11` → `nemesis-v12`) para os celulares baixarem a versão nova.
 3. Se houver SQL novo, rodar `supabase/atualizacao-N.sql` no SQL Editor.
 4. Em 1 ou 2 minutos o GitHub Pages atualiza. No celular, fechar e abrir o app.
 
@@ -752,7 +791,7 @@ React Native (Expo) ou Flutter. Custa uma reescrita das telas (as regras da seç
 
 | Fase | Prazo | Entregas |
 |---|---|---|
-| **0. Colocar no ar o que já foi feito** | 1 a 3 dias | Merge do PR #2; rodar `atualizacao-7` a `-11`, em ordem; conferir Auth URLs; configurar SMTP próprio; testar com 2 ou 3 alunas reais |
+| **0. Colocar no ar o que já foi feito** | 1 a 3 dias | Merge do PR #2; rodar `atualizacao-7` a `-12`, em ordem; preencher `LEGAL` no `config.js`; conferir Auth URLs; configurar SMTP próprio; testar com 2 ou 3 alunas reais |
 | **1. Piloto** | semanas 1 e 2 | Uso real com a turma; correções; responder as decisões pendentes (seção 15) |
 | **2. Robustez** | semanas 3 a 6 | Supabase Pro com backup; domínio próprio; LGPD (consentimento no Alistamento, política de privacidade, exclusão de dados); testes automáticos no GitHub Actions; regra de guarda dos vídeos |
 | **3. Lojas (Capacitor)** | semanas 6 a 10 | Empacotar; push; câmera; links profundos; contas nas lojas; enviar para revisão (Apple leva de dias a 2 semanas) |
@@ -772,7 +811,7 @@ O computador não guarda nada essencial. Tudo está na nuvem:
 4. **Acessos:** e-mail do GitHub, e-mail do Supabase, senha do banco. **Guardar num gerenciador de senhas**, fora do computador.
 5. **Este documento:** está em `docs/CEREBRO-NEMESIS.md` no repositório, então também fica salvo no GitHub.
 
-**Reconstruir do zero em outro lugar:** novo projeto Supabase → rodar `schema.sql` e as atualizações 2 a 11 → importar o backup → trocar URL e chave no `config.js` → publicar no GitHub Pages → ajustar as Auth URLs.
+**Reconstruir do zero em outro lugar:** novo projeto Supabase → rodar `schema.sql` e as atualizações 2 a 12 → importar o backup → trocar URL e chave no `config.js` → publicar no GitHub Pages → ajustar as Auth URLs.
 
 ---
 
@@ -803,7 +842,7 @@ O computador não guarda nada essencial. Tudo está na nuvem:
 | "Primeira conta vira treinador" | Verdadeiro, risco só numa reconstrução do banco. Não alterado |
 | Sem monitoramento, publicação manual, código público | Verdadeiros. Não alterados |
 | Testes automáticos não estão no repositório | Verdadeiro. Os testes rodam no ambiente de desenvolvimento, fora do repositório |
-| LGPD (consentimento, privacidade, exclusão, menores, Dossiê imutável × eliminação) | Verdadeiros. Pendentes, com textos a validar por advogado |
+| LGPD (consentimento, privacidade, exclusão, menores, Dossiê imutável × eliminação) | Verdadeiros. Implementado na atualização 12 (seção 7.1); textos sem validação de advogado, por decisão do Luiz |
 
 **Achado da própria correção:** o cadastro pelo convite falhava no banco (o convite apontava para um perfil que ainda não existia). Corrigido na `atualizacao-9.sql` e na `atualizacao-11.sql`, antes de ir para produção.
 
@@ -817,6 +856,7 @@ O computador não guarda nada essencial. Tudo está na nuvem:
 | — | Modelos, presets, mesociclo com progressão; Tesouro, Chronos, biblioteca nível 3, Radar (PR #1, merge) |
 | 30/09/2026 | Ficha 360; Arena, Prova, Oráculo com semáforo, Olimpo, Crônica, Templo; índices 0–100 com tendência; convite com link; fotos lado a lado (PR #2, atualizações 8 e 9) |
 | 30/09/2026 | Relatório com deusa, missão e card de Stories (PR #3, outra sessão) |
+| 01/10/2026 | LGPD: consentimento em três partes, menores com responsável, Privacidade da aluna, exclusão completa, prazos de guarda (atualização 12) |
 | 01/10/2026 | Auditoria técnica externa; PR #3 incorporado ao PR #2 (atualização 10); cadastro com aprovação e anti-robô (atualização 11); correção do convite |
 
-**Números do código (01/10/2026, PR #2):** 26 arquivos JS (~6.600 linhas), CSS ~1.210 linhas, 12 arquivos SQL (~1.870 linhas), 39 tabelas.
+**Números do código (01/10/2026, PR #2):** 28 arquivos JS (~7.000 linhas), CSS ~1.230 linhas, 13 arquivos SQL (~2.000 linhas), 42 tabelas.

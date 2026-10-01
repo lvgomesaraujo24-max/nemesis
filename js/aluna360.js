@@ -3,6 +3,7 @@ import { html, useState, useEffect } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { Icone } from './icones.js';
 import { ComoFunciona } from './comum.js';
+import { podeImagem } from './legal.js';
 import { ModalEnvio, statusAtribuicao, CampoPrazo } from './formularios.js';
 import { useCarregar, Estado, Modal, Campo, Abas, toast, dataBR, hoje, somaDias, segundaDe, relativo, num, diasEntre } from './util.js';
 
@@ -79,7 +80,8 @@ function ModalAtribuirAluna({ aluna, forms, onFechar, onFeito }) {
 export const CATEGORIAS_ARQ = [['foto', 'Foto de evolução'], ['exame', 'Exame'], ['documento', 'Documento'], ['outro', 'Outro']];
 const tamanho = (b) => (b >= 1048576 ? `${num(b / 1048576, 1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
-export function ArquivosAluna({ aluna, podeApagar = true }) {
+// daAluna: a própria aluna está vendo (só apaga o que ela mesma enviou; o resto ela pede em Privacidade)
+export function ArquivosAluna({ aluna, daAluna = false }) {
   const e = useCarregar(() => api.q('arquivos_aluna', { eq: { aluna_id: aluna.id }, order: 'created_at', asc: false }), [aluna.id]);
   const [categoria, setCategoria] = useState('foto');
   const [pose, setPose] = useState('');
@@ -91,13 +93,22 @@ export function ArquivosAluna({ aluna, podeApagar = true }) {
     if (!arquivos.length) return;
     setEnviando(true);
     try {
+      // foto do corpo e vídeo só com a autorização de imagem da aluna (LGPD); para a aluna, qualquer imagem ou vídeo conta
+      const ehImagem = (a) => categoria === 'foto' || (daAluna && /^(image|video)\//.test(a.type || ''));
+      const autorizada = arquivos.some(ehImagem) ? await podeImagem(aluna.id) : true;
+      let enviados = 0;
       for (const a of arquivos) {
         if (a.size > 20 * 1024 * 1024) { toast(`${a.name} passa de 20 MB`, 'erro'); continue; }
-        const caminho = `${aluna.id}/${Date.now()}-${a.name.normalize('NFD').replace(/[^\w.-]+/g, '_')}`;
+        if (ehImagem(a) && !autorizada) {
+          toast(daAluna ? 'Para enviar fotos e vídeos, autorize em Perfil > Privacidade. Exame em PDF pode ser enviado sem isso.' : 'A aluna não autorizou fotos e vídeos (Perfil > Privacidade dela).', 'erro');
+          continue;
+        }
+        const caminho = `${aluna.id}/${ehImagem(a) ? 'fotos/' : ''}${Date.now()}-${a.name.normalize('NFD').replace(/[^\w.-]+/g, '_')}`;
         await api.subirArquivo(caminho, a);
         await api.ins('arquivos_aluna', { aluna_id: aluna.id, nome: a.name, caminho, tipo: a.type || null, categoria, tamanho: a.size, ...(categoria === 'foto' && pose ? { pose } : {}) });
+        enviados++;
       }
-      toast('Arquivo(s) enviado(s)', 'ok'); e.recarregar();
+      if (enviados) { toast('Arquivo(s) enviado(s)', 'ok'); e.recarregar(); }
     } catch (err) { toast(err.message, 'erro'); } finally { setEnviando(false); }
   };
   const abrir = async (x) => { try { const url = await api.linkArquivo(x.caminho); if (url) window.open(url, '_blank', 'noopener'); } catch (err) { toast(err.message, 'erro'); } };
@@ -121,7 +132,7 @@ export function ArquivosAluna({ aluna, podeApagar = true }) {
       return html`<div class="titulo-acoes"><div class="chips">${[['', 'Todos'], ...CATEGORIAS_ARQ].map(([k, r]) => html`<button class=${filtro === k ? 'chip on' : 'chip'} onClick=${() => setFiltro(k)}>${r} ${k ? `(${lista.filter((x) => x.categoria === k).length})` : ''}</button>`)}</div>
           ${datasFotos.size > 1 && html`<button class=${'btn' + (comparar ? ' on' : '')} onClick=${() => setComparar(!comparar)}>${comparar ? 'Fechar comparação' : 'Comparar fotos'}</button>`}</div>
         ${comparar && html`<${ComparaFotos} fotos=${fotos} abrir=${abrir}/>`}
-        <div class="arquivos-grade">${l.map((x) => html`<${CartaoArquivo} key=${x.id} x=${x} abrir=${() => abrir(x)} apagar=${podeApagar ? () => apagar(x) : null}/>`)}</div>`;
+        <div class="arquivos-grade">${l.map((x) => html`<${CartaoArquivo} key=${x.id} x=${x} abrir=${() => abrir(x)} apagar=${!daAluna || x.enviado_por === aluna.id ? () => apagar(x) : null}/>`)}</div>`;
     }}<//>
   </div>`;
 }

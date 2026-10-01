@@ -2,6 +2,7 @@
 import { html, useState, useMemo } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { Icone } from './icones.js';
+import { podeImagem } from './legal.js';
 import { useCarregar, Estado, Vazio, Linha, Modal, Campo, toast, num, dataBR, dataCurta, hoje, lerNum, tonelagem,
   recordes, sequenciaSemanas, equivalencia, DOBRAS, MEDIDAS, MEDIDAS_TODAS, DIAMETROS, PROTOCOLOS, camposProtocolo, percentualGordura, protocoloSugerido, composicao, idadeDe, idadeEm, relativo, diasEntre } from './util.js';
 
@@ -407,12 +408,17 @@ function Autoavaliacao({ aluna, onFechar, onSalvo }) {
   const [salvando, setSalvando] = useState(false);
   const salvar = async (ev) => {
     ev.preventDefault();
+    if (Object.values(fotos).some(Boolean)) {
+      let ok = false;
+      try { ok = await podeImagem(aluna.id); } catch (err) { toast(err.message, 'erro'); return; }
+      if (!ok) { toast('Para enviar fotos, autorize fotos e vídeos em Perfil > Privacidade. Ou envie só as medidas.', 'erro'); return; }
+    }
     if (!lerNum(f.peso)) { toast('Coloque o seu peso.', 'erro'); return; }
     setSalvando(true);
     try {
       for (const [k, r] of FOTOS_AUTO) {
         const arq = fotos[k]; if (!arq) continue;
-        const caminho = `${aluna.id}/${Date.now()}-autoavaliacao-${k}.${(arq.name.split('.').pop() || 'jpg').toLowerCase()}`;
+        const caminho = `${aluna.id}/fotos/${Date.now()}-autoavaliacao-${k}.${(arq.name.split('.').pop() || 'jpg').toLowerCase()}`;
         await api.subirArquivo(caminho, arq);
         await api.ins('arquivos_aluna', { aluna_id: aluna.id, nome: `Autoavaliação ${dataBR(hoje())} · ${r}`, caminho, tipo: arq.type || null, categoria: 'foto', tamanho: arq.size });
       }
