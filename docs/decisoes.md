@@ -120,3 +120,12 @@ Modelo:
 **Decisão**: a seção 2 da Política de Privacidade passou a citar a água do dia e as observações por exercício, sem subir `VERSAO_TERMOS`.
 **Por quê**: são dados comuns (não sensíveis), opcionais e usados na mesma finalidade já aceita (acompanhamento do treino). Pedir novo aceite a todas por isso seria desproporcional. Se um dia entrar dado sensível novo ou finalidade nova, sobe a versão.
 
+## 2026-10-01 · Metas da semana dentro do Oráculo vivo
+**Decisão**: as metas da semana são duas perguntas do próprio Oráculo (atualização 15), e não uma tabela nova. A semana seguinte usa o contexto `ctx.anterior` para lembrar a meta e perguntar como foi.
+**Por quê**: pedido de quem testou o app ("no Oráculo faltou as metas para a semana"). Reaproveita o motor de formulários: o treinador edita o texto ou tira as perguntas sem mexer em código.
+**Consequências**: o Oráculo fixo do modo demonstração (sem formulário vivo) não tem as metas.
+
+## 2026-10-01 · Cores das linhas de série
+**Decisão**: o gráfico de progressão por série usa quatro cores novas em `:root` (`--serie-1` a `--serie-4`: azul, laranja, verde-água e amarelo).
+**Por quê**: o roxo da marca não serve para separar várias linhas. As quatro cores passaram pelo validador de paleta no fundo escuro do app: diferença para daltonismo ΔE ≥ 8 e contraste ≥ 3:1. Os tons de estado (`--ok`, `--atencao`, `--perigo`) continuam reservados para estado.
+

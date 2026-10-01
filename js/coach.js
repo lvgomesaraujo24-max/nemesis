@@ -6,7 +6,7 @@ import { Selo, DossieAluna } from './dossie.js';
 import { Formularios, ModalEnvio } from './formularios.js';
 import { CardioAluna, TestesAluna, MetasAluna } from './extras.js';
 import { Agenda } from './chronos.js';
-import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
+import { Evolucao, Anamnese, Avaliacoes, MetasEnvio } from './comum.js';
 import { ResumoCheckin } from './aluna.js';
 import { Relatorio } from './relatorio.js';
 import { Icone } from './icones.js';
@@ -329,6 +329,7 @@ function CartaoResposta({ c, aluna, envio, onFeito }) {
     <div class="card-topo"><div>${aluna && html`<a href=${`#/aluna/${aluna.id}/checkins`}><h3>${aluna.nome}</h3></a>`}<small class="suave">Semana de ${dataBR(c.semana)} · enviado ${relativo(c.created_at)}</small></div>
       ${c.resposta ? html`<span class="tag roxo">respondido</span>` : html`<span class="tag atencao">aguardando</span>`}</div>
     <${ResumoCheckin} c=${c} sinal/>
+    ${envio && html`<${MetasEnvio} envio=${envio}/>`}
     ${envio && html`<button class="btn-texto" onClick=${() => setVerEnvio(true)}>Ver o Oráculo completo (dores, ciclo, RIR)</button>`}
     ${verEnvio && html`<${ModalEnvio} envio=${envio} nome=${aluna ? aluna.nome : 'Oráculo'} onFechar=${() => setVerEnvio(false)}/>`}
     ${editando ? html`<textarea class="input" rows="3" placeholder="Sua resposta (a aluna vê no app)" value=${txt} onInput=${(ev) => setTxt(ev.target.value)}></textarea>

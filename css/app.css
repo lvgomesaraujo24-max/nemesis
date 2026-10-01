@@ -8,6 +8,9 @@
 @font-face { font-family: 'Playfair Display'; font-style: italic; font-weight: 600; font-display: swap; src: url(../lib/fontes/playfair-display-latin-600-italic.woff2) format('woff2'); }
 
 :root {
+  /* linhas de série nos gráficos: ordem fixa, validadas para o fundo escuro (#242424) com o validador de paleta:
+     faixa de luminosidade, croma, daltonismo (ΔE ≥ 8) e contraste ≥ 3:1 */
+  --serie-1: #3987e5; --serie-2: #d95926; --serie-3: #199e70; --serie-4: #c98500;
   --fundo: #1a1a1a;
   --sup: #242424;
   --sup2: #2e2e2e;
@@ -1328,3 +1331,15 @@ select.cel-in { cursor: pointer; appearance: none; font-size: 13px; }
 .agua-numero small { color: var(--suave); }
 .agua-barra { width: 100%; accent-color: var(--roxo-forte); height: 28px; }
 .nota-ex { display: block; margin-top: 2px; color: var(--roxo-claro); }
+.metas-semana { display: flex; flex-direction: column; gap: 4px; border-left: 3px solid var(--roxo-claro); padding: 6px 10px; background: var(--roxo-fundo); border-radius: 8px; font-size: 14px; }
+
+/* gráfico de várias linhas (carga por série); cores --serie-* no :root */
+.legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--suave); }
+.legenda i, .dica-grafico i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.grafico { position: relative; }
+.grafico .mira { stroke: var(--suave); stroke-dasharray: 3 3; }
+.ponto-serie { stroke: var(--sup); stroke-width: 2; }
+.dica-grafico { position: absolute; top: 4px; transform: translateX(-50%); background: var(--sup2); border: 1px solid var(--linha); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; display: flex; flex-direction: column; gap: 2px; pointer-events: none; white-space: nowrap; color: var(--texto); }
+.filtros-evolucao { display: grid; grid-template-columns: 1fr; gap: 8px; }
+@media (min-width: 600px) { .filtros-evolucao { grid-template-columns: 1fr 1fr; } }
+.metas-card p, .metas-semana p { white-space: pre-line; }

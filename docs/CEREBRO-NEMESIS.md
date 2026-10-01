@@ -2,7 +2,7 @@
 
 > Fonte primária do app Nemesis. Reúne o que o app é, como foi construído, onde cada coisa mora, todas as regras de cálculo ("inteligência") e o plano daqui para frente.
 > Dono do produto: **Luiz (LV TEAM · LV Coach)**. Repositório: `github.com/lvgomesaraujo24-max/nemesis`. Endereço do app: `https://lvgomesaraujo24-max.github.io/nemesis/`.
-> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v13`, banco até a `atualizacao-14.sql`).
+> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v13`, banco até a `atualizacao-15.sql`).
 
 ### Status real (leia antes de tudo)
 
@@ -191,7 +191,7 @@ Roteamento por hash: `#/base/id/sub`.
 | `#/` | Início: cartão do próximo treino (ou do treino em andamento) com tempo estimado, semana, Oráculo aberto, cardio, água do dia com meta, lista de treinos e pendências de formulário |
 | `#/treino/:id` | Arena: um exercício por vez (seção 6.4) |
 | `#/form/:formularioId/:atribuicaoId` | Responder formulário |
-| `#/evolucao` · `#/relatorio` | Evolução, Olimpo e relatório |
+| `#/evolucao` · `#/relatorio` | Evolução (progressão de carga por série com filtro de ficha e treino, peso com a tabela de registros, Olimpo) e relatório |
 | `#/checkin` | Oráculo |
 | `#/perfil` | Abas: Dados, Metas, Avaliações (e autoavaliação), Fotos e arquivos, Testes, Alistamento, Privacidade |
 | `#/cardio` | Cardio |
@@ -213,7 +213,7 @@ Antes de tudo, a aluna sem o aceite da versão atual dos termos e do consentimen
 ### Ordem de instalação
 
 1. `supabase/schema.sql` (base)
-2. `atualizacao-2.sql` até `atualizacao-14.sql`, **nessa ordem**. Todas podem rodar mais de uma vez (testado num Postgres 16 simulando o Supabase: o conjunto inteiro rodou duas vezes seguidas sem erro). **Não rode uma atualização antiga depois de uma nova**: a 2 recria funções que a 11 protege.
+2. `atualizacao-2.sql` até `atualizacao-15.sql`, **nessa ordem**. Todas podem rodar mais de uma vez (testado num Postgres 16 simulando o Supabase: o conjunto inteiro rodou duas vezes seguidas sem erro). **Não rode uma atualização antiga depois de uma nova**: a 2 recria funções que a 11 protege.
 
 | Arquivo | O que liga |
 |---|---|
@@ -229,8 +229,9 @@ Antes de tudo, a aluna sem o aceite da versão atual dos termos e do consentimen
 | `atualizacao-10` | Relatório: palavra do treinador e missão do mês salvas no banco (`relatorio_notas`) |
 | `atualizacao-11` | Correções da auditoria: cadastro sem convite aguardando aprovação, leitura da metodologia só por aluna ativa, limites contra robôs no formulário público |
 | `atualizacao-12` | LGPD: consentimentos sem edição, pedidos da aluna, exclusão completa (`eliminar_aluna`), foto e vídeo só com consentimento de imagem, aluna apaga os próprios arquivos |
-| `atualizacao-14` | Arena nova e água: `treino_itens.preparatorias`, `series.preparatoria`, `sessoes.notas`, `profiles.agua_meta_ml` e tabela `agua_registros` |
 | `atualizacao-13` | `fase_ciclo` só responde para a própria aluna ou o treinador (antes respondia até sem login); a original vira `fase_ciclo_base`, fechada. Caminho de busca fixo em `nome_regiao` e `avaliar_regra` |
+| `atualizacao-14` | Arena nova e água: `treino_itens.preparatorias`, `series.preparatoria`, `sessoes.notas`, `profiles.agua_meta_ml` e tabela `agua_registros` |
+| `atualizacao-15` | Metas da semana no Oráculo vivo: perguntas `metas_cumpridas` (só aparece se houve meta na semana anterior, com o texto dela no título) e `metas_semana`; o comentário livre passa a ser a última pergunta |
 
 ### Tabelas (43)
 
@@ -366,6 +367,12 @@ Bucket privado **`arquivos`**. Caminho: `{id_da_aluna}/{arquivo}` e `{id_da_alun
 - **Troca de exercício pela aluna** (aparelho ocupado): só por um substituto cadastrado; o treinador recebe um alerta "Troca de exercício".
 - Vídeo da execução vai para o Storage; o treinador corrige e a aluna vê a correção no treino.
 
+### 6.4a Progressão de carga (Evolução)
+
+- Filtros: ficha (período do mesociclo, do início ao fim, igual ao Relatório; abre na ficha ativa se ela já tiver 2 treinos com carga, senão em todas) e treino.
+- Uma linha por série válida (1ª, 2ª, 3ª, 4ª): em cada data de treino, a maior carga feita naquela série. Aquecimento e preparatória ficam fora.
+- Cores de série em ordem fixa (`--serie-1` a `--serie-4`, paleta validada para o fundo escuro); legenda sempre visível e dica com os valores ao tocar.
+
 ### 6.5 Semáforo do check-in (Oráculo)
 
 ```
@@ -467,6 +474,8 @@ Cada item pode ser marcado como visto, resolvido, feito ou adiado (3 dias), e so
 - **Regra mal escrita ou operador desconhecido = falso.** A tela nunca quebra por causa de uma regra.
 - Textos vivos: `{{ctx.ultima_dor.intensidade}}` é trocado pelo valor.
 - Pergunta com `mostrar_se` só aparece quando a regra é verdadeira. `titulo_variantes` troca o título conforme o contexto.
+
+**Metas da semana (atualização 15):** no fim do Oráculo a aluna escreve até 3 metas para a próxima semana (`metas_semana`). No Oráculo seguinte, `metas_cumpridas` aparece com o título "Na semana passada você se propôs: {{ctx.anterior.metas_semana}}. Como foi?" (cumpri todas, parte ou não consegui). A home da aluna mostra as metas do último Oráculo e o cartão de resposta do treinador mostra as duas respostas. São perguntas comuns do formulário: o treinador pode editar ou tirar em Formulários.
 
 **Contexto (`ctx`) que o banco monta para cada aluna:** respostas do envio anterior do mesmo tipo e a data dele; dores dos últimos 21 dias (a mais recente de cada região, da mais forte para a mais fraca) e `ultima_dor`; metas ativas com prazo em até 14 dias ou não batidas já analisadas; treinos da semana passada e da atual; `alvo_semana`; fase do ciclo; dicas em cooldown.
 

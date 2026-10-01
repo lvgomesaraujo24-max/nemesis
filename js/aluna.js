@@ -1,7 +1,7 @@
 // Lado da ALUNA
 import { html, useState, useEffect, useRef } from '../lib/preact-htm.js';
 import { api } from './api.js';
-import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
+import { Evolucao, Anamnese, Avaliacoes, metasAtuais } from './comum.js';
 import { ResponderFormulario, pendenciasDaAluna } from './vivo.js';
 import { CardioAluna, TestesAluna, MetasAluna } from './extras.js';
 import { Execucao } from './arena.js';
@@ -11,7 +11,7 @@ import { TelaConsentimento, PrivacidadeAluna, consentimentoAtual, precisaConsent
 import { Icone } from './icones.js';
 import { tempoTreino, fmtTempo } from './musculos.js';
 import { DEMO } from './api.js';
-import { useCarregar, Estado, Vazio, Modal, Campo, Escala, toast, num, dataBR, hoje, segundaDe, lerNum, relativo, diasEntre, semaforo } from './util.js';
+import { useCarregar, Estado, Vazio, Modal, Campo, Escala, toast, num, dataBR, iso, hoje, segundaDe, lerNum, relativo, diasEntre, semaforo } from './util.js';
 
 export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
   const [pulouAnamnese, setPulou] = useState(false);
@@ -111,6 +111,7 @@ function InicioAluna({ perfil, ir, pendentes = [], recarregarPerfil }) {
         </div>
         ${!checkinFeito && [5, 6, 0].includes(new Date().getDay()) ? html`<a class="card aviso" href="#/checkin"><b>O Oráculo da semana está aberto</b><span>Leva 2 minutos. É com ele que eu ajusto o seu treino.</span></a>` : null}
         ${cardio && cardio.length > 0 && html`<a class="card cardio-card" href="#/cardio"><div class="card-topo"><h3>Cardio</h3><span class="seta">›</span></div><small>${cardio.map((c) => `${c.duracao_min} min ${c.modalidade} · ${c.vezes_semana}x por semana`).join(' · ')}</small></a>`}
+        <${MetasDaSemana} perfil=${perfil}/>
         <${Agua} perfil=${perfil} recarregarPerfil=${recarregarPerfil}/>
         <h2 class="secao">Seus treinos</h2>
         ${treinos.map((t) => {
@@ -123,6 +124,14 @@ function InicioAluna({ perfil, ir, pendentes = [], recarregarPerfil }) {
         })}`;
     }}<//>
   </div>`;
+}
+
+// ---------- metas que a aluna escreveu no último Oráculo ----------
+function MetasDaSemana({ perfil }) {
+  const e = useCarregar(() => metasAtuais(perfil.id), [perfil.id]);
+  if (!e.dados) return null;
+  return html`<a class="card metas-card" href="#/checkin"><div class="card-topo"><h3>Suas metas da semana</h3><span class="seta">›</span></div>
+    <p>${e.dados.semana}</p><small class="suave">Você definiu no Oráculo de ${dataBR(iso(new Date(e.dados.em)))}. No próximo, conta como foi.</small></a>`;
 }
 
 // ---------- água do dia ----------

@@ -3,7 +3,7 @@ import { html, useState, useMemo } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { Icone } from './icones.js';
 import { podeImagem } from './legal.js';
-import { useCarregar, Estado, Vazio, Linha, Modal, Campo, toast, num, dataBR, dataCurta, hoje, lerNum, tonelagem,
+import { useCarregar, Estado, Vazio, Linha, LinhasSeries, CORES_SERIE, somaDias, Modal, Campo, toast, num, dataBR, dataCurta, hoje, lerNum, tonelagem,
   recordes, sequenciaSemanas, equivalencia, DOBRAS, MEDIDAS, MEDIDAS_TODAS, DIAMETROS, PROTOCOLOS, camposProtocolo, percentualGordura, protocoloSugerido, composicao, idadeDe, idadeEm, relativo, diasEntre } from './util.js';
 
 // ============================================================
@@ -23,20 +23,36 @@ export function ComoFunciona({ titulo, texto, passos, children }) {
 // ============================================================
 export function Evolucao({ alunaId }) {
   const e = useCarregar(async () => {
-    const [sessoes, series, exercicios, checkins, avaliacoes] = await Promise.all([
+    const [sessoes, series, exercicios, checkins, avaliacoes, mesos] = await Promise.all([
       api.q('sessoes', { eq: { aluna_id: alunaId }, order: 'data' }),
       api.q('series', { eq: { aluna_id: alunaId }, order: 'created_at' }),
       api.q('exercicios', { order: 'nome' }),
       api.q('checkins', { eq: { aluna_id: alunaId }, order: 'semana' }),
       api.q('avaliacoes', { eq: { aluna_id: alunaId }, order: 'data' }),
+      api.q('mesociclos', { eq: { aluna_id: alunaId }, order: 'inicio', asc: false }).catch(() => []),
     ]);
-    return { sessoes, series, exercicios, checkins, avaliacoes };
+    return { sessoes, series, exercicios, checkins, avaliacoes, mesos };
   }, [alunaId]);
   return html`<${Estado} e=${e}>${(d) => html`<${EvolucaoCorpo} d=${d}/>`}<//>`;
 }
 
 function EvolucaoCorpo({ d }) {
-  const { sessoes, series, exercicios, checkins, avaliacoes } = d;
+  const { sessoes, series, exercicios, checkins, avaliacoes, mesos = [] } = d;
+  // filtros da progressão de carga: ficha (período do mesociclo) e treino
+  // abre na ficha ativa só se ela já tiver pelo menos 2 treinos com carga; senão mostra todo o histórico
+  const [fichaSel, setFichaSel] = useState(() => {
+    const a = mesos.find((m) => m.status === 'ativo'); if (!a) return '';
+    const comCargaIds = new Set(series.filter((s) => s.carga != null && !s.aquecimento).map((s) => s.sessao_id));
+    const datas = new Set(sessoes.filter((s) => comCargaIds.has(s.id) && s.data >= a.inicio && s.data <= a.fim).map((s) => s.data));
+    return datas.size >= 2 ? a.id : '';
+  });
+  const [treinoSel, setTreinoSel] = useState('');
+  const periodo = useMemo(() => {
+    const m = mesos.find((x) => x.id === fichaSel); if (!m) return null;
+    return { de: m.inicio, ate: m.fim || '9999-12-31' };   // mesmo período da ficha no Relatório
+  }, [fichaSel, mesos]);
+  const sessoesFiltro = useMemo(() => sessoes.filter((s) => (!periodo || (s.data >= periodo.de && s.data <= periodo.ate)) && (!treinoSel || s.treino_nome === treinoSel)), [sessoes, periodo, treinoSel]);
+  const nomesTreino = [...new Set(sessoes.filter((s) => !periodo || (s.data >= periodo.de && s.data <= periodo.ate)).map((s) => s.treino_nome).filter(Boolean))].sort();
   const feitas = sessoes.filter((s) => s.concluida_em || series.some((x) => x.sessao_id === s.id));
   const mes = hoje().slice(0, 7);
   const noMes = feitas.filter((s) => s.data.slice(0, 7) === mes).length;
@@ -54,15 +70,20 @@ function EvolucaoCorpo({ d }) {
     return top ? top[0] : null;
   });
   const [verTodos, setVerTodos] = useState(false);
+  const idsFiltro = useMemo(() => new Set(sessoesFiltro.map((s) => s.id)), [sessoesFiltro]);
+  const exFiltro = useMemo(() => { const ids = new Set(series.filter((s) => idsFiltro.has(s.sessao_id) && s.carga != null && !s.aquecimento).map((s) => s.exercicio_id)); return comCarga.filter((x) => ids.has(x.id)); }, [idsFiltro, comCarga, series]);
+  const exVer = exFiltro.some((x) => x.id === exSel) ? exSel : exFiltro[0] ? exFiltro[0].id : null;
+  // carga de cada série válida (1ª, 2ª, 3ª...) por data de treino; até 4 linhas
+  const porSerie = useMemo(() => {
+    const dataDe = Object.fromEntries(sessoesFiltro.map((s) => [s.id, s.data]));
+    const validas = series.filter((s) => s.exercicio_id === exVer && s.carga != null && !s.aquecimento && dataDe[s.sessao_id]);
+    const datas = [...new Set(validas.map((s) => dataDe[s.sessao_id]))].sort();
+    const maxN = Math.min(4, Math.max(0, ...validas.map((s) => s.numero || 1)));
+    const linhas = [];
+    for (let n = 1; n <= maxN; n++) linhas.push({ nome: `Série ${n}`, cor: CORES_SERIE[n - 1], valores: datas.map((dt) => { const x = validas.filter((s) => (s.numero || 1) === n && dataDe[s.sessao_id] === dt); return x.length ? Math.max(...x.map((s) => s.carga)) : null; }) });
+    return { datas, linhas };
+  }, [exVer, series, sessoesFiltro]);
 
-  const pontosCarga = useMemo(() => {
-    const porData = {};
-    series.filter((s) => s.exercicio_id === exSel && s.carga != null && !s.aquecimento).forEach((s) => {
-      const dt = (sessoes.find((x) => x.id === s.sessao_id) || {}).data || s.created_at.slice(0, 10);
-      porData[dt] = Math.max(porData[dt] || 0, s.carga);
-    });
-    return Object.keys(porData).sort().map((k) => ({ x: dataCurta(k), y: porData[k] }));
-  }, [exSel, series]);
 
   const pontosPeso = useMemo(() => {
     const m = {};
@@ -70,6 +91,8 @@ function EvolucaoCorpo({ d }) {
     avaliacoes.forEach((a) => { if (a.peso != null) m[a.data] = a.peso; });
     return Object.keys(m).sort().map((k) => ({ x: dataCurta(k), y: m[k] }));
   }, [checkins, avaliacoes]);
+  const registrosPeso = useMemo(() => [...checkins.filter((c) => c.peso != null).map((c) => ({ data: c.semana, peso: c.peso, fonte: 'Oráculo (semana)' })),
+    ...avaliacoes.filter((a) => a.peso != null).map((a) => ({ data: a.data, peso: a.peso, fonte: a.autoavaliacao ? 'Autoavaliação' : 'Avaliação' }))].sort((a, b) => (a.data < b.data ? 1 : -1)), [checkins, avaliacoes]);
   const pontosGordura = avaliacoes.filter((a) => a.percentual_gordura != null).map((a) => ({ x: dataCurta(a.data), y: a.percentual_gordura }));
 
   if (!feitas.length && !checkins.length && !avaliacoes.length) return html`<${Vazio} titulo="Nada registrado ainda" texto="Assim que o primeiro treino for concluído, a evolução aparece aqui."/>`;
@@ -84,14 +107,25 @@ function EvolucaoCorpo({ d }) {
     ${ton > 0 && html`<p class="nota">Tonelagem acumulada: ${num(ton, 0)} kg, ${equivalencia(ton)}.</p>`}
 
     ${comCarga.length > 0 && html`<section class="card">
-      <div class="card-topo"><h3>Carga por exercício</h3></div>
-      <select class="input" value=${exSel} onChange=${(ev) => setExSel(ev.target.value)} aria-label="Exercício">
-        ${comCarga.map((x) => html`<option value=${x.id}>${x.nome}</option>`)}
-      </select>
-      <${Linha} pontos=${pontosCarga} sufixo=" kg"/>
+      <div class="card-topo"><h3>Progressão de carga</h3></div>
+      <div class="filtros-evolucao">
+        <select class="input" value=${fichaSel} onChange=${(ev) => { setFichaSel(ev.target.value); setTreinoSel(''); }} aria-label="Ficha de treino">
+          <option value="">Todas as fichas</option>
+          ${mesos.map((m) => html`<option value=${m.id}>${m.nome || 'Ficha'} · ${dataBR(m.inicio)}${m.status === 'ativo' ? ' (ativa)' : ''}</option>`)}
+        </select>
+        <select class="input" value=${treinoSel} onChange=${(ev) => setTreinoSel(ev.target.value)} aria-label="Treino">
+          <option value="">Todos os treinos</option>
+          ${nomesTreino.map((t) => html`<option value=${t}>${t}</option>`)}
+        </select>
+      </div>
+      ${exFiltro.length ? html`<select class="input" value=${exVer} onChange=${(ev) => setExSel(ev.target.value)} aria-label="Exercício">
+          ${exFiltro.map((x) => html`<option value=${x.id}>${x.nome}</option>`)}
+        </select>
+        <${LinhasSeries} datas=${porSerie.datas} linhas=${porSerie.linhas} sufixo=" kg"/>`
+      : html`<p class="suave">Nenhum exercício com carga nesse filtro.</p>`}
     </section>`}
 
-    ${comCarga.length > 0 && html`<${ProgressaoGeral} sessoes=${sessoes} series=${series} exercicios=${exercicios} onVer=${setExSel}/>`}
+    ${comCarga.length > 0 && html`<${ProgressaoGeral} sessoes=${sessoes} series=${series} exercicios=${exercicios} onVer=${(id) => { setFichaSel(''); setTreinoSel(''); setExSel(id); }}/>`}
 
     <section class="card">
       <div class="card-topo"><div><h3>Olimpo</h3><small class="suave">O melhor de cada exercício: maior carga, repetições nela e 1RM estimado</small></div><span class="tag">${recs.length}</span></div>
@@ -106,7 +140,10 @@ function EvolucaoCorpo({ d }) {
       : html`<p class="suave">Os recordes aparecem quando houver séries com carga.</p>`}
     </section>
 
-    ${pontosPeso.length > 0 && html`<section class="card"><div class="card-topo"><h3>Peso corporal</h3><span class="valor">${num(pontosPeso[pontosPeso.length - 1].y, 1)} kg</span></div><${Linha} pontos=${pontosPeso} sufixo=" kg"/></section>`}
+    ${pontosPeso.length > 0 && html`<section class="card"><div class="card-topo"><h3>Peso corporal</h3><span class="valor">${num(pontosPeso[pontosPeso.length - 1].y, 1)} kg</span></div><${Linha} pontos=${pontosPeso} sufixo=" kg"/>
+      <details class="instr"><summary>Registros de peso (${registrosPeso.length})</summary>
+        <table class="tabela-series"><thead><tr><th>Data</th><th>Peso</th><th>Onde</th></tr></thead>
+          <tbody>${registrosPeso.map((r) => html`<tr><td>${dataBR(r.data)}</td><td>${num(r.peso, 1)} kg</td><td>${r.fonte}</td></tr>`)}</tbody></table></details></section>`}
     ${pontosGordura.length > 0 && html`<section class="card"><div class="card-topo"><h3>% de gordura</h3><span class="valor">${num(pontosGordura[pontosGordura.length - 1].y, 1)}%</span></div><${Linha} pontos=${pontosGordura} sufixo="%"/></section>`}
 
     ${feitas.length > 0 && html`<section class="card"><div class="card-topo"><h3>Últimos treinos</h3></div>
@@ -447,3 +484,34 @@ function Autoavaliacao({ aluna, onFechar, onSalvo }) {
     <button class="btn primario grande" disabled=${salvando}>${salvando ? 'Enviando...' : 'Enviar autoavaliação'}</button>
   </form><//>`;
 }
+
+// ---------- metas da semana (perguntas metas_semana e metas_cumpridas do Oráculo vivo, atualização 15) ----------
+export const ROTULO_METAS = { todas: 'cumpriu todas', parte: 'cumpriu parte', nenhuma: 'não cumpriu' };
+const textoResposta = (v) => (v == null ? '' : typeof v === 'string' ? v : String(v));
+export async function metasDoEnvio(envioId) {
+  const l = await api.q('respostas', { eq: { envio_id: envioId } });
+  const pega = (k) => textoResposta((l.find((r) => r.chave === k) || {}).valor).trim();
+  return { semana: pega('metas_semana'), cumpridas: pega('metas_cumpridas') };
+}
+// último Oráculo vivo da aluna que trouxe metas para a semana (null se não houver ou sem as atualizações)
+export async function metasAtuais(alunaId) {
+  try {
+    const forms = (await api.q('formularios', { eq: { tipo: 'oraculo' } })).map((f) => f.id);
+    if (!forms.length) return null;
+    // só o último Oráculo vale: é ele que o próximo usa para perguntar como foi
+    const ultimo = (await api.q('envios', { eq: { aluna_id: alunaId }, order: 'enviado_em', asc: false, limit: 20 })).find((x) => forms.includes(x.formulario_id));
+    if (!ultimo) return null;
+    const m = await metasDoEnvio(ultimo.id);
+    return m.semana ? { ...m, em: ultimo.enviado_em } : null;
+  } catch (err) { return null; }
+}
+export function MetasEnvio({ envio }) {
+  const e = useCarregar(() => metasDoEnvio(envio.id).catch(() => null), [envio.id]);
+  const m = e.dados;
+  if (!m || (!m.semana && !m.cumpridas)) return null;
+  return html`<div class="metas-semana">
+    ${m.cumpridas && html`<p><b>Metas da semana passada:</b> ${ROTULO_METAS[m.cumpridas] || m.cumpridas}${(envio.contexto && envio.contexto.anterior && envio.contexto.anterior.metas_semana) ? html`<br/><small class="suave">${envio.contexto.anterior.metas_semana}</small>` : ''}</p>`}
+    ${m.semana && html`<p><b>Metas para a próxima semana:</b> ${m.semana}</p>`}
+  </div>`;
+}
+
