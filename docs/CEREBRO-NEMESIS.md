@@ -189,7 +189,7 @@ Roteamento por hash: `#/base/id/sub`.
 
 | Rota | Tela |
 |---|---|
-| `#/` | Início: cartão do próximo treino (ou do treino em andamento) com tempo estimado, semana, Oráculo aberto, cardio, água do dia com meta, lista de treinos e pendências de formulário |
+| `#/` | Início: faixa grega, cartão do próximo treino (ou do treino em andamento) com tempo estimado, semana, Oráculo aberto, **Cardio sempre visível** (prescrito ou registro livre), metas da semana, **água numa ânfora** que enche (toque = 1 copo de 250 ml, copos até a meta, garrafinha de 500 ml, desfazer), lista de treinos e pendências de formulário |
 | `#/treino/:id` | Arena: um exercício por vez (seção 6.4) |
 | `#/form/:formularioId/:atribuicaoId` | Responder formulário |
 | `#/evolucao` · `#/relatorio` | Evolução (progressão de carga por série com filtro de ficha e treino, peso com a tabela de registros, Olimpo) e relatório |
@@ -661,6 +661,7 @@ Menor de 18 anos (pela data de nascimento ou pela resposta): nome, parentesco e 
   - ok `#5fd4a0` · atenção `#f2c14e` · perigo `#ff6b81`
   - raio 16 px
 - **Fontes:** Inter (texto) e Playfair Display (títulos), locais em `lib/fontes`.
+- **Grécia antiga (pedido de aluna, 01/10/2026):** ícones de linha em `js/icones.js` (`elmo` próximo treino, `coluna` semana, `tocha` cardio, `louros` metas, `anfora` água, `copo`), faixa de grega (`.grega`, meandro por máscara CSS na cor do token) e a ânfora da água. Por enquanto só na home da aluna; levar o mesmo cuidado às outras telas é um próximo passo (seção 13).
 - **Layout:** treinador com menu lateral recolhível (desktop) e gaveta (celular); aluna com menu inferior. KPIs grandes, painéis em 3 colunas, estados vazios que ensinam ("Como funciona" em passos).
 - **Tom:** português do Brasil, segunda pessoa, feminino para a aluna ("bem-vinda", "Guerreira"), frases curtas, sem jargão para a aluna. Mensagens de WhatsApp prontas em tom próximo.
 - Pendente: a especificação da ficha pediu fundo `#121212`; hoje é `#1a1a1a`.
@@ -831,6 +832,7 @@ React Native (Expo) ou Flutter. Custa uma reescrita das telas (as regras da seç
 |---|---|---|
 | **0. Colocar no ar o que já foi feito** | 1 a 3 dias | Merge do PR #2; rodar `atualizacao-7` a `-12`, em ordem; preencher `LEGAL` no `config.js`; conferir Auth URLs; configurar SMTP próprio; testar com 2 ou 3 alunas reais |
 | **1. Piloto** | semanas 1 e 2 | Uso real com a turma; correções; responder as decisões pendentes (seção 15) |
+| **1b. Visual grego no app todo** | junto com o piloto | Pedido de aluna: levar ícones gregos, faixa de grega e detalhes de marca da home para Arena, Evolução, Oráculo e Perfil |
 | **2. Robustez** | semanas 3 a 6 | Supabase Pro com backup; domínio próprio; LGPD (consentimento no Alistamento, política de privacidade, exclusão de dados); testes automáticos no GitHub Actions; regra de guarda dos vídeos |
 | **3. Lojas (Capacitor)** | semanas 6 a 10 | Empacotar; push; câmera; links profundos; contas nas lojas; enviar para revisão (Apple leva de dias a 2 semanas) |
 | **4. Automação e receita** | após a semana 10 | Cobrança automática; lembretes automáticos (WhatsApp/push); Petroski e outros protocolos; recursos de IA |

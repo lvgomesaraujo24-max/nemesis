@@ -134,3 +134,8 @@ Modelo:
 **Por quê**: o SMTP embutido do Supabase manda poucos e-mails por hora e é só para teste; o Resend tem plano grátis para alguns milhares de e-mails por mês e deixa o remetente com o domínio da consultoria.
 **Consequências**: precisa de um domínio próprio verificado no Resend. A chave da API fica só no painel do Supabase. A Política de Privacidade passou a citar o Resend pelo nome entre os operadores (antes dizia "o serviço que envia os e-mails"), sem nova versão dos termos.
 
+## 2026-10-01 · Home da aluna com cara de Grécia antiga
+**Decisão**: a home da aluna ganhou ícones gregos (elmo, coluna, tocha, louros, ânfora), uma faixa de grega e a água virou uma ânfora que enche, com copos de 250 ml. O Cardio aparece sempre, mesmo sem prescrição, e a aluna pode registrar cardio livre.
+**Por quê**: retorno de aluna testando o app: faltava o cardio na primeira página, a água podia ser mais interativa e o layout podia ser mais autêntico, com a marca do Nemesis. Os nomes das funções não mudaram (regra de não inventar nome grego novo sem aprovação); só o visual.
+**Próximo passo**: levar o mesmo visual às outras telas (roadmap, seção 13).
+
