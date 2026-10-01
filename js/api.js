@@ -15,7 +15,7 @@ function criarSupabase() {
     async sessao() { const { data } = await sb.auth.getSession(); return data.session ? data.session.user : null; },
     async entrar(email, senha) { erro(await sb.auth.signInWithPassword({ email, password: senha })); },
     async cadastrar(email, senha, nome, extra = {}) {
-      const d = erro(await sb.auth.signUp({ email, password: senha, options: { data: { nome, ...extra } } }));
+      const d = erro(await sb.auth.signUp({ email, password: senha, options: { data: { nome, ...extra }, emailRedirectTo: location.origin + location.pathname } }));   // o link do e-mail volta para o app (precisa estar em Redirect URLs no Supabase)
       return { precisaConfirmar: !d.session };
     },
     async recuperar(email) { erro(await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname })); },

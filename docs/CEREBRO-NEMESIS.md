@@ -2,13 +2,13 @@
 
 > Fonte primária do app Nemesis. Reúne o que o app é, como foi construído, onde cada coisa mora, todas as regras de cálculo ("inteligência") e o plano daqui para frente.
 > Dono do produto: **Luiz (LV TEAM · LV Coach)**. Repositório: `github.com/lvgomesaraujo24-max/nemesis`. Endereço do app: `https://lvgomesaraujo24-max.github.io/nemesis/`.
-> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v11`, banco até a `atualizacao-13.sql`).
+> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v12`, banco até a `atualizacao-13.sql`).
 
 ### Status real (leia antes de tudo)
 
 | Onde | Versão | Banco |
 |---|---|---|
-| **Produção** (branch `main`, o que as alunas usam hoje) | `nemesis-v11` | até a `atualizacao-13.sql` |
+| **Produção** (branch `main`, o que as alunas usam hoje) | `nemesis-v11` (v12 no PR #4) | até a `atualizacao-13.sql` |
 
 O PR #2 foi juntado ao `main` em 01/10/2026 e as atualizações 7 a 12 foram rodadas no Supabase no mesmo dia; a 13 (trava da `fase_ciclo`) foi aplicada logo depois. O PR #3 (relatório com deusa, missão e card de Stories) foi incorporado ao PR #2; a migração dele virou a `atualizacao-10.sql`. O branch `claude/happy-lovelace-qmbtuq` (CLAUDE.md, `.claude/` e checagem) também foi incorporado, atualizado para a v10.
 
@@ -655,7 +655,7 @@ Menor de 18 anos (pela data de nascimento ou pela resposta): nome, parentesco e 
 
 ### Supabase
 - Projeto em **South America (São Paulo)**. URL do projeto em `config.js`.
-- **Authentication > URL Configuration:** Site URL e Redirect URLs = endereço do app (sem isso, confirmação de e-mail e "esqueci a senha" não voltam para o app).
+- **Authentication > URL Configuration:** Site URL = `https://lvgomesaraujo24-max.github.io/nemesis/` e, em Redirect URLs, `https://lvgomesaraujo24-max.github.io/nemesis/**` (sem isso, confirmação de e-mail e "esqueci a senha" caem num 404 do GitHub Pages). O cadastro e o "esqueci a senha" mandam `emailRedirectTo`/`redirectTo` com o endereço atual do app.
 - **Authentication > Providers > Email:** "Confirm email" pode ser desligado se a aluna não precisar confirmar.
 - **E-mails:** o SMTP embutido do Supabase tem limite baixo de envios por hora. Para uso real, configurar um SMTP próprio (seção 12).
 - Senha do banco: **fica só com o Luiz** (guardar num gerenciador de senhas). Não está no repositório.
