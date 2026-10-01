@@ -21,9 +21,9 @@ const PADRAO = {
 // o que o "Replicar valores" copia do 1º exercício para os outros
 const REPLICAR = [['reps', 'Repetições', ['reps', 'reps_tipo']], ['metodo', 'Método', ['metodo', 'tecnica']], ['series', 'Séries', ['series']],
   ['cadencia', 'Cadência', ['cadencia_exc', 'cadencia_con', 'cadencia_tipo', 'cadencia_texto']], ['intervalo', 'Intervalo', ['descanso', 'descanso_tipo', 'descanso_max']],
-  ['aquecimento', 'Séries de aquecimento', ['aquecimento']], ['esforco', 'RIR/RPE', ['esforco_tipo', 'esforco_alvo']]];
+  ['aquecimento', 'Aquecimento e preparatórias', ['aquecimento', 'preparatorias']], ['esforco', 'RIR/RPE', ['esforco_tipo', 'esforco_alvo']]];
 // o que um preset de linha guarda
-const CAMPOS_PRESET = ['series', 'aquecimento', 'reps', 'reps_tipo', 'cadencia_exc', 'cadencia_con', 'cadencia_tipo', 'cadencia_texto', 'descanso', 'descanso_tipo', 'descanso_max', 'metodo', 'tecnica', 'esforco_tipo', 'esforco_alvo'];
+const CAMPOS_PRESET = ['series', 'aquecimento', 'preparatorias', 'reps', 'reps_tipo', 'cadencia_exc', 'cadencia_con', 'cadencia_tipo', 'cadencia_texto', 'descanso', 'descanso_tipo', 'descanso_max', 'metodo', 'tecnica', 'esforco_tipo', 'esforco_alvo'];
 
 // dono dos treinos: uma aluna (ficha) ou um modelo
 const donoDe = (aluna, modelo) => (aluna ? { campo: 'aluna_id', id: aluna.id, tabela: 'profiles', nivel: aluna.nivel, aluna } : { campo: 'modelo_id', id: modelo.id, tabela: 'modelos', nivel: modelo.nivel, modelo });
@@ -243,7 +243,7 @@ function Item({ it, ex, i, n, presets, salvar, mover, remover, trocar, salvarPre
   const [verSeries, setVerSeries] = useState(false);
   const emGrupo = METODOS_GRUPO.includes(it.metodo);
   const cel = (rotulo, corpo, extra) => html`<div class="cel"><div class="cel-rot">${rotulo}</div><div class=${'cel-corpo' + (extra ? ' ' + extra : '')}>${corpo}</div></div>`;
-  const num = (campo, ph = '—') => html`<input class="cel-in" inputmode="numeric" placeholder=${ph} value=${it[campo] ?? ''} onChange=${(ev) => salvar({ [campo]: numOuNull(ev.target.value) ?? (campo === 'series' ? 1 : campo === 'aquecimento' ? 0 : null) })}/>`;
+  const num = (campo, ph = '—') => html`<input class="cel-in" inputmode="numeric" placeholder=${ph} value=${it[campo] ?? ''} onChange=${(ev) => { let v = numOuNull(ev.target.value) ?? (campo === 'series' ? 1 : campo === 'aquecimento' || campo === 'preparatorias' ? 0 : null); if (campo === 'preparatorias') v = Math.min(5, Math.max(0, v)); salvar({ [campo]: v }); }}/>`;
   const sobre = arrasto && arrasto.sobre === i && arrasto.de !== i;
   return html`<article ref=${ref} class=${'ex-item tipo-' + tipo + (arrasto && arrasto.de === i ? ' arrastando' : '') + (sobre ? ' sobre' : '')}
     onDragOver=${(ev) => { if (!arrasto) return; ev.preventDefault(); if (arrasto.sobre !== i) setArrasto({ ...arrasto, sobre: i }); }}
@@ -276,6 +276,7 @@ function Item({ it, ex, i, n, presets, salvar, mover, remover, trocar, salvarPre
     : html`<div class="ex-campos">
         ${cel('Séries', num('series'))}
         ${cel('Aquec.', num('aquecimento', '0'))}
+        ${cel(html`<span title="Séries preparatórias: carga perto da de trabalho, poucas reps, longe da falha. Não contam como séries válidas.">Prep.</span>`, num('preparatorias', '0'))}
         <${CelReps} it=${it} salvar=${salvar} cel=${cel}/>
         ${cel(html`<select class="cel-sel" aria-label="Tipo de cadência" onChange=${(ev) => salvar({ cadencia_tipo: ev.target.value, cadencia_texto: ev.target.value === 'americana' ? '3-0-1-0' : ev.target.value === 'simplificada' ? 'moderada' : null })}>${opcoes(CADENCIAS, ct)}</select>`,
           ct === 'americana' ? html`<input class="cel-in" placeholder="3-0-1-0" title="Descida, pausa embaixo, subida, pausa em cima (segundos)" value=${it.cadencia_texto || ''} onChange=${(ev) => salvar({ cadencia_texto: ev.target.value.replace(/[^\dX]/gi, '').slice(0, 4).split('').join('-') || null })}/>`

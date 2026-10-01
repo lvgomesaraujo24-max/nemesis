@@ -111,9 +111,18 @@ function EvolucaoCorpo({ d }) {
 
     ${feitas.length > 0 && html`<section class="card"><div class="card-topo"><h3>Últimos treinos</h3></div>
       <ul class="lista">${feitas.slice(-8).reverse().map((s) => html`<li class="linha">
-        <div><b>${s.treino_nome || 'Treino'}</b><small>${dataBR(s.data)}${s.comentario ? ' · ' + s.comentario : ''}</small></div>
+        <div><b>${s.treino_nome || 'Treino'}</b><small>${dataBR(s.data)}${s.comentario ? ' · ' + s.comentario : ''}</small>
+          ${notasDaSessao(s, series, exercicios).map(([ex, t]) => html`<small class="nota-ex"><b>${ex}:</b> ${t}</small>`)}</div>
         ${s.esforco ? html`<span class="tag">esforço ${s.esforco}/10</span>` : null}</li>`)}</ul></section>`}
   </div>`;
+}
+
+// observações que a aluna anotou por exercício na Arena (sessoes.notas, chave = treino_item_id)
+function notasDaSessao(s, series, exercicios) {
+  return Object.entries(s.notas || {}).filter(([, t]) => t).map(([itemId, t]) => {
+    const serie = series.find((x) => x.sessao_id === s.id && x.treino_item_id === itemId);
+    return [(exercicios.find((e) => serie && e.id === serie.exercicio_id) || {}).nome || 'Exercício', t];
+  });
 }
 
 // progressão geral: todos os exercícios lado a lado, com filtro por treino
