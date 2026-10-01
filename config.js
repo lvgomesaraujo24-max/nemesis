@@ -13,10 +13,10 @@ window.NEMESIS_CONFIG = {
   ASSINATURA: "@luizvcoach",
   // LGPD: quem responde pelos dados das alunas. Aparece na Política de Privacidade e nos Termos de Uso.
   LEGAL: {
-    controlador: "",   // seu nome completo ou o nome da empresa
-    documento: "",     // CPF ou CNPJ (ex.: "CNPJ 00.000.000/0001-00")
-    email: "",         // e-mail para assuntos de privacidade
-    cref: "",          // ex.: "CREF 000000-G/ES"
-    cidade: ""         // ex.: "Vitória/ES"
+    controlador: "Luiz Victor Gomes de Araujo",   // obrigatório: seu nome completo ou o nome da empresa
+    documento: "",                                 // opcional: CNPJ (ex.: "CNPJ 00.000.000/0001-00"). Não use CPF: este arquivo é público
+    email: "lvgomesaraujo.24@gmail.com",           // obrigatório: e-mail para assuntos de privacidade
+    cref: "",                                      // opcional: ex.: "CREF 000000-G/SP"
+    cidade: "São Paulo/SP"
   }
 };

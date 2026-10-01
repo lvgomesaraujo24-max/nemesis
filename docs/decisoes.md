@@ -95,7 +95,7 @@ Modelo:
 **Por quê**: a imutabilidade protege o histórico clínico; o direito de eliminação (art. 18, VI) prevalece quando a aluna pede ou o prazo de guarda vence.
 
 ## 2026-10-01 · Trava de consentimento só com o responsável preenchido
-**Decisão**: fora do modo demonstração, a tela de consentimento fica desligada enquanto `config.js` > `LEGAL` não tiver nome, documento e e-mail do responsável pelos dados. Se a leitura do consentimento falhar, o app não abre.
+**Decisão**: fora do modo demonstração, a tela de consentimento fica desligada enquanto `config.js` > `LEGAL` não tiver nome e e-mail do responsável (CNPJ e CREF são opcionais) pelos dados. Se a leitura do consentimento falhar, o app não abre.
 **Por quê**: um aceite dado sobre um texto com "[nome do responsável]" não identifica o controlador (art. 9º, III) e não vale como prova. E uma trava que abre o app quando a rede falha não protege nada.
 **Consequências**: até preencher `LEGAL`, a aluna não consegue autorizar fotos e vídeos, e o banco recusa os envios dela. A Acrópole avisa o treinador.
 

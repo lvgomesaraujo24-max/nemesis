@@ -11,10 +11,11 @@ export const VERSAO_TERMOS = '2026-10-01';
 // dados do responsável pelos dados (controlador), preenchidos em config.js > LEGAL
 const L = (window.NEMESIS_CONFIG || {}).LEGAL || {};
 export const CONTROLADOR = {
-  nome: L.controlador || '[nome do responsável]', documento: L.documento || '[CPF ou CNPJ]', email: L.email || '[e-mail de contato]',
-  cref: L.cref || '[CREF]', cidade: L.cidade || '[cidade/UF]',
+  nome: L.controlador || '[nome do responsável]', email: L.email || '[e-mail de contato]',
+  // opcionais: só entram no texto se estiverem preenchidos (a LGPD pede identificação e contato, art. 9º, III)
+  documento: L.documento ? `, ${L.documento}` : '', cref: L.cref ? ` (${L.cref})` : '', cidade: L.cidade ? `, em ${L.cidade}` : '',
 };
-export const legalPreenchido = () => !!(L.controlador && L.documento && L.email);
+export const legalPreenchido = () => !!(L.controlador && L.email);
 
 // ============================================================
 // TEXTOS (cada documento: [título da seção, [parágrafos]]; parágrafo que começa com "• " vira item de lista)
@@ -22,7 +23,7 @@ export const legalPreenchido = () => !!(L.controlador && L.documento && L.email)
 const C = CONTROLADOR;
 export const POLITICA = [
   ['1. Quem cuida dos seus dados', [
-    `O responsável pelos seus dados (controlador, LGPD art. 5º, VI) é ${C.nome}, ${C.documento}, profissional de educação física (${C.cref}), em ${C.cidade}.`,
+    `O responsável pelos seus dados (controlador, LGPD art. 5º, VI) é ${C.nome}${C.documento}, profissional de educação física${C.cref}${C.cidade}.`,
     `Qualquer assunto sobre os seus dados: ${C.email} ou, no app, em Perfil > Privacidade. Esse é o canal de atendimento ao titular (art. 41).`]],
   ['2. Quais dados o Nemesis guarda', [
     '• Cadastro: nome, e-mail, WhatsApp, data de nascimento, sexo e objetivo.',
@@ -89,7 +90,7 @@ export const POLITICA = [
 
 export const TERMOS = [
   ['1. O que é o Nemesis', [
-    `O Nemesis é o app da consultoria de treino online de ${C.nome}, profissional de educação física (${C.cref}). Pelo app você recebe a sua ficha de treino, registra treinos, check-ins e avaliações e acompanha a sua evolução.`]],
+    `O Nemesis é o app da consultoria de treino online de ${C.nome}, profissional de educação física${C.cref}. Pelo app você recebe a sua ficha de treino, registra treinos, check-ins e avaliações e acompanha a sua evolução.`]],
   ['2. Sua conta', [
     '• A conta é pessoal: não compartilhe a senha.',
     '• Use dados verdadeiros: o treino é montado a partir deles.',

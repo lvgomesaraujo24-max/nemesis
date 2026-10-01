@@ -609,7 +609,7 @@ No aparelho: campo-isca invisível ("Empresa") e tempo mínimo de 5 segundos des
 3. Fotos e vídeos (opcional; sem ele, o banco recusa foto, imagem e vídeo enviados pela aluna, e o app também não deixa o treinador subir foto de corpo dela).
 Menor de 18 anos (pela data de nascimento ou pela resposta): nome, parentesco e contato do responsável e a declaração dele (art. 14, §1º). Cada aceite fica em `consentimentos` com a versão (`VERSAO_TERMOS`) e a hora do servidor; ninguém edita nem apaga (só a exclusão da aluna). **Subir a versão faz todas aceitarem de novo.**
 
-**Trava desligada até preencher `LEGAL`:** fora do modo demonstração, a tela de consentimento só aparece depois que `config.js` > `LEGAL` tiver nome, documento e e-mail do responsável (ninguém aceita texto com campo em branco). Enquanto isso, sem consentimento registrado, o banco (com a atualização 12) recusa foto e vídeo enviados pela aluna. Se a leitura do consentimento falhar (rede, sessão), o app não abre: mostra "Tentar de novo".
+**Trava desligada até preencher `LEGAL`:** fora do modo demonstração, a tela de consentimento só aparece depois que `config.js` > `LEGAL` tiver nome e e-mail do responsável (CNPJ e CREF são opcionais) (ninguém aceita texto com campo em branco). Enquanto isso, sem consentimento registrado, o banco (com a atualização 12) recusa foto e vídeo enviados pela aluna. Se a leitura do consentimento falhar (rede, sessão), o app não abre: mostra "Tentar de novo".
 
 **Pastas no Storage:** `<aluna>/fotos/` (fotos de corpo, imagens e vídeos da aba Arquivos, fotos da autoavaliação) e `<aluna>/videos/` (vídeos de execução) exigem o consentimento de imagem para a aluna enviar. Exames e documentos ficam em `<aluna>/`.
 

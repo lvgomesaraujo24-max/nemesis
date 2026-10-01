@@ -275,7 +275,7 @@ function FilaDoDia({ f, ir }) {
   return html`<section class="templo">
     ${f.pedidos.length > 0 && html`<button class="lacre pedidos-aviso" onClick=${() => ir(f.pedidos[0].aluna_id ? `aluna/${f.pedidos[0].aluna_id}/dados` : 'alunas')}><span class="lacre-ponto" aria-hidden="true"></span>
       <span><b>${f.pedidos.length} pedido(s) de privacidade em aberto</b> · o mais antigo há ${diasEntre(String(f.pedidos[0].criada_em).slice(0, 10), hoje())} dia(s). A LGPD dá 15 dias para responder.</span><span class="lacre-ver">Ver</span></button>`}
-    ${!legalPreenchido() && html`<p class="nota atencao">Preencha os seus dados de responsável pelos dados (nome, CPF ou CNPJ, e-mail e CREF) em <b>config.js</b>, no campo LEGAL. Eles aparecem na Política de Privacidade e nos Termos de Uso que as alunas aceitam.</p>`}
+    ${!legalPreenchido() && html`<p class="nota atencao">Preencha os seus dados de responsável pelos dados (nome e e-mail; CNPJ e CREF se tiver) em <b>config.js</b>, no campo LEGAL. Eles aparecem na Política de Privacidade e nos Termos de Uso que as alunas aceitam.</p>`}
     ${f.aguardando.length > 0 && html`<button class="lacre aguardando-aviso" onClick=${() => ir('alunas')}><span class="lacre-ponto" aria-hidden="true"></span>
       <span><b>${f.aguardando.length} cadastro(s) aguardando aprovação</b> · ${nomes(f.aguardando)}</span><span class="lacre-ver">Ver</span></button>`}
     <div class="templo-cab"><h2 class="bloco">Fila do dia</h2><small>${total ? `${total} coisa(s) esperando você` : 'Nada na fila. Dia limpo.'}</small></div>
