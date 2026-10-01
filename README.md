@@ -53,6 +53,7 @@ Funciona como app instalável no celular (PWA). Não precisa de loja de aplicati
 
 ### 3. Ajustes finais no Supabase
 1. Em **Authentication > URL Configuration**, coloque o endereço do app em **Site URL** e também em **Redirect URLs**. Sem isso, o link de confirmação de e-mail e o de "esqueci a senha" não voltam para o app.
+1. Para os e-mails saírem com a marca e sem limite baixo, configure o **Resend** como SMTP e cole os modelos de `supabase/emails/` em **Authentication > Email Templates** (passo a passo em `docs/CEREBRO-NEMESIS.md`, seção 9).
 2. **Crie a sua conta primeiro.** A primeira conta criada no app vira TREINADOR. Todas as outras viram aluna.
 3. Opcional: em **Authentication > Providers > Email**, desligue **Confirm email** se não quiser que a aluna tenha que confirmar o e-mail antes de entrar.
 

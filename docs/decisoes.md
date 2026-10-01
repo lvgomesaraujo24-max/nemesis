@@ -129,3 +129,8 @@ Modelo:
 **Decisão**: o gráfico de progressão por série usa quatro cores novas em `:root` (`--serie-1` a `--serie-4`: azul, laranja, verde-água e amarelo).
 **Por quê**: o roxo da marca não serve para separar várias linhas. As quatro cores passaram pelo validador de paleta no fundo escuro do app: diferença para daltonismo ΔE ≥ 8 e contraste ≥ 3:1. Os tons de estado (`--ok`, `--atencao`, `--perigo`) continuam reservados para estado.
 
+## 2026-10-01 · E-mails pelo Resend, com a marca do Nemesis
+**Decisão**: os e-mails de login (confirmação, nova senha, troca de e-mail, código) saem pelo Resend via SMTP do Supabase, com modelos próprios em `supabase/emails/` no visual do app (escuro, roxo, logo, tom da §8).
+**Por quê**: o SMTP embutido do Supabase manda poucos e-mails por hora e é só para teste; o Resend tem plano grátis para alguns milhares de e-mails por mês e deixa o remetente com o domínio da consultoria.
+**Consequências**: precisa de um domínio próprio verificado no Resend. A chave da API fica só no painel do Supabase. A Política de Privacidade passou a citar o Resend pelo nome entre os operadores (antes dizia "o serviço que envia os e-mails"), sem nova versão dos termos.
+

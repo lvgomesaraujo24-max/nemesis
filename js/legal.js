@@ -53,7 +53,7 @@ export const POLITICA = [
     '• Inscrição pelo formulário da bio: o seu consentimento ao enviar (art. 7º, I).']],
   ['5. Com quem os dados são compartilhados', [
     '• Só o treinador responsável acessa os seus dados. Outras alunas não veem nada seu.',
-    '• Fornecedores de tecnologia que fazem o app funcionar, só para prestar esse serviço: Supabase (banco de dados, login e arquivos), o serviço que envia os e-mails de login e o GitHub Pages (hospeda os arquivos do app e, como qualquer site, recebe o endereço IP de quem acessa; não guarda os seus dados de treino ou saúde). Eles são operadores (art. 5º, VII) e só tratam os dados seguindo as instruções do controlador.',
+    '• Fornecedores de tecnologia que fazem o app funcionar, só para prestar esse serviço: Supabase (banco de dados, login e arquivos), Resend (envia os e-mails de cadastro e de troca de senha) e o GitHub Pages (hospeda os arquivos do app e, como qualquer site, recebe o endereço IP de quem acessa; não guarda os seus dados de treino ou saúde). Eles são operadores (art. 5º, VII) e só tratam os dados seguindo as instruções do controlador.',
     '• Alguns desses fornecedores são empresas estrangeiras. Quando houver transferência de dados para fora do Brasil, ela segue as regras do art. 33 da LGPD.',
     '• WhatsApp, quando você ou o treinador escolhem conversar por lá.',
     '• Nutricionista ou outro profissional, só a seu pedido ou com a sua autorização.',

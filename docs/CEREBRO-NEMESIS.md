@@ -2,7 +2,7 @@
 
 > Fonte primária do app Nemesis. Reúne o que o app é, como foi construído, onde cada coisa mora, todas as regras de cálculo ("inteligência") e o plano daqui para frente.
 > Dono do produto: **Luiz (LV TEAM · LV Coach)**. Repositório: `github.com/lvgomesaraujo24-max/nemesis`. Endereço do app: `https://lvgomesaraujo24-max.github.io/nemesis/`.
-> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v13`, banco até a `atualizacao-15.sql`).
+> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v14`, banco até a `atualizacao-15.sql`).
 
 ### Status real (leia antes de tudo)
 
@@ -147,7 +147,8 @@ Regras:
 | `js/chronos.js` | Agenda: semana, mês, fila, camadas automáticas, rituais |
 | `js/icones.js` | Ícones SVG de linha |
 | `supabase/schema.sql` | Banco base (rodar primeiro) |
-| `supabase/atualizacao-2.sql` … `-9.sql` | Atualizações do banco, em ordem |
+| `supabase/atualizacao-2.sql` … `-15.sql` | Atualizações do banco, em ordem |
+| `supabase/emails/*.html` | Modelos dos e-mails de login (Resend), colados em Supabase > Authentication > Email Templates (§9) |
 
 ### Padrões de código
 
@@ -673,10 +674,28 @@ Menor de 18 anos (pela data de nascimento ou pela resposta): nome, parentesco e 
 - **GitHub Pages:** Settings > Pages > Deploy from a branch > `main` > `/ (root)`. No plano grátis, o Pages exige repositório público.
 
 ### Supabase
-- Projeto em **South America (São Paulo)**. URL do projeto em `config.js`.
+- Projeto na região **us-east-2 (Ohio, EUA)**, conferido em 01/10/2026; os dados ficam fora do Brasil (transferência internacional, LGPD art. 33, citada na Política de Privacidade). URL do projeto em `config.js`.
 - **Authentication > URL Configuration:** Site URL = `https://lvgomesaraujo24-max.github.io/nemesis/` e, em Redirect URLs, `https://lvgomesaraujo24-max.github.io/nemesis/**` (sem isso, confirmação de e-mail e "esqueci a senha" caem num 404 do GitHub Pages). O cadastro e o "esqueci a senha" mandam `emailRedirectTo`/`redirectTo` com o endereço atual do app.
 - **Authentication > Providers > Email:** "Confirm email" pode ser desligado se a aluna não precisar confirmar.
-- **E-mails:** o SMTP embutido do Supabase tem limite baixo de envios por hora. Para uso real, configurar um SMTP próprio (seção 12).
+- **E-mails (Resend):** o SMTP embutido do Supabase manda pouquíssimos e-mails por hora e só serve para teste. O envio de verdade é pelo **Resend** (SMTP), com os modelos da marca em `supabase/emails/`.
+  1. **Domínio próprio:** o Resend só envia para qualquer pessoa a partir de um domínio verificado (ex.: `lvteam.com.br`). Sem domínio, ele só manda teste para o e-mail da própria conta.
+  2. **Resend > Domains > Add domain:** de preferência um subdomínio (ex.: `mail.lvteam.com.br`). Copiar os registros DNS (SPF, DKIM e MX de retorno) para onde o domínio foi comprado e clicar em Verify.
+  3. **Resend > API Keys:** criar uma chave só de envio ("Sending access") para esse domínio. **A chave fica só no painel do Supabase**: nunca em `config.js`, no repositório ou no chat.
+  4. **Supabase > Project Settings > Authentication > SMTP Settings > Enable custom SMTP:** remetente `nao-responda@<domínio>`, nome `Nemesis`, host `smtp.resend.com`, porta `465`, usuário `resend`, senha = a chave do passo 3. (O Resend também tem uma integração com o Supabase que preenche isso sozinha.)
+  5. **Supabase > Authentication > Rate Limits:** subir "emails per hour" (ex.: 100).
+  6. **Supabase > Authentication > Email Templates:** colar cada modelo com o assunto da tabela abaixo.
+  7. **Testar:** cadastro com `seuemail+teste@gmail.com` e "Esqueci a senha".
+
+  | Modelo no Supabase | Arquivo | Assunto |
+  |---|---|---|
+  | Confirm signup | `confirmar-cadastro.html` | Confirme seu e-mail para entrar no Nemesis |
+  | Reset Password | `redefinir-senha.html` | Crie uma nova senha no Nemesis |
+  | Change Email Address | `trocar-email.html` | Confirme o seu novo e-mail no Nemesis |
+  | Magic Link | `link-de-acesso.html` | Seu link para entrar no Nemesis |
+  | Invite user | `convite.html` | Você foi convidada para o Nemesis |
+  | Reauthentication | `codigo-de-confirmacao.html` | Seu código de confirmação do Nemesis |
+
+  Os modelos usam as variáveis do Supabase (`{{ .ConfirmationURL }}`, `{{ .Token }}`, `{{ .Email }}`, `{{ .NewEmail }}`, `{{ .Data.nome }}`). E-mail não aceita CSS do app: as cores do manual (§8) vão escritas direto em cada modelo. Mudou a marca? Ajuste os seis arquivos e cole de novo no Supabase.
 - Senha do banco: **fica só com o Luiz** (guardar num gerenciador de senhas). Não está no repositório.
 
 ### Publicar uma versão nova (checklist)
