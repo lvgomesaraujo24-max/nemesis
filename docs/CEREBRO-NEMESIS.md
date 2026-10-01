@@ -2,16 +2,15 @@
 
 > Fonte primária do app Nemesis. Reúne o que o app é, como foi construído, onde cada coisa mora, todas as regras de cálculo ("inteligência") e o plano daqui para frente.
 > Dono do produto: **Luiz (LV TEAM · LV Coach)**. Repositório: `github.com/lvgomesaraujo24-max/nemesis`. Endereço do app: `https://lvgomesaraujo24-max.github.io/nemesis/`.
-> Versão deste documento: **01/10/2026**. Descreve o código do PR #2 (cache `nemesis-v11`, banco até a `atualizacao-12.sql`).
+> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v11`, banco até a `atualizacao-13.sql`).
 
 ### Status real (leia antes de tudo)
 
 | Onde | Versão | Banco |
 |---|---|---|
-| **Produção** (branch `main`, o que as alunas usam hoje) | `nemesis-v6` | até a `atualizacao-6.sql` |
-| **PR #2** (branch `claude/compassionate-mccarthy-3py13z`, consolidado, aguardando merge) | `nemesis-v11` | até a `atualizacao-12.sql` |
+| **Produção** (branch `main`, o que as alunas usam hoje) | `nemesis-v11` | até a `atualizacao-13.sql` |
 
-Enquanto o PR #2 não for juntado ao `main` e as atualizações 7 a 11 não forem rodadas no Supabase, **o que este documento descreve além da v6 não está no ar.** O PR #3 (relatório com deusa, missão e card de Stories) foi incorporado ao PR #2; a migração dele virou a `atualizacao-10.sql`. O branch `claude/happy-lovelace-qmbtuq` (CLAUDE.md, `.claude/` e checagem) também foi incorporado, atualizado para a v10.
+O PR #2 foi juntado ao `main` em 01/10/2026 e as atualizações 7 a 12 foram rodadas no Supabase no mesmo dia; a 13 (trava da `fase_ciclo`) foi aplicada logo depois. O PR #3 (relatório com deusa, missão e card de Stories) foi incorporado ao PR #2; a migração dele virou a `atualizacao-10.sql`. O branch `claude/happy-lovelace-qmbtuq` (CLAUDE.md, `.claude/` e checagem) também foi incorporado, atualizado para a v10.
 
 ---
 
@@ -213,7 +212,7 @@ Antes de tudo, a aluna sem o aceite da versão atual dos termos e do consentimen
 ### Ordem de instalação
 
 1. `supabase/schema.sql` (base)
-2. `atualizacao-2.sql` até `atualizacao-12.sql`, **nessa ordem**. Todas podem rodar mais de uma vez (testado num Postgres 16 simulando o Supabase: o conjunto inteiro rodou duas vezes seguidas sem erro). **Não rode uma atualização antiga depois de uma nova**: a 2 recria funções que a 11 protege.
+2. `atualizacao-2.sql` até `atualizacao-13.sql`, **nessa ordem**. Todas podem rodar mais de uma vez (testado num Postgres 16 simulando o Supabase: o conjunto inteiro rodou duas vezes seguidas sem erro). **Não rode uma atualização antiga depois de uma nova**: a 2 recria funções que a 11 protege.
 
 | Arquivo | O que liga |
 |---|---|
@@ -227,8 +226,9 @@ Antes de tudo, a aluna sem o aceite da versão atual dos termos e do consentimen
 | `atualizacao-8` | Cadência por tipo, grupos de método, séries detalhadas, RIR real, vídeos de execução, todos os protocolos, autoavaliação, dia de revisão, combo nutri, aulas presenciais |
 | `atualizacao-9` | Modelos com objetivo/frequência/duração, prazo nos formulários, pose das fotos, convites |
 | `atualizacao-10` | Relatório: palavra do treinador e missão do mês salvas no banco (`relatorio_notas`) |
-| `atualizacao-12` | LGPD: consentimentos sem edição, pedidos da aluna, exclusão completa (`eliminar_aluna`), foto e vídeo só com consentimento de imagem, aluna apaga os próprios arquivos |
 | `atualizacao-11` | Correções da auditoria: cadastro sem convite aguardando aprovação, leitura da metodologia só por aluna ativa, limites contra robôs no formulário público |
+| `atualizacao-12` | LGPD: consentimentos sem edição, pedidos da aluna, exclusão completa (`eliminar_aluna`), foto e vídeo só com consentimento de imagem, aluna apaga os próprios arquivos |
+| `atualizacao-13` | `fase_ciclo` só responde para a própria aluna ou o treinador (antes respondia até sem login); a original vira `fase_ciclo_base`, fechada. Caminho de busca fixo em `nome_regiao` e `avaliar_regra` |
 
 ### Tabelas (42)
 
@@ -291,7 +291,7 @@ Antes de tudo, a aluna sem o aceite da versão atual dos termos e do consentimen
 | `montar_formulario(formulario, aluna?)` | Monta o pacote do formulário vivo com o contexto da aluna (seção 6.11). Só treinador ou aluna ativa; a lógica fica em `montar_formulario_base`, fechada para chamada direta |
 | `enviar_formulario(...)` | Grava o envio, as respostas, as dores, o ciclo, as dicas mostradas e os alertas ao treinador. No Oráculo, também grava o `checkins` da semana |
 | `avaliar_regra(regra, fonte)` | Motor de regras no banco (igual ao `motor.js`) |
-| `fase_ciclo(aluna, dia)` | Fase estimada do ciclo menstrual (seção 6.12) |
+| `fase_ciclo(aluna, dia)` | Fase estimada do ciclo menstrual (seção 6.12); só para a própria aluna ou o treinador, senão `sem_acesso` (atualização 13) |
 | `nome_regiao(regiao, lado)` | "joelho direito", "coxa esquerda (trás)" |
 | `dossie_carimba` / `dossie_audita` (gatilhos) | Dossiê imutável com histórico de versões |
 | `centro_de_comando(dia)` | Uma chamada monta a Acrópole: `fichas`, `sem_ficha`, `sinais`, `alertas`, `adesao`, `adesao_alunas`, `marcos`, `agenda`, `oraculos`, `metas`, `estados` |
@@ -857,6 +857,7 @@ O computador não guarda nada essencial. Tudo está na nuvem:
 | 30/09/2026 | Ficha 360; Arena, Prova, Oráculo com semáforo, Olimpo, Crônica, Templo; índices 0–100 com tendência; convite com link; fotos lado a lado (PR #2, atualizações 8 e 9) |
 | 30/09/2026 | Relatório com deusa, missão e card de Stories (PR #3, outra sessão) |
 | 01/10/2026 | LGPD: consentimento em três partes, menores com responsável, Privacidade da aluna, exclusão completa, prazos de guarda (atualização 12) |
+| 01/10/2026 | PR #2 no `main` (v11), atualizações 7 a 12 rodadas; atualização 13 fecha a `fase_ciclo` (dado de ciclo e anticoncepcional exposto sem login, achado pelo verificador do Supabase) |
 | 01/10/2026 | Auditoria técnica externa; PR #3 incorporado ao PR #2 (atualização 10); cadastro com aprovação e anti-robô (atualização 11); correção do convite |
 
 **Números do código (01/10/2026, PR #2):** 28 arquivos JS (~7.000 linhas), CSS ~1.230 linhas, 13 arquivos SQL (~2.000 linhas), 42 tabelas.
