@@ -11,7 +11,7 @@
 | **Produção** (branch `main`, o que as alunas usam hoje) | `nemesis-v6` | até a `atualizacao-6.sql` |
 | **PR #2** (branch `claude/compassionate-mccarthy-3py13z`, consolidado, aguardando merge) | `nemesis-v10` | até a `atualizacao-11.sql` |
 
-Enquanto o PR #2 não for juntado ao `main` e as atualizações 7 a 11 não forem rodadas no Supabase, **o que este documento descreve além da v6 não está no ar.** O PR #3 (relatório com deusa, missão e card de Stories) foi incorporado ao PR #2; a migração dele virou a `atualizacao-10.sql`. O branch `claude/happy-lovelace-qmbtuq` (CLAUDE.md, docs e skills para o Claude Code) existe, mas não faz parte do PR #2.
+Enquanto o PR #2 não for juntado ao `main` e as atualizações 7 a 11 não forem rodadas no Supabase, **o que este documento descreve além da v6 não está no ar.** O PR #3 (relatório com deusa, missão e card de Stories) foi incorporado ao PR #2; a migração dele virou a `atualizacao-10.sql`. O branch `claude/happy-lovelace-qmbtuq` (CLAUDE.md, `.claude/` e checagem) também foi incorporado, atualizado para a v10.
 
 ---
 
@@ -630,6 +630,23 @@ No aparelho: campo-isca invisível ("Empresa") e tempo mínimo de 5 segundos des
 ---
 
 ## 10. Convenções de trabalho
+
+**Regras para o Claude Code (no próprio repositório, valem em toda sessão)**
+
+| Arquivo | Para que serve |
+|---|---|
+| `CLAUDE.md` | Lido sozinho a cada sessão: stack, comandos, onde fica cada coisa, regras obrigatórias e o que é proibido |
+| `docs/decisoes.md` | Cada decisão com o porquê e as alternativas descartadas. Mudou de ideia: entrada nova, sem apagar a antiga |
+| `.claude/skills/nemesis-banco` | Carregada ao mexer em tabela, política, função ou `api.*`: padrões de RLS, migração idempotente, testes do SQL |
+| `.claude/skills/nemesis-regras` | Carregada ao mexer em qualquer conta: aponta para a §6 e para onde cada fórmula já existe no código |
+| `.claude/skills/nemesis-visual` | Carregada ao mexer em tela ou CSS: variáveis de cor, componentes existentes, vocabulário grego e tom |
+| `.claude/agents/revisor.md` | Subagente que revisa a branch antes do merge, por gravidade (bloqueia / corrigir / sugestão) |
+| `.claude/commands/nova-tela.md` · `mudar-banco.md` · `publicar.md` | Atalhos `/nova-tela`, `/mudar-banco`, `/publicar`: planejam e param para aprovação antes de mexer |
+| `.claude/hooks/checar-js.mjs` + `.claude/settings.json` | Depois de cada edição de `.js`, confere a sintaxe e devolve o erro na hora. Bloqueia `push --force` e push direto na `main` |
+| `ferramentas/checar.mjs` | `node ferramentas/checar.mjs`: sintaxe de todo JS, lista do `sw.js`, imports quebrados, RLS em toda tabela, nenhuma `service_role` |
+
+**Fluxo de cada funcionalidade:** branch própria → `/nova-tela` ou `/mudar-banco` (plano aprovado antes do código) → `node ferramentas/checar.mjs` → teste no navegador → subagente `revisor` ou `/review` (e `/security-review` se mexeu em banco, login ou dados de saúde) → PR → o Luiz faz o merge.
+
 
 **Commits**
 - Em português, título curto que nomeia a entrega e as áreas (ex.: "Ficha da aluna: índices com tendência, convite com link, fotos lado a lado").
