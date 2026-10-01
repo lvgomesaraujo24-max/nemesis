@@ -29,7 +29,8 @@ export const POLITICA = [
     '• Cadastro: nome, e-mail, WhatsApp, data de nascimento, sexo e objetivo.',
     '• Alistamento (anamnese e PAR-Q): rotina, experiência, sono, estresse, alimentação, lesões, cirurgias, condições de saúde, medicamentos e regularidade do ciclo menstrual.',
     '• Oráculo (check-in semanal): peso, sono, energia, estresse, fome, alimentação e dores com o lugar do corpo. Se você ativar, também o registro do ciclo menstrual e o método contraceptivo.',
-    '• Treinos: cargas, repetições, repetições de reserva (RIR), esforço, comentários e trocas de exercício.',
+    '• Treinos: cargas, repetições, repetições de reserva (RIR), esforço, comentários, observações por exercício e trocas de exercício.',
+    '• Água: quanto você bebeu em cada dia e a sua meta, se você usar esse controle.',
     '• Avaliação física: peso, altura, medidas, dobras cutâneas, diâmetros ósseos, composição corporal e testes aeróbicos (inclui frequência cardíaca).',
     '• Fotos e vídeos: fotos de avaliação e de evolução e vídeos de execução dos exercícios, só com a sua autorização.',
     '• Metas, formulários respondidos e mensagens trocadas com o treinador.',
@@ -221,7 +222,7 @@ export function TelaConsentimento({ perfil, atual, onFeito }) {
 // ---------- exportar os dados de uma aluna (portabilidade e acesso, art. 18, II e V) ----------
 const TABELAS_ALUNA = ['consentimentos', 'solicitacoes_privacidade', 'anamneses', 'avaliacoes', 'checkins', 'sessoes', 'series', 'metas', 'testes_aerobicos',
   'cardio_prescricoes', 'cardio_registros', 'dor_relatos', 'ciclo_registros', 'envios', 'arquivos_aluna', 'videos_execucao', 'assinaturas', 'treinos',
-  'treino_itens', 'mesociclos', 'relatorio_notas'];
+  'treino_itens', 'mesociclos', 'relatorio_notas', 'agua_registros'];
 const TABELAS_TREINADOR = ['dossie', 'lancamentos', 'alertas_coach', 'agenda'];
 export async function exportarDados(aluna, completo) {
   const pega = (t, o) => api.q(t, o).catch(() => []);

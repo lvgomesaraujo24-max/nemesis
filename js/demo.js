@@ -1,6 +1,6 @@
 // MODO DEMONSTRAÇÃO: imita o Supabase com dados de exemplo guardados no navegador.
 // Serve para ver e testar o app antes de ligar o banco de verdade.
-const CHAVE = 'nemesis-demo-v3';
+const CHAVE = 'nemesis-demo-v4';
 let memoria = null;
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
@@ -13,7 +13,7 @@ function semear() {
     anamneses: [], avaliacoes: [], leads: [], planos: [], assinaturas: [], lancamentos: [] };
   const coach = { id: 'coach-demo', role: 'coach', nome: 'Luiz Victor', email: 'treinador@demo', sexo: 'M', ativo: true, anamnese_ok: true, created_at: diasAtras(120).toISOString() };
   const alunas = [
-    { id: 'aluna-ana', nome: 'Ana Beatriz', email: 'ana@demo', telefone: '11999990001', nascimento: '1998-04-12', objetivo: 'Glúteo e definição' },
+    { id: 'aluna-ana', nome: 'Ana Beatriz', email: 'ana@demo', telefone: '11999990001', nascimento: '1998-04-12', objetivo: 'Glúteo e definição', agua_meta_ml: 2600 },
     { id: 'aluna-carol', nome: 'Carolina Mendes', email: 'carol@demo', telefone: '11999990002', nascimento: '1993-09-02', objetivo: 'Emagrecimento com força' },
     { id: 'aluna-bia', nome: 'Beatriz Lopes', email: 'bia@demo', telefone: '11999990003', nascimento: '2001-01-20', objetivo: 'Ganhar massa' },
   ].map((a) => ({ role: 'student', sexo: 'F', ativo: true, anamnese_ok: true, created_at: diasAtras(80).toISOString(), ...a }));
@@ -27,6 +27,9 @@ function semear() {
     ['Prancha', 'Core'], ['Cadeira adutora', 'Adutores'], ['Crucifixo inverso', 'Ombros']];
   const ex = {};
   for (const [nome, grupo] of nomes) { const e = { id: uid(), nome, grupo, video_url: '', instrucoes: '' }; ex[nome] = e; db.exercicios.push(e); }
+  // equivalentes para a aluna trocar quando o aparelho estiver ocupado
+  ex['Leg press 45°'].substitutos = [ex['Agachamento búlgaro no Smith'].id, ex['Cadeira extensora'].id];
+  ex['Elevação pélvica na máquina'].substitutos = [ex['Abdução de quadril com elástico'].id];
 
   const fichas = [
     ['A · Inferior posterior', false, [['Abdução de quadril com elástico', 0, 2, '15-20', 45], ['Elevação pélvica na máquina', 1, 3, '8-12', 120], ['Stiff com barra', 1, 3, '8-12', 120], ['Mesa flexora', 0, 3, '10-12', 90], ['Cadeira abdutora 45°', 0, 3, '12-15', 60]]],
@@ -38,7 +41,7 @@ function semear() {
     fichas.forEach(([nome, opcional, itens], i) => {
       const t = { id: uid(), aluna_id: a.id, nome, ordem: i, opcional, observacoes: '', ativo: true };
       db.treinos.push(t);
-      itens.forEach(([n, aq, s, r, d], j) => db.treino_itens.push({ id: uid(), treino_id: t.id, aluna_id: a.id, exercicio_id: ex[n].id, ordem: j, aquecimento: aq, series: s, reps: r, descanso: d, tecnica: '', obs: '' }));
+      itens.forEach(([n, aq, s, r, d], j) => db.treino_itens.push({ id: uid(), treino_id: t.id, aluna_id: a.id, exercicio_id: ex[n].id, ordem: j, aquecimento: aq, preparatorias: aq ? 1 : 0, series: s, reps: r, descanso: d, tecnica: '', obs: '' }));
     });
   }
 

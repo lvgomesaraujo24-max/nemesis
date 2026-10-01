@@ -247,6 +247,50 @@ export function Linha({ pontos, sufixo = '', altura = 150 }) {
     </svg></div>`;
 }
 
+// Várias linhas no mesmo eixo (ex.: carga da série 1, 2, 3 ao longo das datas). valores com null deixam um buraco na linha.
+// Cores pela ordem fixa --serie-1..4 (paleta validada para o fundo escuro); legenda sempre visível e dica ao tocar.
+// Cargas iguais em várias séries se sobrepõem: a 1ª linha é a mais grossa e a última a mais fina, para todas aparecerem.
+export function LinhasSeries({ datas, linhas, sufixo = '', altura = 190 }) {
+  const ref = useRef();
+  const [larg, setLarg] = useState(320);
+  useEffect(() => { const f = () => ref.current && setLarg(ref.current.clientWidth || 320); f(); addEventListener('resize', f); return () => removeEventListener('resize', f); }, []);
+  const [ativo, setAtivo] = useState(null);
+  useEffect(() => setAtivo(null), [datas.join(), linhas.length]);   // trocou exercício ou filtro: some a dica antiga
+  const ys = linhas.flatMap((l) => l.valores.filter((v) => v != null));
+  if (datas.length < 2 || !ys.length) return html`<div ref=${ref} class="grafico-vazio">Precisa de pelo menos 2 treinos com carga para desenhar as linhas.</div>`;
+  const P = { t: 14, r: 14, b: 24, l: 40 };
+  let mn = Math.min(...ys), mx = Math.max(...ys);
+  if (mn === mx) { mn -= 1; mx += 1; } const pad = (mx - mn) * 0.12; mn -= pad; mx += pad;
+  const W = larg, H = altura, iw = W - P.l - P.r, ih = H - P.t - P.b;
+  const X = (i) => P.l + (i * iw) / (datas.length - 1);
+  const Y = (v) => P.t + ih - ((v - mn) / (mx - mn)) * ih;
+  const caminho = (vals) => { let d = ''; let solto = true;
+    vals.forEach((v, i) => { if (v == null) { solto = true; return; } d += `${solto ? 'M' : 'L'}${X(i).toFixed(1)},${Y(v).toFixed(1)} `; solto = false; }); return d; };
+  const ticks = [mn + pad, (mn + mx) / 2, mx - pad];
+  const passo = Math.max(1, Math.ceil(datas.length / 6));
+  const fatia = iw / Math.max(1, datas.length - 1);
+  const ultimo = linhas.map((l) => { const v = [...l.valores].reverse().find((x) => x != null); return `${l.nome}: ${v == null ? 'sem registro' : num(v, 1) + sufixo}`; }).join(', ');
+  return html`<div class="pilha-curta">
+    <div class="legenda">${linhas.map((l) => html`<span><i style=${`background:${l.cor}`}></i>${l.nome}</span>`)}</div>
+    <div ref=${ref} class="grafico" onMouseLeave=${() => setAtivo(null)}>
+      <svg width=${W} height=${H} viewBox=${`0 0 ${W} ${H}`} role="img" aria-label=${`Carga por série em ${datas.length} treinos, de ${dataBR(datas[0])} a ${dataBR(datas[datas.length - 1])}. Último treino: ${ultimo}.`}>
+        ${ticks.map((t) => html`<g><line x1=${P.l} x2=${W - P.r} y1=${Y(t)} y2=${Y(t)} class="grade"/><text x=${P.l - 6} y=${Y(t) + 4} text-anchor="end" class="eixo">${num(t, 1)}</text></g>`)}
+        ${datas.map((dt, i) => (i % passo === 0 || i === datas.length - 1 ? html`<text x=${X(i)} y=${H - 6} text-anchor="middle" class="eixo">${dataCurta(dt)}</text>` : null))}
+        ${ativo != null && html`<line x1=${X(ativo)} x2=${X(ativo)} y1=${P.t} y2=${P.t + ih} class="mira"/>`}
+        ${linhas.map((l, k) => html`<g>
+          <path d=${caminho(l.valores)} fill="none" stroke=${l.cor} stroke-width=${2 + 1.5 * (linhas.length - 1 - k)} stroke-opacity=${k === linhas.length - 1 ? 1 : 0.85} stroke-linejoin="round" stroke-linecap="round"/>
+          ${l.valores.map((v, i) => (v == null ? null : html`<circle cx=${X(i)} cy=${Y(v)} r=${i === ativo ? 5 : 4} fill=${l.cor} class="ponto-serie"/>`))}
+        </g>`)}
+        ${datas.map((dt, i) => html`<rect x=${X(i) - fatia / 2} y=${P.t} width=${Math.max(12, fatia)} height=${ih} fill="transparent" onMouseEnter=${() => setAtivo(i)} onClick=${() => setAtivo(i)}/>`)}
+      </svg>
+      ${ativo != null && html`<div class="dica-grafico" style=${`left:${Math.min(Math.max(X(ativo), 70), W - 70)}px`}>
+        <b>${dataBR(datas[ativo])}</b>${linhas.map((l) => html`<span><i style=${`background:${l.cor}`}></i>${l.nome}: ${l.valores[ativo] == null ? '·' : num(l.valores[ativo], 1) + sufixo}</span>`)}</div>`}
+    </div>
+    <details class="instr"><summary>Ver em tabela</summary><table class="tabela-series"><thead><tr><th>Data</th>${linhas.map((l) => html`<th>${l.nome}</th>`)}</tr></thead>
+      <tbody>${datas.map((dt, i) => html`<tr><td>${dataBR(dt)}</td>${linhas.map((l) => html`<td>${l.valores[i] == null ? '·' : num(l.valores[i], 1) + sufixo}</td>`)}</tr>`).reverse()}</tbody></table></details></div>`;
+}
+export const CORES_SERIE = ['var(--serie-1)', 'var(--serie-2)', 'var(--serie-3)', 'var(--serie-4)'];
+
 // Barras simples (financeiro)
 export function Barras({ dados, formato = brl }) {
   const mx = Math.max(1, ...dados.map((d) => d.v));

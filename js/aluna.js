@@ -1,16 +1,17 @@
 // Lado da ALUNA
 import { html, useState, useEffect, useRef } from '../lib/preact-htm.js';
 import { api } from './api.js';
-import { Evolucao, Anamnese, Avaliacoes } from './comum.js';
+import { Evolucao, Anamnese, Avaliacoes, metasAtuais } from './comum.js';
 import { ResponderFormulario, pendenciasDaAluna } from './vivo.js';
-import { CardioAluna, TestesAluna, MetasAluna, semanaDoMeso } from './extras.js';
+import { CardioAluna, TestesAluna, MetasAluna } from './extras.js';
+import { Execucao } from './arena.js';
 import { Relatorio } from './relatorio.js';
 import { ArquivosAluna } from './aluna360.js';
-import { TelaConsentimento, PrivacidadeAluna, consentimentoAtual, precisaConsentir, podeImagem, legalPreenchido } from './legal.js';
+import { TelaConsentimento, PrivacidadeAluna, consentimentoAtual, precisaConsentir, legalPreenchido } from './legal.js';
 import { Icone } from './icones.js';
-import { nomeMetodo, textoDescanso, textoEsforco, TIPOS, PERFIS, METODOS_GRUPO, textoCadencia } from './musculos.js';
+import { tempoTreino, fmtTempo } from './musculos.js';
 import { DEMO } from './api.js';
-import { useCarregar, Estado, Vazio, Modal, Campo, Escala, toast, num, dataBR, hoje, segundaDe, lerNum, relativo, diasEntre, semaforo } from './util.js';
+import { useCarregar, Estado, Vazio, Modal, Campo, Escala, toast, num, dataBR, iso, hoje, segundaDe, lerNum, relativo, diasEntre, semaforo } from './util.js';
 
 export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
   const [pulouAnamnese, setPulou] = useState(false);
@@ -55,7 +56,7 @@ export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
   else if (base === 'relatorio') tela = html`<div class="pilha"><button class="btn-texto" onClick=${() => ir('evolucao')}>‹ Evolução</button><h1 class="titulo">Relatório</h1><${Relatorio} aluna=${perfil}/></div>`;
   else if (base === 'checkin') tela = html`<${CheckinAluna} perfil=${perfil}/>`;
   else if (base === 'perfil') tela = html`<${PerfilAluna} perfil=${perfil} recarregarPerfil=${recarregarPerfil} onPrivacidade=${cons.recarregar}/>`;
-  else tela = html`<${InicioAluna} perfil=${perfil} ir=${ir} pendentes=${(pend.dados || []).filter((p) => p.formulario.tipo !== 'oraculo')}/>`;
+  else tela = html`<${InicioAluna} perfil=${perfil} ir=${ir} recarregarPerfil=${recarregarPerfil} pendentes=${(pend.dados || []).filter((p) => p.formulario.tipo !== 'oraculo')}/>`;
   const aba = base === 'treino' ? '' : base === 'relatorio' ? 'evolucao' : base || '';
   return html`<div class="tela com-nav">
     <header class="topo"><span class="marca">NEMESIS</span></header>
@@ -68,8 +69,8 @@ export function AppAluna({ perfil, rota, ir, recarregarPerfil }) {
 
 const primeiroNome = (n) => (n || '').split(' ')[0] || '';
 
-// ---------- início: lista de treinos ----------
-function InicioAluna({ perfil, ir, pendentes = [] }) {
+// ---------- início: próximo treino, semana, cardio, água e lista de treinos ----------
+function InicioAluna({ perfil, ir, pendentes = [], recarregarPerfil }) {
   const e = useCarregar(async () => {
     const [treinos, sessoes, checkins, cardio] = await Promise.all([
       api.q('treinos', { eq: { aluna_id: perfil.id, ativo: true }, order: 'ordem' }),
@@ -86,259 +87,88 @@ function InicioAluna({ perfil, ir, pendentes = [] }) {
     <div class="ola"><p class="sobre">${saud},</p><h1>${primeiroNome(perfil.nome)}</h1></div>
     ${pendentes.map((p) => html`<a class="card aviso" href=${`#/form/${p.formulario.id}/${p.atribuicao.id}`}><b>${p.formulario.titulo}</b><span>${p.atribuicao.prazo ? (p.atribuicao.prazo < hoje() ? `Prazo era ${dataBR(p.atribuicao.prazo)}. ` : `Responda até ${dataBR(p.atribuicao.prazo)}. `) : ''}${p.formulario.descricao || 'Toque para responder.'}</span></a>`)}
     <${Estado} e=${e}>${({ treinos, sessoes, itens, checkinFeito, cardio }) => {
-      if (!treinos.length) return html`<${Vazio} titulo="Sua ficha está sendo montada" texto="Assim que o treinador publicar os seus treinos, eles aparecem aqui."/>`;
+      if (!treinos.length) return html`<${Vazio} titulo="Sua ficha está sendo montada" texto="Assim que o treinador publicar os seus treinos, eles aparecem aqui."/>
+        <${Agua} perfil=${perfil} recarregarPerfil=${recarregarPerfil}/>`;
       const semana = sessoes.filter((s) => s.data >= segundaDe());
       const obrig = treinos.filter((t) => !t.opcional);
       const ultima = sessoes[sessoes.length - 1];
-      let proximo = obrig[0];
+      let proximo = obrig[0] || treinos[0];
       if (ultima) { const i = obrig.findIndex((t) => t.id === ultima.treino_id); if (i >= 0) proximo = obrig[(i + 1) % obrig.length]; }
-      const emAndamento = sessoes.find((s) => s.data === hoje() && !s.concluida_em);
+      const emAndamento = sessoes.find((s) => s.data === hoje() && !s.concluida_em && treinos.some((t) => t.id === s.treino_id));
+      const alvo = emAndamento ? treinos.find((t) => t.id === emAndamento.treino_id) : proximo;
+      const itensAlvo = itens.filter((i) => i.treino_id === alvo.id);
       return html`
+        <section class="card proximo-treino">
+          <small>${emAndamento ? 'Treino em andamento' : 'Próximo treino'}</small>
+          <h2>${alvo.nome}</h2>
+          <p class="suave">${itensAlvo.length} exercício(s)${itensAlvo.length ? ` · cerca de ${fmtTempo(tempoTreino(itensAlvo))}` : ''}</p>
+          <button class="btn primario grande" onClick=${() => ir('treino/' + alvo.id)}>${emAndamento ? 'Continuar o treino' : 'Ir para o treino'}</button>
+        </section>
         <div class="semana card">
           <div class="card-topo"><h3>Esta semana</h3><span class="valor">${semana.length}/${obrig.length}</span></div>
           <div class="progresso"><div style=${`width:${Math.min(100, (semana.length / Math.max(1, obrig.length)) * 100)}%`}></div></div>
           <p class="suave">${semana.length >= obrig.length ? 'Semana completa. Isso é constância.' : `Faltam ${obrig.length - semana.length} treino(s) para fechar a semana.`}</p>
         </div>
         ${!checkinFeito && [5, 6, 0].includes(new Date().getDay()) ? html`<a class="card aviso" href="#/checkin"><b>O Oráculo da semana está aberto</b><span>Leva 2 minutos. É com ele que eu ajusto o seu treino.</span></a>` : null}
-        ${cardio && cardio.length > 0 && html`<a class="card" href="#/cardio"><div class="card-topo"><h3>Cardio da semana</h3><span class="seta">›</span></div><small>${cardio.map((c) => `${c.duracao_min} min ${c.modalidade} · ${c.vezes_semana}x`).join(' · ')}</small></a>`}
-        ${emAndamento && html`<button class="card aviso" onClick=${() => ir('treino/' + emAndamento.treino_id)}><b>Treino em andamento</b><span>Continuar ${emAndamento.treino_nome}</span></button>`}
+        ${cardio && cardio.length > 0 && html`<a class="card cardio-card" href="#/cardio"><div class="card-topo"><h3>Cardio</h3><span class="seta">›</span></div><small>${cardio.map((c) => `${c.duracao_min} min ${c.modalidade} · ${c.vezes_semana}x por semana`).join(' · ')}</small></a>`}
+        <${MetasDaSemana} perfil=${perfil}/>
+        <${Agua} perfil=${perfil} recarregarPerfil=${recarregarPerfil}/>
         <h2 class="secao">Seus treinos</h2>
         ${treinos.map((t) => {
           const ult = [...sessoes].reverse().find((s) => s.treino_id === t.id);
           const n = itens.filter((i) => i.treino_id === t.id).length;
-          return html`<button class=${'card treino' + (proximo && t.id === proximo.id ? ' proximo' : '')} onClick=${() => ir('treino/' + t.id)}>
+          return html`<button class=${'card treino' + (t.id === proximo.id ? ' proximo' : '')} onClick=${() => ir('treino/' + t.id)}>
             <div><h3>${t.nome}</h3><small>${n} exercício(s) · ${ult ? 'feito ' + relativo(ult.data) : 'ainda não feito'}</small></div>
-            <div class="treino-tags">${proximo && t.id === proximo.id ? html`<span class="tag roxo">próximo</span>` : null}${t.opcional ? html`<span class="tag">opcional</span>` : null}<span class="seta">›</span></div>
+            <div class="treino-tags">${t.id === proximo.id ? html`<span class="tag roxo">próximo</span>` : null}${t.opcional ? html`<span class="tag">opcional</span>` : null}<span class="seta">›</span></div>
           </button>`;
         })}`;
     }}<//>
   </div>`;
 }
 
-// ---------- execução do treino ----------
-function Execucao({ perfil, treinoId, ir }) {
-  const e = useCarregar(async () => {
-    const [treino, itens, exercicios, sessoes, historico] = await Promise.all([
-      api.um('treinos', { id: treinoId }),
-      api.q('treino_itens', { eq: { treino_id: treinoId }, order: 'ordem' }),
-      api.q('exercicios', {}),
-      api.q('sessoes', { eq: { aluna_id: perfil.id, treino_id: treinoId }, order: 'iniciada_em' }),
-      api.q('series', { eq: { aluna_id: perfil.id }, order: 'created_at' }),
-    ]);
-    const aberta = sessoes.find((s) => s.data === hoje() && !s.concluida_em) || null;
-    // semana do mesociclo: meta de RIR da semana e, no deload, metade das séries
-    const meso = (await api.q('mesociclos', { eq: { aluna_id: perfil.id, status: 'ativo' } }).catch(() => []))[0];
-    const semana = semanaDoMeso(meso);
-    const ajustados = !semana ? itens : itens.map((i) => (i.tipo && i.tipo !== 'musculacao' ? i
-      : semana.alvo.deload ? { ...i, series: Math.max(1, Math.ceil(i.series / 2)) }
-      : semana.alvo.rir != null ? { ...i, esforco_tipo: 'rir', esforco_alvo: semana.alvo.rir } : i));
-    const videos = await api.q('videos_execucao', { eq: { aluna_id: perfil.id }, order: 'created_at' }).catch(() => []);
-    return { treino, itens: ajustados, exercicios, aberta, historico, semana, videos };
-  }, [treinoId]);
-  return html`<${Estado} e=${e}>${(d) => (d.treino ? html`<${ExecucaoCorpo} d=${d} perfil=${perfil} ir=${ir}/>` : html`<${Vazio} titulo="Treino não encontrado"/>`)}<//>`;
+// ---------- metas que a aluna escreveu no último Oráculo ----------
+function MetasDaSemana({ perfil }) {
+  const e = useCarregar(() => metasAtuais(perfil.id), [perfil.id]);
+  if (!e.dados) return null;
+  return html`<a class="card metas-card" href="#/checkin"><div class="card-topo"><h3>Suas metas da semana</h3><span class="seta">›</span></div>
+    <p>${e.dados.semana}</p><small class="suave">Você definiu no Oráculo de ${dataBR(iso(new Date(e.dados.em)))}. No próximo, conta como foi.</small></a>`;
 }
 
-// linha de prescrição: "3 × 8-12 · descanso 90s · Drop-set · cadência 3-1s · RIR 2"
-function resumoItem(it) {
-  if (it.tipo === 'aerobico') return [TIPOS.aerobico.nome, it.duracao ? `${it.duracao} min` : null, it.intensidade, nomeMetodo(it.metodo || 'continuo')].filter(Boolean).join(' · ');
-  return [`${it.aquecimento ? it.aquecimento + ' aquec. + ' : ''}${it.series} × ${it.reps || '·'}`, textoDescanso(it),
-    it.metodo && it.metodo !== 'padrao' ? nomeMetodo(it.metodo) : null, it.tecnica,
-    textoCadencia(it) || null,
-    textoEsforco(it), it.tipo && it.tipo !== 'musculacao' ? TIPOS[it.tipo].nome : null].filter(Boolean).join(' · ');
-}
-
-function ExecucaoCorpo({ d, perfil, ir }) {
-  const { treino, itens, exercicios } = d;
-  const [sessao, setSessao] = useState(d.aberta);
-  const [historico, setHistorico] = useState(d.historico);
-  const [linhas, setLinhas] = useState(() => montarLinhas(itens, d.historico, d.aberta));
-  const [descanso, setDescanso] = useState(null); // {fim, total}
-  const [finalizar, setFinalizar] = useState(false);
-  const exNome = (id) => (exercicios.find((x) => x.id === id) || {}).nome || 'Exercício';
-  const exVideo = (id) => (exercicios.find((x) => x.id === id) || {}).video_url;
-  const exInstr = (id) => (exercicios.find((x) => x.id === id) || {}).instrucoes;
-  const exDe = (id) => exercicios.find((x) => x.id === id) || {};
-  // troca de exercício (aparelho ocupado): vale só para esta sessão e avisa o treinador
-  const [trocas, setTrocas] = useState({});
-  const [enviandoVideo, setEnviandoVideo] = useState(null);
-  // vídeo da série para o treinador corrigir no app
-  const enviarVideo = async (item, ev) => {
-    const f = ev.target.files && ev.target.files[0]; ev.target.value = '';
-    if (!f) return;
-    if (f.size > 50 * 1024 * 1024) { toast('Vídeo muito grande (máximo 50 MB). Grave um trecho mais curto.', 'erro'); return; }
-    try { if (!(await podeImagem(perfil.id))) { toast('Para enviar vídeos, autorize fotos e vídeos em Perfil > Privacidade.', 'erro'); return; } }
-    catch (err) { toast(err.message, 'erro'); return; }
-    const comentario = prompt('Quer deixar uma dúvida ou comentário para o treinador? (opcional)') || null;
-    setEnviandoVideo(item.id);
-    try {
-      const caminho = `${perfil.id}/videos/${Date.now()}.${(f.name.split('.').pop() || 'mp4').toLowerCase()}`;
-      await api.subirArquivo(caminho, f);
-      await api.ins('videos_execucao', { aluna_id: perfil.id, exercicio_id: exAtual(item), treino_item_id: item.id, sessao_id: sessaoRef.current ? sessaoRef.current.id : null, caminho, comentario });
-      toast('Vídeo enviado. A correção aparece aqui no exercício.', 'ok');
-    } catch (err) { toast(err.message, 'erro'); } finally { setEnviandoVideo(null); }
+// ---------- água do dia ----------
+// A meta é combinada com o treinador ou a nutricionista e fica no perfil; o app não calcula meta sozinho.
+function Agua({ perfil, recarregarPerfil }) {
+  const [meta, setMeta] = useState(perfil.agua_meta_ml || null);
+  const [ml, setMl] = useState(null);       // null = carregando; false = sem a atualização 14 no banco
+  const [editar, setEditar] = useState(false);
+  const espera = useRef(null);
+  useEffect(() => {
+    api.q('agua_registros', { eq: { aluna_id: perfil.id, dia: hoje() } }).then((l) => setMl(l[0] ? l[0].ml : 0)).catch(() => setMl(false));
+  }, [perfil.id]);
+  if (ml === false || ml === null) return null;
+  const gravar = (v) => {
+    v = Math.max(0, Math.min(10000, Math.round(v / 50) * 50)); setMl(v);
+    clearTimeout(espera.current);
+    espera.current = setTimeout(() => api.ups('agua_registros', { aluna_id: perfil.id, dia: hoje(), ml: v, updated_at: new Date().toISOString() }, 'aluna_id,dia')
+      .catch((err) => toast(err.message, 'erro')), 600);
   };
-  const [trocando, setTrocando] = useState(null);
-  const exAtual = (item) => trocas[item.id] || item.exercicio_id;
-  const trocar = async (item, novoId) => {
-    setTrocas((t) => ({ ...t, [item.id]: novoId === item.exercicio_id ? undefined : novoId })); setTrocando(null);
-    // a carga sugerida era do exercício original: limpa o que ainda não foi feito
-    setLinhas((ls) => ({ ...ls, [item.id]: ls[item.id].map((x) => (x.id ? x : { ...x, carga: '' })) }));
-    if (novoId === item.exercicio_id) return;
-    try { await api.ins('alertas_coach', { aluna_id: perfil.id, titulo: 'Troca de exercício', texto: `Trocou ${exNome(item.exercicio_id)} por ${exNome(novoId)} no ${treino.nome}.`, severidade: 'info' }); }
-    catch (e) { /* aviso é opcional */ }
+  const salvarMeta = async (litros) => {
+    const v = Math.round((lerNum(litros) || 0) * 1000);
+    if (v < 500 || v > 8000) { toast('Coloque a meta em litros, entre 0,5 e 8.', 'erro'); return; }
+    try { await api.upd('profiles', perfil.id, { agua_meta_ml: v }); setMeta(v); setEditar(false); recarregarPerfil && recarregarPerfil(); } catch (err) { toast(err.message, 'erro'); }
   };
-
-  const feitas = Object.values(linhas).flat().filter((l) => l.id && !l.aquecimento).length;
-  const total = itens.reduce((t, i) => t + i.series, 0);
-
-  const sessaoRef = useRef(d.aberta);
-  const criando = useRef(null);
-  const garantirSessao = async () => {
-    // evita criar duas sessões se a aluna tocar em duas séries muito rápido
-    if (sessaoRef.current) return sessaoRef.current;
-    if (!criando.current) {
-      criando.current = api.ins('sessoes', { aluna_id: perfil.id, treino_id: treino.id, treino_nome: treino.nome, data: hoje(), iniciada_em: new Date().toISOString() })
-        .then(([s]) => { sessaoRef.current = s; setSessao(s); return s; })
-        .catch((err) => { criando.current = null; throw err; });
-    }
-    return criando.current;
-  };
-
-  const concluir = async (item, idx) => {
-    const l = linhas[item.id][idx];
-    const carga = lerNum(l.carga); const reps = lerNum(l.reps);
-    try {
-      const s = await garantirSessao();
-      const linha = { sessao_id: s.id, aluna_id: perfil.id, treino_item_id: item.id, exercicio_id: exAtual(item), numero: l.numero, carga, reps: reps == null ? null : Math.round(reps), aquecimento: l.aquecimento };
-      if (lerNum(l.rir) != null) linha.rir = lerNum(l.rir); // RIR real que a aluna sentiu
-      const [salva] = await api.ins('series', linha);
-      const antes = historico.filter((h) => h.exercicio_id === exAtual(item) && !h.aquecimento && h.carga != null);
-      const maxAntes = antes.length ? Math.max(...antes.map((h) => h.carga)) : null;
-      setHistorico([...historico, salva]);
-      setLinhas((ls) => ({ ...ls, [item.id]: ls[item.id].map((x, i) => (i === idx ? { ...x, id: salva.id } : x)) }));
-      if (!l.aquecimento && carga != null && maxAntes != null && carga > maxAntes) toast(`Novo recorde em ${exNome(exAtual(item))}: ${num(carga, 1)} kg`, 'recorde');
-      const seg = item.descanso_tipo === 'livre' ? 0 : l.aquecimento ? Math.min(60, item.descanso) : item.descanso;
-      if (seg > 0) setDescanso({ fim: Date.now() + seg * 1000, total: seg });
-    } catch (err) { toast(err.message, 'erro'); }
-  };
-  const desfazer = async (item, idx) => {
-    const l = linhas[item.id][idx];
-    try {
-      await api.del('series', l.id);
-      setHistorico(historico.filter((h) => h.id !== l.id));
-      setLinhas((ls) => ({ ...ls, [item.id]: ls[item.id].map((x, i) => (i === idx ? { ...x, id: null } : x)) }));
-    } catch (err) { toast(err.message, 'erro'); }
-  };
-  const muda = (item, idx, campo, v) => setLinhas((ls) => ({ ...ls, [item.id]: ls[item.id].map((x, i) => (i === idx ? { ...x, [campo]: v } : x)) }));
-
-  return html`<div class="pilha execucao">
-    <div class="exec-topo">
-      <button class="btn-texto" onClick=${() => ir('')}>‹ Voltar</button>
-      <h1>${treino.nome}</h1>
-      <div class="progresso"><div style=${`width:${(feitas / Math.max(1, total)) * 100}%`}></div></div>
-      <p class="suave">${feitas} de ${total} séries${treino.observacoes ? ' · ' + treino.observacoes : ''}</p>
-    </div>
-    ${d.semana && html`<p class=${'semana-banner' + (d.semana.alvo.deload ? ' deload' : '')}><b>Semana ${d.semana.n} de ${d.semana.total}.</b> ${d.semana.alvo.deload
-      ? 'Semana de deload: metade das séries e carga uns 10% menor. É a semana que o corpo usa para crescer.'
-      : `Meta da semana: RIR ${d.semana.alvo.rir}, ou seja, terminar cada série sentindo que ainda sairiam ${d.semana.alvo.rir} repetição(ões).`}</p>`}
-    ${itens.map((item, n) => {
-      const exId = exAtual(item); const subs = (exDe(item.exercicio_id).substitutos || []).filter((id) => exercicios.some((x) => x.id === id));
-      const perfilR = PERFIS.find(([k]) => k === exDe(exId).perfil_resistencia);
-      const ult = ultimaVez(historico, exId, sessao);
-      return html`<section class="card exercicio">
-        <div class="ex-cab"><span class="ex-n">${n + 1}</span><div><h3>${exNome(exId)}</h3>${exId !== item.exercicio_id && html`<small class="trocado">no lugar de ${exNome(item.exercicio_id)}</small>`}
-          <small>${resumoItem(item)}</small>
-          ${METODOS_GRUPO.includes(item.metodo) && html`<small class=${'grupo-tag g' + (item.grupo || 1)}>(${item.grupo || 1}) ${nomeMetodo(item.metodo)}${(() => { const par = itens.filter((x) => x.id !== item.id && METODOS_GRUPO.includes(x.metodo) && String(x.grupo || 1) === String(item.grupo || 1)); return par.length ? ` com ${par.map((x) => exNome(x.exercicio_id)).join(' e ')}` : ''; })()}</small>`}</div></div>
-        ${(() => { const c = d.videos.filter((v) => v.exercicio_id === exId && v.correcao).pop(); return c && html`<p class="nota correcao"><b>Correção do seu treinador (${dataBR(c.corrigido_em || c.created_at)}):</b> ${c.correcao}</p>`; })()}
-        ${item.obs && html`<p class="nota">${item.obs}</p>`}
-        ${(exInstr(exId) || perfilR) && html`<details class="instr"><summary>Como executar</summary>${exInstr(exId) && html`<p>${exInstr(exId)}</p>`}${perfilR && html`<p><b>${perfilR[1]}:</b> ${perfilR[2].toLowerCase()}</p>`}</details>`}
-        <div class="acoes">${exVideo(exId) && html`<a class="btn-texto" href=${exVideo(exId)} target="_blank" rel="noopener">▶ Ver vídeo</a>`}
-          ${subs.length > 0 && html`<button class="btn-texto" onClick=${() => setTrocando(trocando === item.id ? null : item.id)}>⇄ Aparelho ocupado? Trocar</button>`}
-          ${item.tipo !== 'aerobico' && html`<label class="btn-texto">🎥 ${enviandoVideo === item.id ? 'Enviando vídeo...' : 'Enviar vídeo da série'}<input type="file" accept="video/*" capture="environment" hidden onChange=${(ev) => enviarVideo(item, ev)}/></label>`}</div>
-        ${trocando === item.id && html`<div class="troca-lista"><small>Escolha um equivalente. Seu treinador fica sabendo.</small>
-          ${[item.exercicio_id, ...subs].map((id) => html`<button class=${'chip' + (exId === id ? ' on' : '')} onClick=${() => trocar(item, id)}>${exNome(id)}${id === item.exercicio_id ? ' (original)' : ''}</button>`)}</div>`}
-        ${ult && html`<p class="ultima">Última vez: ${ult}</p>`}
-        <div class="series">
-          <div class="serie cab"><span>Série</span><span>kg</span><span>reps</span><span title="Quantas repetições ainda sairiam">RIR</span><span></span></div>
-          ${linhas[item.id].map((l, idx) => html`<div class=${'serie' + (l.id ? ' feita' : '') + (l.aquecimento ? ' aquec' : '')}>
-            <span class="s-n">${l.aquecimento ? 'Aquec.' : l.numero}</span>
-            <input class="input" inputmode="decimal" placeholder=${item.tipo === 'aerobico' ? '—' : 'sem peso'} value=${l.carga} disabled=${!!l.id || item.tipo === 'aerobico'} onInput=${(ev) => muda(item, idx, 'carga', ev.target.value)} aria-label="Carga em kg"/>
-            <input class="input" inputmode="numeric" placeholder=${item.tipo === 'aerobico' ? 'min' : l.metaReps || item.reps} value=${l.reps} disabled=${!!l.id} onInput=${(ev) => muda(item, idx, 'reps', ev.target.value)} aria-label="Repetições"/>
-            <input class="input" inputmode="numeric" placeholder=${l.aquecimento || item.tipo === 'aerobico' ? '—' : l.metaRir != null ? String(l.metaRir) : '·'} value=${l.rir} disabled=${!!l.id || l.aquecimento || item.tipo === 'aerobico'} onInput=${(ev) => muda(item, idx, 'rir', ev.target.value)} aria-label="RIR sentido"/>
-            ${l.id ? html`<button class="check on" aria-label="Desfazer série" onClick=${() => desfazer(item, idx)}>✓</button>`
-              : html`<button class="check" aria-label="Concluir série" onClick=${() => concluir(item, idx)}>✓</button>`}
-          </div>`)}
-        </div>
-        ${l0(linhas[item.id]) && html`<p class="dica">Aquecimento é aproximação: uns 50% da carga, poucas reps, longe da falha.</p>`}
-      </section>`;
-    })}
-    <button class="btn primario grande" onClick=${() => (sessao ? setFinalizar(true) : toast('Conclua pelo menos uma série antes de finalizar.', 'erro'))}>Finalizar treino</button>
-    ${descanso && html`<${Descanso} d=${descanso} onFim=${() => setDescanso(null)} onMais=${() => setDescanso({ ...descanso, fim: descanso.fim + 15000, total: descanso.total + 15 })}/>`}
-    ${finalizar && html`<${Finalizar} sessao=${sessao} feitas=${feitas} total=${total} onFechar=${() => setFinalizar(false)} onFeito=${() => { toast('Treino registrado. Bom trabalho!', 'ok'); ir('evolucao'); }}/>`}
-  </div>`;
-}
-const l0 = (ls) => ls.some((l) => l.aquecimento);
-
-function montarLinhas(itens, historico, aberta) {
-  const out = {};
-  for (const it of itens) {
-    const ant = historico.filter((h) => h.exercicio_id === it.exercicio_id && !h.aquecimento && (!aberta || h.sessao_id !== aberta.id));
-    const ultSessao = ant.length ? ant[ant.length - 1].sessao_id : null;
-    const daUlt = ant.filter((h) => h.sessao_id === ultSessao);
-    const lista = [];
-    for (let i = 1; i <= it.aquecimento; i++) lista.push({ numero: i, aquecimento: true, carga: '', reps: '', rir: '', id: null });
-    for (let i = 1; i <= it.series; i++) {
-      const ref = daUlt.find((h) => h.numero === i) || daUlt[daUlt.length - 1];
-      // meta da série (séries detalhadas pelo treinador) ou a da linha do exercício
-      const meta = (it.series_detalhe || [])[i - 1] || {};
-      const carga = meta.carga != null ? meta.carga : ref && ref.carga != null ? ref.carga : null;
-      lista.push({ numero: i, aquecimento: false, carga: carga == null ? '' : String(carga).replace('.', ','), reps: '', rir: '', id: null,
-        metaReps: meta.reps || it.reps, metaRir: meta.rir != null ? meta.rir : it.esforco_alvo });
-    }
-    if (aberta) {
-      historico.filter((h) => h.sessao_id === aberta.id && h.treino_item_id === it.id).forEach((h) => {
-        const l = lista.find((x) => x.numero === h.numero && x.aquecimento === h.aquecimento);
-        if (l) Object.assign(l, { id: h.id, carga: h.carga == null ? '' : String(h.carga).replace('.', ','), reps: h.reps == null ? '' : String(h.reps), rir: h.rir == null ? '' : String(h.rir) });
-      });
-    }
-    out[it.id] = lista;
-  }
-  return out;
-}
-function ultimaVez(historico, exId, sessao) {
-  const ant = historico.filter((h) => h.exercicio_id === exId && !h.aquecimento && (!sessao || h.sessao_id !== sessao.id));
-  if (!ant.length) return null;
-  const sid = ant[ant.length - 1].sessao_id;
-  return ant.filter((h) => h.sessao_id === sid).map((h) => `${h.carga == null ? 'sem peso' : num(h.carga, 1) + ' kg'} × ${h.reps ?? '·'}`).join('  ·  ');
-}
-
-function Descanso({ d, onFim, onMais }) {
-  const [agora, setAgora] = useState(Date.now());
-  const avisou = useRef(false);
-  useEffect(() => { const t = setInterval(() => setAgora(Date.now()), 250); return () => clearInterval(t); }, []);
-  const resta = Math.max(0, Math.ceil((d.fim - agora) / 1000));
-  useEffect(() => { if (resta === 0 && !avisou.current) { avisou.current = true; try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) { /* */ } setTimeout(onFim, 1200); } }, [resta]);
-  return html`<div class="descanso" role="status">
-    <div class="descanso-barra" style=${`width:${(resta / d.total) * 100}%`}></div>
-    <span>${resta > 0 ? `Descanso ${Math.floor(resta / 60)}:${String(resta % 60).padStart(2, '0')}` : 'Bora pra próxima!'}</span>
-    <div><button class="btn-texto" onClick=${onMais}>+15s</button><button class="btn-texto" onClick=${onFim}>Pular</button></div>
-  </div>`;
-}
-
-function Finalizar({ sessao, feitas, total, onFechar, onFeito }) {
-  const [esforco, setEsforco] = useState(null);
-  const [coment, setComent] = useState('');
-  const salvar = async () => {
-    try { await api.upd('sessoes', sessao.id, { concluida_em: new Date().toISOString(), esforco, comentario: coment || null }); onFeito(); }
-    catch (err) { toast(err.message, 'erro'); }
-  };
-  return html`<${Modal} titulo="Finalizar treino" onFechar=${onFechar}>
-    <div class="pilha">
-      <p>${feitas} de ${total} séries concluídas.${feitas < total ? ' Tudo bem, o que ficou registrado conta.' : ''}</p>
-      <${Campo} rotulo="Quão pesado foi o treino? (1 = leve, 10 = máximo)"><${Escala} valor=${esforco} onMuda=${setEsforco} min=${1} max=${10}/><//>
-      <${Campo} rotulo="Algo para me contar? (dor, máquina ocupada, carga que subiu)"><textarea class="input" rows="3" value=${coment} onInput=${(ev) => setComent(ev.target.value)}></textarea><//>
-      <button class="btn primario grande" onClick=${salvar}>Concluir treino</button>
-    </div><//>`;
+  const teto = Math.max(meta || 3000, ml) * 1.25;
+  return html`<section class="card agua">
+    <div class="card-topo"><h3>Água</h3>
+      <button class="btn mini" onClick=${() => setEditar(true)}>${meta ? `Meta ${num(meta / 1000, 1)} L` : 'Definir meta'}</button></div>
+    <div class="agua-numero"><b>${num(ml / 1000, 2)} L</b><small>${meta ? (ml >= meta ? 'meta batida hoje' : `faltam ${num((meta - ml) / 1000, 2)} L`) : 'bebidos hoje'}</small></div>
+    <input type="range" class="agua-barra" min="0" max=${Math.round(teto / 50) * 50} step="50" value=${ml} aria-label="Água bebida hoje em ml" onInput=${(ev) => gravar(Number(ev.target.value))}/>
+    <div class="acoes">${[250, 500].map((v) => html`<button class="btn mini" onClick=${() => gravar(ml + v)}>+${v} ml</button>`)}
+      ${ml > 0 && html`<button class="btn-texto" onClick=${() => gravar(ml - 250)}>−250 ml</button>`}</div>
+    ${editar && html`<${Modal} titulo="Meta de água" onFechar=${() => setEditar(false)}><form class="pilha" onSubmit=${(ev) => { ev.preventDefault(); salvarMeta(ev.target.litros.value); }}>
+      <p class="suave">Quantos litros por dia? Use a meta que você combinou com o seu treinador ou a sua nutricionista.</p>
+      <${Campo} rotulo="Litros por dia"><input class="input" name="litros" inputmode="decimal" placeholder="Ex.: 2,5" value=${meta ? String(meta / 1000).replace('.', ',') : ''}/><//>
+      <button class="btn primario grande">Salvar meta</button></form><//>`}
+  </section>`;
 }
 
 // ---------- check-in semanal ----------

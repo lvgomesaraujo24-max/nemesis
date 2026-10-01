@@ -2,13 +2,13 @@
 
 > Fonte primária do app Nemesis. Reúne o que o app é, como foi construído, onde cada coisa mora, todas as regras de cálculo ("inteligência") e o plano daqui para frente.
 > Dono do produto: **Luiz (LV TEAM · LV Coach)**. Repositório: `github.com/lvgomesaraujo24-max/nemesis`. Endereço do app: `https://lvgomesaraujo24-max.github.io/nemesis/`.
-> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v12`, banco até a `atualizacao-13.sql`).
+> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v13`, banco até a `atualizacao-15.sql`).
 
 ### Status real (leia antes de tudo)
 
 | Onde | Versão | Banco |
 |---|---|---|
-| **Produção** (branch `main`, o que as alunas usam hoje) | `nemesis-v11` (v12 no PR #4) | até a `atualizacao-13.sql` |
+| **Produção** (branch `main`, o que as alunas usam hoje) | `nemesis-v12` (v13 no PR da Arena nova) | até a `atualizacao-13.sql` (a 14 vem com a Arena nova) |
 
 O PR #2 foi juntado ao `main` em 01/10/2026 e as atualizações 7 a 12 foram rodadas no Supabase no mesmo dia; a 13 (trava da `fase_ciclo`) foi aplicada logo depois. O PR #3 (relatório com deusa, missão e card de Stories) foi incorporado ao PR #2; a migração dele virou a `atualizacao-10.sql`. O branch `claude/happy-lovelace-qmbtuq` (CLAUDE.md, `.claude/` e checagem) também foi incorporado, atualizado para a v10.
 
@@ -126,7 +126,8 @@ Regras:
 | `js/demo.js` | Mesma interface do `api.js`, com dados no `localStorage` (chave `nemesis-demo-v2`) |
 | `js/util.js` | Datas, números, moeda, componentes base (Modal, Campo, Abas, Estado, gráficos Linha/Barras), avaliação física, semáforo, recordes |
 | `js/coach.js` | Casca do treinador (menu), Alunas, ficha 360 da aluna, Oráculo do treinador, Inscrições, Painel antigo, Convite |
-| `js/aluna.js` | Casca da aluna, Início, Execução (Arena), Oráculo, Perfil |
+| `js/aluna.js` | Casca da aluna, Início (próximo treino, semana, cardio, água), Oráculo, Perfil |
+| `js/arena.js` | Arena: execução um exercício por vez, Seu desempenho, troca de exercício, observações, timer e cronômetro, apresentação da tela |
 | `js/comando.js` | Acrópole: KPIs, Fila do dia, notificações (RPC `centro_de_comando`), agenda de hoje |
 | `js/radar.js` | Engajamento, Progressão, risco de evasão, Radar da Guerreira |
 | `js/ficha.js` | Forja: editor de treino (prescrição, presets, volume ao vivo, séries detalhadas, importar/salvar modelo) |
@@ -187,10 +188,10 @@ Roteamento por hash: `#/base/id/sub`.
 
 | Rota | Tela |
 |---|---|
-| `#/` | Início: treinos da semana (próximo em destaque), pendências de formulário com prazo, relatório |
-| `#/treino/:id` | Arena (execução) |
+| `#/` | Início: cartão do próximo treino (ou do treino em andamento) com tempo estimado, semana, Oráculo aberto, cardio, água do dia com meta, lista de treinos e pendências de formulário |
+| `#/treino/:id` | Arena: um exercício por vez (seção 6.4) |
 | `#/form/:formularioId/:atribuicaoId` | Responder formulário |
-| `#/evolucao` · `#/relatorio` | Evolução, Olimpo e relatório |
+| `#/evolucao` · `#/relatorio` | Evolução (progressão de carga por série com filtro de ficha e treino, peso com a tabela de registros, Olimpo) e relatório |
 | `#/checkin` | Oráculo |
 | `#/perfil` | Abas: Dados, Metas, Avaliações (e autoavaliação), Fotos e arquivos, Testes, Alistamento, Privacidade |
 | `#/cardio` | Cardio |
@@ -212,7 +213,7 @@ Antes de tudo, a aluna sem o aceite da versão atual dos termos e do consentimen
 ### Ordem de instalação
 
 1. `supabase/schema.sql` (base)
-2. `atualizacao-2.sql` até `atualizacao-13.sql`, **nessa ordem**. Todas podem rodar mais de uma vez (testado num Postgres 16 simulando o Supabase: o conjunto inteiro rodou duas vezes seguidas sem erro). **Não rode uma atualização antiga depois de uma nova**: a 2 recria funções que a 11 protege.
+2. `atualizacao-2.sql` até `atualizacao-15.sql`, **nessa ordem**. Todas podem rodar mais de uma vez (testado num Postgres 16 simulando o Supabase: o conjunto inteiro rodou duas vezes seguidas sem erro). **Não rode uma atualização antiga depois de uma nova**: a 2 recria funções que a 11 protege.
 
 | Arquivo | O que liga |
 |---|---|
@@ -229,23 +230,26 @@ Antes de tudo, a aluna sem o aceite da versão atual dos termos e do consentimen
 | `atualizacao-11` | Correções da auditoria: cadastro sem convite aguardando aprovação, leitura da metodologia só por aluna ativa, limites contra robôs no formulário público |
 | `atualizacao-12` | LGPD: consentimentos sem edição, pedidos da aluna, exclusão completa (`eliminar_aluna`), foto e vídeo só com consentimento de imagem, aluna apaga os próprios arquivos |
 | `atualizacao-13` | `fase_ciclo` só responde para a própria aluna ou o treinador (antes respondia até sem login); a original vira `fase_ciclo_base`, fechada. Caminho de busca fixo em `nome_regiao` e `avaliar_regra` |
+| `atualizacao-14` | Arena nova e água: `treino_itens.preparatorias`, `series.preparatoria`, `sessoes.notas`, `profiles.agua_meta_ml` e tabela `agua_registros` |
+| `atualizacao-15` | Metas da semana no Oráculo vivo: perguntas `metas_cumpridas` (só aparece se houve meta na semana anterior, com o texto dela no título) e `metas_semana`; o comentário livre passa a ser a última pergunta |
 
-### Tabelas (42)
+### Tabelas (43)
 
 **Pessoas e acesso**
-- `profiles`: um por conta (id = `auth.users.id`). `role` (coach/student), `nome`, `email`, `telefone`, `nascimento`, `sexo` (F/M), `objetivo`, `ativo`, `anamnese_ok`, `alistada_em`, `treinos_semana_alvo`, `nivel` (iniciante/intermediaria/avancada), `ciclo_rastrear`, `ciclo_duracao_media`, `contracepcao`, `dia_revisao` (0 = domingo … 6), `combo_nutri`.
+- `profiles`: um por conta (id = `auth.users.id`). `role` (coach/student), `nome`, `email`, `telefone`, `nascimento`, `sexo` (F/M), `objetivo`, `ativo`, `anamnese_ok`, `alistada_em`, `treinos_semana_alvo`, `nivel` (iniciante/intermediaria/avancada), `ciclo_rastrear`, `ciclo_duracao_media`, `contracepcao`, `dia_revisao` (0 = domingo … 6), `combo_nutri`, `agua_meta_ml` (meta de água combinada, a aluna pode editar).
 - `convites`: `token`, `nome`, `email`, `telefone`, `objetivo`, `expira_em`, `usado_em`, `aluna_id`.
 - `profiles.aguardando`: conta criada sem convite, pausada até o treinador liberar.
 
 **Treino**
 - `exercicios`: biblioteca. `nome`, `grupo`, vídeo, instruções, `musculos` {primarios, secundarios}, `equipamento`, `articulacao`, `perfil_resistencia`, `substitutos[]`.
 - `treinos`: treino A, B, C… De uma aluna (`aluna_id`) **ou** de um modelo (`modelo_id`). `nome`, `ordem`, `opcional`, `ativo`, `observacoes`.
-- `treino_itens`: linha de prescrição. `tipo` (aquecimento/aerobico/musculacao/crossfit), `series`, `reps`, `reps_tipo`, `aquecimento`, `metodo`, `grupo`, `cadencia_exc/con/tipo/texto`, `descanso`, `descanso_tipo`, `descanso_max`, `esforco_tipo` (rir/rpe), `esforco_alvo`, `duracao`, `intensidade`, `series_detalhe` (meta por série), `obs`.
+- `treino_itens`: linha de prescrição. `tipo` (aquecimento/aerobico/musculacao/crossfit), `series`, `reps`, `reps_tipo`, `aquecimento`, `preparatorias` (0 a 5), `metodo`, `grupo`, `cadencia_exc/con/tipo/texto`, `descanso`, `descanso_tipo`, `descanso_max`, `esforco_tipo` (rir/rpe), `esforco_alvo`, `duracao`, `intensidade`, `series_detalhe` (meta por série), `obs`.
 - `modelos`: `nome`, `nivel`, `descricao`, `objetivo`, `frequencia_semanal`, `duracao_semanas`.
 - `presets_linha`: prescrições prontas ("Glúteo força: 4×6-8, RIR 2, 2s excêntrica, 120s").
 - `mesociclos`: validade da ficha. `inicio`, `fim`, `status` (planejado/ativo/encerrado), `progressao` ([{rir:3},{rir:2},{rir:1},{deload:true}]).
-- `sessoes`: um treino feito. `data`, `treino_nome`, `iniciada_em`, `concluida_em`, `esforco`, `comentario`.
-- `series`: cada série registrada. `carga`, `reps`, `rir`, `aquecimento`, `numero`, `exercicio_id`, `treino_item_id`.
+- `sessoes`: um treino feito. `data`, `treino_nome`, `iniciada_em`, `concluida_em`, `esforco`, `comentario`, `notas` (observações da aluna por exercício: `{treino_item_id: texto}`).
+- `series`: cada série registrada. `carga`, `reps`, `rir`, `aquecimento`, `preparatoria`, `numero`, `exercicio_id`, `treino_item_id`. Série preparatória é gravada com `aquecimento = true` e `preparatoria = true`, então fica fora de volume, recordes e tonelagem como o aquecimento.
+- `agua_registros`: água do dia por aluna (`dia`, `ml`, único por aluna e dia). A aluna grava a própria; o treinador lê.
 - `videos_execucao`: vídeo da aluna + `correcao` do treinador.
 
 **Acompanhamento**
@@ -334,7 +338,7 @@ Bucket privado **`arquivos`**. Caminho: `{id_da_aluna}/{arquivo}` e `{id_da_alun
 - Segundos por repetição: cadência padrão = excêntrica + concêntrica (padrão 2 s + 0 s, mínimo 1). Americana (ex.: "3-1-1-0") = soma dos dígitos. Simplificada: lenta 5 s, moderada 3 s, rápida 2 s, explosiva 1 s.
 - Por série: isometria "30s" = 30 s. Máximas, até a falha ou na reserva = 10 reps. Faixa "8-12" = média (10). Sem número = 10.
 - Descanso: exato = valor; faixa = média de mínimo e máximo; livre = 90 s.
-- **Tempo do exercício = séries × tempo da série + (séries − 1) × descanso + séries de aquecimento × (0,8 × tempo da série + 45 s).**
+- **Tempo do exercício = séries × tempo da série + (séries − 1) × descanso + séries de aquecimento × (0,8 × tempo da série + 45 s).** Séries preparatórias entram como séries de aquecimento nessa conta (decisão de 01/10/2026).
 - Aeróbico = duração em minutos × 60.
 - **Tempo do treino = soma dos exercícios + um descanso entre um exercício e o próximo** (menos depois de aeróbico). Conferido com o HypeFit: 3 min 48 s no mesmo exemplo.
 
@@ -349,12 +353,25 @@ Bucket privado **`arquivos`**. Caminho: `{id_da_aluna}/{arquivo}` e `{id_da_alun
 
 ### 6.4 Arena (execução)
 
+- **Um exercício por vez** (estrutura pedida pelo Luiz a partir do treino.io, 01/10/2026): barra com Voltar, tempo total da sessão e Cancelar treino; números dos exercícios para pular; nome, "Substituir exercício", "Ver vídeo" e "Seu desempenho"; contagem de séries; "Exercício concluído · feitas/total"; bolinhas das séries (vermelho = aquecimento, amarelo = preparatória, verde = válidas); RIR da série em botões de 0 a 5; peso e reps grandes; "Concluir série"; setas para o anterior e o próximo; "Minhas observações"; "Enviar vídeo"; timer e cronômetro.
+- **Ordem das séries:** aquecimento, preparatórias, válidas. Só as válidas contam para volume, recorde e progresso ("N de M séries válidas"). Série válida exige reps; aquecimento e preparatória não.
+- Ao concluir a última série de um exercício, a Arena passa para o próximo exercício que ainda tem séries. Em bi-set e circuito, passa direto para o próximo do grupo e só abre o descanso no fim da volta.
+- **Corrigir:** tocar na série concluída e em "Série concluída" apaga o registro.
+- **Cancelar treino:** apaga as séries e a sessão de hoje daquele treino (com confirmação).
+- **Seu desempenho:** recorde pessoal pela regra do Olimpo (6.15) e as últimas 10 execuções do exercício, por data, com série, carga, reps e RIR.
+- **Lembrar troca:** a escolha de "Substituir exercício" pode ficar salva só no aparelho (`localStorage`); desligado, o treino abre com o prescrito. A apresentação de 4 passos aparece só na primeira vez em cada aparelho.
 - Cada série registra carga, repetições e RIR real (opcional).
 - **Recorde:** série de trabalho (não aquecimento) com carga maior que a maior carga anterior daquele exercício → aviso "Novo recorde".
 - **Descanso automático** depois da série: tempo prescrito; em série de aquecimento, no máximo 60 s; descanso livre não abre cronômetro. Botão +15 s.
 - "Última vez": mostra o que a aluna fez no exercício na sessão anterior.
 - **Troca de exercício pela aluna** (aparelho ocupado): só por um substituto cadastrado; o treinador recebe um alerta "Troca de exercício".
 - Vídeo da execução vai para o Storage; o treinador corrige e a aluna vê a correção no treino.
+
+### 6.4a Progressão de carga (Evolução)
+
+- Filtros: ficha (período do mesociclo, do início ao fim, igual ao Relatório; abre na ficha ativa se ela já tiver 2 treinos com carga, senão em todas) e treino.
+- Uma linha por série válida (1ª, 2ª, 3ª, 4ª): em cada data de treino, a maior carga feita naquela série. Aquecimento e preparatória ficam fora.
+- Cores de série em ordem fixa (`--serie-1` a `--serie-4`, paleta validada para o fundo escuro); legenda sempre visível e dica com os valores ao tocar.
 
 ### 6.5 Semáforo do check-in (Oráculo)
 
@@ -457,6 +474,8 @@ Cada item pode ser marcado como visto, resolvido, feito ou adiado (3 dias), e so
 - **Regra mal escrita ou operador desconhecido = falso.** A tela nunca quebra por causa de uma regra.
 - Textos vivos: `{{ctx.ultima_dor.intensidade}}` é trocado pelo valor.
 - Pergunta com `mostrar_se` só aparece quando a regra é verdadeira. `titulo_variantes` troca o título conforme o contexto.
+
+**Metas da semana (atualização 15):** no fim do Oráculo a aluna escreve até 3 metas para a próxima semana (`metas_semana`). No Oráculo seguinte, `metas_cumpridas` aparece com o título "Na semana passada você se propôs: {{ctx.anterior.metas_semana}}. Como foi?" (cumpri todas, parte ou não consegui). A home da aluna mostra as metas do último Oráculo e o cartão de resposta do treinador mostra as duas respostas. São perguntas comuns do formulário: o treinador pode editar ou tirar em Formulários.
 
 **Contexto (`ctx`) que o banco monta para cada aluna:** respostas do envio anterior do mesmo tipo e a data dele; dores dos últimos 21 dias (a mais recente de cada região, da mais forte para a mais fraca) e `ultima_dor`; metas ativas com prazo em até 14 dias ou não batidas já analisadas; treinos da semana passada e da atual; `alvo_semana`; fase do ciclo; dicas em cooldown.
 

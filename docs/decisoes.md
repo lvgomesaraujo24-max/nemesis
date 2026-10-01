@@ -103,3 +103,29 @@ Modelo:
 **Decisão**: fotos de corpo, imagens e vídeos enviados ficam em `<aluna>/fotos/` e vídeos de execução em `<aluna>/videos/`; a regra do Storage exige o consentimento de imagem para a aluna gravar nessas pastas.
 **Por quê**: sem a pasta separada, a aluna (ou alguém com a sessão dela) podia gravar uma foto no Storage mesmo sem autorização, só pulando o registro na tabela.
 
+## 2026-10-01 · Arena um exercício por vez (estrutura do treino.io)
+**Decisão**: a execução do treino mostra um exercício por vez, no formato que as alunas já conhecem do treino.io (pedido do Luiz com prints), mas com as cores e o vocabulário do Nemesis. A tela antiga (lista rolando com todos os exercícios) saiu.
+**Por quê**: na academia, com o celular na mão, a aluna precisa de campos grandes, um botão de concluir e o descanso automático na mesma tela.
+**Fora por enquanto**: o feed "Comunidade" com fotos de outras alunas. Depende de consentimento de imagem para divulgação (hoje a autorização de imagem é só para o treinador ver) e de moderação.
+
+## 2026-10-01 · Série preparatória gravada como aquecimento
+**Decisão**: a preparatória é prescrita à parte (`treino_itens.preparatorias`), mas cada série feita é gravada com `aquecimento = true` e `preparatoria = true`. No tempo estimado ela conta como série de aquecimento.
+**Por quê**: assim volume, recordes, tonelagem, engajamento e relatório continuam iguais, sem mudar nenhuma fórmula da §6: preparatória não é série de trabalho.
+
+## 2026-10-01 · Meta de água sem cálculo automático
+**Decisão**: a meta de água é digitada (pela aluna, combinada com o treinador ou a nutricionista); o app não calcula meta por peso.
+**Por quê**: regra do projeto de não inventar fórmula sem pedido explícito e referência.
+
+## 2026-10-01 · Política cita água e observações sem nova versão dos termos
+**Decisão**: a seção 2 da Política de Privacidade passou a citar a água do dia e as observações por exercício, sem subir `VERSAO_TERMOS`.
+**Por quê**: são dados comuns (não sensíveis), opcionais e usados na mesma finalidade já aceita (acompanhamento do treino). Pedir novo aceite a todas por isso seria desproporcional. Se um dia entrar dado sensível novo ou finalidade nova, sobe a versão.
+
+## 2026-10-01 · Metas da semana dentro do Oráculo vivo
+**Decisão**: as metas da semana são duas perguntas do próprio Oráculo (atualização 15), e não uma tabela nova. A semana seguinte usa o contexto `ctx.anterior` para lembrar a meta e perguntar como foi.
+**Por quê**: pedido de quem testou o app ("no Oráculo faltou as metas para a semana"). Reaproveita o motor de formulários: o treinador edita o texto ou tira as perguntas sem mexer em código.
+**Consequências**: o Oráculo fixo do modo demonstração (sem formulário vivo) não tem as metas.
+
+## 2026-10-01 · Cores das linhas de série
+**Decisão**: o gráfico de progressão por série usa quatro cores novas em `:root` (`--serie-1` a `--serie-4`: azul, laranja, verde-água e amarelo).
+**Por quê**: o roxo da marca não serve para separar várias linhas. As quatro cores passaram pelo validador de paleta no fundo escuro do app: diferença para daltonismo ΔE ≥ 8 e contraste ≥ 3:1. Os tons de estado (`--ok`, `--atencao`, `--perigo`) continuam reservados para estado.
+

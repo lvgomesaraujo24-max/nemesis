@@ -186,7 +186,7 @@ export function tempoItem(it) {
   if (seg) porSerie = Number(seg[1]);
   else if (['maxima', 'falha', 'reserva'].includes(tipo)) porSerie = 10 * porRep;
   else { const ns = (reps.match(/\d+/g) || []).map(Number); porSerie = (ns.length ? ns.reduce((a, b) => a + b, 0) / ns.length : 10) * porRep; }
-  const series = Number(it.series || 0), aq = Number(it.aquecimento || 0);
+  const series = Number(it.series || 0), aq = Number(it.aquecimento || 0) + Number(it.preparatorias || 0);   // preparatória conta como aquecimento
   const desc = descansoMedio(it);
   return series * porSerie + Math.max(0, series - 1) * desc + aq * (porSerie * 0.8 + 45);
 }
