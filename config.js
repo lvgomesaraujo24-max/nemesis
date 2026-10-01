@@ -4,8 +4,10 @@
    - SUPABASE_ANON_KEY: a chave "anon public" (ou "publishable")
    Essa chave é pública por natureza. Quem protege os dados são as regras
    de segurança (RLS) do arquivo supabase/schema.sql.
-   Com os dois campos vazios, o app abre em MODO DEMONSTRAÇÃO. */
+   Com os dois campos vazios, o app abre em MODO DEMONSTRAÇÃO.
+   - ASSINATURA: o que aparece no rodapé do card de Stories do relatório (ex.: o seu @). */
 window.NEMESIS_CONFIG = {
   SUPABASE_URL: "https://ycndwyjvddrmlzunnhvv.supabase.co",
-  SUPABASE_ANON_KEY: "sb_publishable_5yvQMMuri_LUlS3l8OFLbg_L-ot_kcM"
+  SUPABASE_ANON_KEY: "sb_publishable_5yvQMMuri_LUlS3l8OFLbg_L-ot_kcM",
+  ASSINATURA: "@luizvcoach"
 };

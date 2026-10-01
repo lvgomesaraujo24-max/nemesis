@@ -1,6 +1,6 @@
 // MODO DEMONSTRAÇÃO: imita o Supabase com dados de exemplo guardados no navegador.
 // Serve para ver e testar o app antes de ligar o banco de verdade.
-const CHAVE = 'nemesis-demo-v2';
+const CHAVE = 'nemesis-demo-v3';
 let memoria = null;
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
@@ -81,6 +81,17 @@ function semear() {
   db.avaliacoes.push(
     { id: uid(), aluna_id: 'aluna-ana', data: iso(diasAtras(75)), idade: 27, peso: 64.9, altura: 165, dobras: { peitoral: 12, axilar: 11, triceps: 20, subescapular: 14, abdominal: 22, suprailiaca: 18, coxa: 28 }, medidas: { cintura: 72, quadril: 100, coxa: 58, braco: 28 }, percentual_gordura: 25.1, obs: '' },
     { id: uid(), aluna_id: 'aluna-ana', data: iso(diasAtras(12)), idade: 27, peso: 63.4, altura: 165, dobras: { peitoral: 10, axilar: 10, triceps: 18, subescapular: 12, abdominal: 18, suprailiaca: 15, coxa: 25 }, medidas: { cintura: 69, quadril: 101, coxa: 58.5, braco: 27.5 }, percentual_gordura: 22.4, obs: 'Cintura caiu 3 cm, quadril subiu.' });
+
+  // metas, relatos de dor e ficha com progressão (aparecem no relatório de evolução)
+  const criada = diasAtras(75).toISOString();
+  db.metas = [
+    { id: uid(), aluna_id: 'aluna-ana', tipo: 'carga', titulo: 'Elevação pélvica: 60 kg', exercicio_id: ex['Elevação pélvica na máquina'].id, medida: null, valor_inicial: 40, valor_alvo: 60, prazo: iso(diasAtras(-45)), status: 'ativa', created_at: criada },
+    { id: uid(), aluna_id: 'aluna-ana', tipo: 'medida', titulo: 'Cintura: 67 cm', exercicio_id: null, medida: 'cintura', valor_inicial: 72, valor_alvo: 67, prazo: iso(diasAtras(-90)), status: 'ativa', created_at: criada },
+    { id: uid(), aluna_id: 'aluna-ana', tipo: 'gordura', titulo: 'Gordura corporal: 21%', exercicio_id: null, medida: null, valor_inicial: 25.1, valor_alvo: 21, prazo: iso(diasAtras(-120)), status: 'ativa', created_at: criada },
+  ];
+  db.dor_relatos = [[52, 5], [38, 4], [24, 3], [13, 2], [4, 1]].map(([dias, intensidade]) => ({ id: uid(), envio_id: null, aluna_id: 'aluna-ana', regiao: 'joelho', lado: 'D', intensidade, quando: ['agachando'], created_at: diasAtras(dias).toISOString() }));
+  db.mesociclos = [{ id: uid(), aluna_id: 'aluna-ana', nome: 'Bloco glúteo 2', inicio: iso(diasAtras(20)), fim: iso(diasAtras(-21)), status: 'ativo',
+    progressao: [{ rir: 3 }, { rir: 2 }, { rir: 2 }, { rir: 1 }, { rir: 1 }, { deload: true }], created_at: diasAtras(20).toISOString() }];
 
   db.planos.push({ id: 'p1', nome: 'Ágora', meses: 1, valor: 247, ativo: true }, { id: 'p2', nome: 'Delfos', meses: 3, valor: 647, ativo: true }, { id: 'p3', nome: 'Ítaca', meses: 6, valor: 1197, ativo: true }, { id: 'p4', nome: 'Olimpo', meses: 12, valor: 1997, ativo: true });
 

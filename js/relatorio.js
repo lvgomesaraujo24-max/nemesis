@@ -1,15 +1,16 @@
 // Relatório de evolução (mensal, por ficha ou por período livre).
 // O treinador gera, baixa em PDF (imprimir > salvar como PDF) e manda para a aluna.
 // A aluna vê o mesmo relatório no app, em Evolução.
-import { html, useState, useMemo } from '../lib/preact-htm.js';
+// As páginas além dos números do período (deusa, visão macro, comparativo...) estão em relatorio-paginas.js.
+import { html, useState, useMemo, useEffect } from '../lib/preact-htm.js';
 import { api } from './api.js';
 import { useCarregar, Estado, Vazio, Campo, toast, num, dataBR, dataCurta, hoje, somaDias, diasEntre, segundaDe, MEDIDAS_TODAS,
   tonelagem, linkWhats, copiar } from './util.js';
+import { Cab, Rodape, Dado, Capa, Macro, Comparativo, MapaDoCorpo, BemEstar, MetasConquistas, Jornada, Missao, CardStories,
+  deusaDe, proximoMeso, conquistas, fimDoMes, somaMesYM, mesDe } from './relatorio-paginas.js';
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const mesLongo = (ym) => { const [y, m] = ym.split('-'); return `${MESES[+m - 1]} de ${y}`; };
-const fimDoMes = (ym) => { const [y, m] = ym.split('-').map(Number); return `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`; };
-const somaMesYM = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 const primeiro = (n) => (n || '').split(' ')[0] || '';
 const pct = (v) => `${v > 0 ? '+' : ''}${num(v * 100, 0)}%`;
 const serieTxt = (s) => (s ? `${num(s.carga, 1)}kg × ${s.reps || '·'}` : '·');
@@ -81,9 +82,11 @@ export function calcularRelatorio({ ini, fim, aluna, sessoes, series, exercicios
   });
   const melhorAte = {};
   const recordes = [];
+  const recordesTodos = []; // de todo o histórico (conquistas)
   cronologico.forEach((s) => {
     const r = melhorAte[s.exercicio_id];
     const bateu = r && (s.carga > r.carga || (s.carga === r.carga && (s.reps || 0) > (r.reps || 0)));
+    if (bateu) recordesTodos.push({ ...s, data: dataSessao[s.sessao_id], nome: nomeEx(s.exercicio_id), antes: r });
     if (bateu && idsFeitas.has(s.sessao_id)) recordes.push({ ...s, data: dataSessao[s.sessao_id], nome: nomeEx(s.exercicio_id), antes: r });
     if (!r || bateu) melhorAte[s.exercicio_id] = s;
   });
@@ -130,7 +133,8 @@ export function calcularRelatorio({ ini, fim, aluna, sessoes, series, exercicios
 
   return { ini, fim, ate, semanas, feitas, previstos, aderencia, alvo, semanasGrade, porTreino, extras, duracaoMedia, esforcoMedio,
     volume, seriesEfetivas, grupos, recordes, forca, destaques, pesoAtual, pesoRef, pesosNoPeriodo, avAtual, avAnterior,
-    bemEstar, checkinsFeitos: chk.length, mediaSemanal: volume / semanas, exerciciosFeitos: exNoPeriodo.length };
+    bemEstar, checkinsFeitos: chk.length, mediaSemanal: volume / semanas, exerciciosFeitos: exNoPeriodo.length,
+    seriesPeriodo: doPeriodo, validas, dataSessao, todasFeitas, recordesTodos };
 }
 
 // ============================================================
@@ -138,7 +142,8 @@ export function calcularRelatorio({ ini, fim, aluna, sessoes, series, exercicios
 // ============================================================
 export function Relatorio({ aluna, coachNome, podeEditar }) {
   const e = useCarregar(async () => {
-    const [sessoes, series, exercicios, treinos, checkins, avaliacoes, anamnese, mesociclos, fotosAluna] = await Promise.all([
+    const opcional = (p) => p.catch(() => []); // tabela de atualização que o banco ainda não tem não derruba o relatório
+    const [sessoes, series, exercicios, treinos, checkins, avaliacoes, anamnese, mesociclos, metas, dores, testes, notas, agenda, fotosAluna] = await Promise.all([
       api.q('sessoes', { eq: { aluna_id: aluna.id }, order: 'data' }),
       api.q('series', { eq: { aluna_id: aluna.id }, order: 'created_at' }),
       api.q('exercicios', { order: 'nome' }),
@@ -146,13 +151,22 @@ export function Relatorio({ aluna, coachNome, podeEditar }) {
       api.q('checkins', { eq: { aluna_id: aluna.id }, order: 'semana' }),
       api.q('avaliacoes', { eq: { aluna_id: aluna.id }, order: 'data' }),
       api.um('anamneses', { aluna_id: aluna.id }).catch(() => null),
-      api.q('mesociclos', { eq: { aluna_id: aluna.id }, order: 'inicio', asc: false }).catch(() => []),
-      api.q('arquivos_aluna', { eq: { aluna_id: aluna.id, categoria: 'foto' }, order: 'created_at' }).catch(() => []),
+      opcional(api.q('mesociclos', { eq: { aluna_id: aluna.id }, order: 'inicio', asc: false })),
+      opcional(api.q('metas', { eq: { aluna_id: aluna.id }, order: 'created_at' })),
+      opcional(api.q('dor_relatos', { eq: { aluna_id: aluna.id }, order: 'created_at' })),
+      opcional(api.q('testes_aerobicos', { eq: { aluna_id: aluna.id }, order: 'data' })),
+      opcional(api.q('relatorio_notas', { eq: { aluna_id: aluna.id } })),
+      podeEditar ? opcional(api.q('agenda', { eq: { aluna_id: aluna.id }, gte: { inicio: hoje() }, order: 'inicio' })) : [],
+      opcional(api.q('arquivos_aluna', { eq: { aluna_id: aluna.id, categoria: 'foto' }, order: 'created_at' })),
     ]);
-    return { sessoes, series, exercicios, treinos, checkins, avaliacoes, anamnese, mesociclos, fotosAluna };
+    return { sessoes, series, exercicios, treinos, checkins, avaliacoes, anamnese, mesociclos, metas, dores, testes, notas, agenda, fotosAluna };
   }, [aluna.id]);
-  return html`<${Estado} e=${e}>${(d) => html`<${RelatorioCorpo} d=${d} aluna=${aluna} coachNome=${coachNome} podeEditar=${podeEditar}/>`}<//>`;
+  // key: trocar de aluna recomeça a tela (mês, rascunhos e notas não passam de uma para outra)
+  return html`<${Estado} e=${e}>${(d) => html`<${RelatorioCorpo} key=${aluna.id} d=${d} aluna=${aluna} coachNome=${coachNome} podeEditar=${podeEditar}/>`}<//>`;
 }
+
+const FOCOS_VAZIOS = [{ titulo: '', alvo: '', texto: '' }, { titulo: '', alvo: '', texto: '' }, { titulo: '', alvo: '', texto: '' }];
+const focosDe = (m) => FOCOS_VAZIOS.map((f, i) => ({ ...f, ...((Array.isArray(m) && m[i]) || {}) }));
 
 function RelatorioCorpo({ d, aluna, coachNome, podeEditar }) {
   const ficha = d.mesociclos.find((m) => m.status === 'ativo') || d.mesociclos[0] || null;
@@ -160,39 +174,88 @@ function RelatorioCorpo({ d, aluna, coachNome, podeEditar }) {
   const [modo, setModo] = useState('mes');
   const [ym, setYm] = useState(() => (Number(hoje().slice(8)) <= 7 ? somaMesYM(hoje().slice(0, 7), -1) : hoje().slice(0, 7)));
   const [livre, setLivre] = useState({ ini: somaDias(hoje(), -29), fim: hoje() });
-  const chaveMsg = `nemesis-rel-msg-${aluna.id}`;
-  const [msg, setMsg] = useState(() => { try { return localStorage.getItem(chaveMsg) || ''; } catch (err) { return ''; } });
   const [fotos, setFotos] = useState({ antes: null, depois: null, rotAntes: 'Início', rotDepois: 'Atual' });
+  const [notas, setNotas] = useState(d.notas);
+  const [rascunhos, setRascunhos] = useState({});
+  const [salvando, setSalvando] = useState(false);
 
-  let ini, fim, periodo, tipo;
-  if (modo === 'ficha' && ficha) { ini = ficha.inicio; fim = ficha.fim; tipo = 'Ciclo'; periodo = `${ficha.nome || 'Ficha'} · ${Math.max(1, Math.round((diasEntre(ini, fim) + 1) / 7))} semanas`; }
-  else if (modo === 'livre') { ini = livre.ini <= livre.fim ? livre.ini : livre.fim; fim = livre.ini <= livre.fim ? livre.fim : livre.ini; tipo = 'Período'; periodo = `${dataBR(ini)} a ${dataBR(fim)}`; }
-  else { ini = `${ym}-01`; fim = fimDoMes(ym); tipo = 'Mês'; periodo = `Relatório mensal · ${mesLongo(ym)}`; }
+  // período atual, período anterior (mesmo tamanho) e os rótulos de cada página
+  let ini, fim, periodo, tipo, chave, iniA, fimA, rotulo;
+  const M = (s) => s.replace(/^./, (c) => c.toUpperCase());
+  if (modo === 'ficha' && ficha) {
+    ini = ficha.inicio; fim = ficha.fim; tipo = 'Ciclo'; chave = `ficha-${ficha.id}`;
+    periodo = `${ficha.nome || 'Ficha'} · ${Math.max(1, Math.round((diasEntre(ini, fim) + 1) / 7))} semanas`;
+    rotulo = { anterior: 'o anterior', comparativo: 'Este ciclo × anterior', diaADia: 'O ciclo, dia a dia', missao: 'Missão do próximo ciclo', card: `${dataCurta(ini)} a ${dataCurta(fim)}` };
+  } else if (modo === 'livre') {
+    ini = livre.ini <= livre.fim ? livre.ini : livre.fim; fim = livre.ini <= livre.fim ? livre.fim : livre.ini; tipo = 'Período'; chave = `${ini}_${fim}`;
+    periodo = `${dataBR(ini)} a ${dataBR(fim)}`;
+    rotulo = { anterior: 'o anterior', comparativo: 'Este período × anterior', diaADia: 'O período, dia a dia', missao: 'Missão do próximo período', card: `${dataCurta(ini)} a ${dataCurta(fim)}` };
+  } else {
+    ini = `${ym}-01`; fim = fimDoMes(ym); tipo = 'Mês'; chave = ym;
+    periodo = `Relatório mensal · ${mesLongo(ym)}`;
+    const antYm = somaMesYM(ym, -1), proxYm = somaMesYM(ym, 1);
+    iniA = `${antYm}-01`; fimA = fimDoMes(antYm);
+    rotulo = { anterior: mesDe(antYm), comparativo: `${M(mesDe(ym))} × ${M(mesDe(antYm))}`, diaADia: `${M(mesDe(ym))}, dia a dia`, missao: `Missão de ${M(mesDe(proxYm))}`, card: `${mesDe(ym)} · ${ym.slice(0, 4)}` };
+  }
+  if (!iniA) { const dias = diasEntre(ini, fim) + 1; iniA = somaDias(ini, -dias); fimA = somaDias(ini, -1); }
 
   const r = useMemo(() => calcularRelatorio({ ini, fim, aluna, ...d }), [ini, fim, d]);
+  const ant = useMemo(() => calcularRelatorio({ ini: iniA, fim: fimA, aluna, ...d }), [iniA, fimA, d]);
+  // mês a mês, dos últimos 12 meses até o fim do período (jornada e conquistas)
+  const meses = useMemo(() => {
+    if (!r.todasFeitas.length) return [];
+    const ultimo = fim.slice(0, 7);
+    let m = r.todasFeitas[0].data.slice(0, 7);
+    if (somaMesYM(ultimo, -11) > m) m = somaMesYM(ultimo, -11);
+    const l = [];
+    for (; m <= ultimo; m = somaMesYM(m, 1)) l.push({ ym: m, ini: `${m}-01`, fim: fimDoMes(m), r: calcularRelatorio({ ini: `${m}-01`, fim: fimDoMes(m), aluna, ...d }) });
+    return l;
+  }, [fim, d]);
+  const deusa = deusaDe(r);
   const objetivo = aluna.objetivo || (d.anamnese && d.anamnese.respostas && d.anamnese.respostas.objetivo) || '';
 
-  const salvarMsg = (v) => { setMsg(v); try { localStorage.setItem(chaveMsg, v); } catch (err) { /* sem storage */ } };
+  // palavra do treinador e missão: ficam no banco, a aluna também vê
+  const nota = notas.find((n) => n.chave === chave) || null;
+  const legado = () => { try { return localStorage.getItem(`nemesis-rel-msg-${aluna.id}`) || ''; } catch (err) { return ''; } };
+  const salvo = { mensagem: nota ? nota.mensagem || '' : podeEditar ? legado() : '', missao: focosDe(nota && nota.missao) };
+  const atual = rascunhos[chave] || salvo;
+  const pendente = !!rascunhos[chave];
+  const editar = (patch) => setRascunhos({ ...rascunhos, [chave]: { ...atual, ...patch } });
+  const editarFoco = (i, k, v) => editar({ missao: atual.missao.map((f, j) => (j === i ? { ...f, [k]: v } : f)) });
+  const salvarNota = async () => {
+    setSalvando(true);
+    try {
+      const linha = { aluna_id: aluna.id, chave, mensagem: atual.mensagem.trim() || null, missao: atual.missao.filter((f) => f.titulo.trim() || f.texto.trim()), updated_at: new Date().toISOString() };
+      const [salva] = await api.ups('relatorio_notas', linha, 'aluna_id,chave');
+      setNotas([...notas.filter((n) => n.chave !== chave), salva || linha]);
+      const { [chave]: _, ...resto } = rascunhos; setRascunhos(resto);
+      toast('Salvo. A aluna vê no relatório dela.');
+    } catch (err) { toast(err.message, 'erro'); }
+    setSalvando(false);
+  };
+  useEffect(() => { if (!pendente) return undefined; const f = (ev) => { ev.preventDefault(); ev.returnValue = ''; }; addEventListener('beforeunload', f); return () => removeEventListener('beforeunload', f); }, [pendente]);
+
+  // foto guardada em Arquivos (categoria foto de evolução)
+  const usarFoto = (k) => async (ev) => {
+    const x = (d.fotosAluna || []).find((f) => f.id === ev.target.value); if (!x) return;
+    try { const url = await api.linkArquivo(x.caminho); setFotos((f) => ({ ...f, [k]: url, [k === 'antes' ? 'rotAntes' : 'rotDepois']: dataBR(x.created_at) })); }
+    catch (err) { toast(err.message, 'erro'); }
+  };
   const lerFoto = (k) => (ev) => {
     const f = ev.target.files && ev.target.files[0]; if (!f) return;
     const leitor = new FileReader();
     leitor.onload = () => setFotos((x) => ({ ...x, [k]: leitor.result }));
     leitor.readAsDataURL(f);
   };
-  // foto guardada em Arquivos (categoria foto de evolução)
-  const usarFoto = (k) => async (ev) => {
-    const x = d.fotosAluna.find((f) => f.id === ev.target.value); if (!x) return;
-    try { const url = await api.linkArquivo(x.caminho); setFotos((f) => ({ ...f, [k]: url, [k === 'antes' ? 'rotAntes' : 'rotDepois']: dataBR(x.created_at) })); }
-    catch (err) { toast(err.message, 'erro'); }
-  };
   const resumoTexto = () => {
     const linhas = [`Oi, ${primeiro(aluna.nome)}! Seu relatório de evolução (${modo === 'mes' ? mesLongo(ym) : periodo}) está pronto 💜`, '',
+      `• Sua deusa do período: ${deusa.nome}, ${deusa.lema}`,
       `• ${r.feitas.length} treino(s) feitos · ${num(r.aderencia * 100, 0)}% de aderência`,
       `• ${num(r.volume / 1000, 1)} toneladas levantadas`,
       `• ${r.recordes.length} recorde(s) pessoal(is) de carga`];
     if (r.destaques[0]) linhas.push(`• Destaque: ${r.destaques[0].nome} com ${pct(r.destaques[0].ganho)} de força estimada`);
     if (r.pesoAtual && r.pesoRef && r.pesoAtual.data !== r.pesoRef.data) linhas.push(`• Peso: ${num(r.pesoRef.peso, 1)} → ${num(r.pesoAtual.peso, 1)} kg`);
-    linhas.push('', 'O relatório completo está no app, em Evolução > Relatório. Te mando o PDF aqui também.');
+    linhas.push('', 'O relatório completo está no app, em Evolução > Relatório. Te mando o PDF aqui também. A última página é um card para você postar nos Stories.');
     return linhas.join('\n');
   };
   const imprimir = () => { document.title = `Relatorio_Evolucao_${(aluna.nome || 'aluna').replace(/\s+/g, '_')}_${ini}`; window.print(); setTimeout(() => { document.title = 'Nemesis'; }, 1500); };
@@ -205,9 +268,19 @@ function RelatorioCorpo({ d, aluna, coachNome, podeEditar }) {
       ${modo === 'livre' && html`<div class="grade2">
         <${Campo} rotulo="De"><input class="input" type="date" value=${livre.ini} onInput=${(ev) => setLivre({ ...livre, ini: ev.target.value })}/><//>
         <${Campo} rotulo="Até"><input class="input" type="date" value=${livre.fim} onInput=${(ev) => setLivre({ ...livre, fim: ev.target.value })}/><//></div>`}
-      ${podeEditar && html`<details class="rel-extras"><summary>Mensagem e fotos (opcional)</summary><div class="pilha">
-        <${Campo} rotulo="Palavra do treinador" dica="Aparece no resumo do relatório. Fica salva só neste aparelho."><textarea class="input" rows="3" value=${msg} onInput=${(ev) => salvarMsg(ev.target.value)} placeholder="Ex.: Mês de muita consistência. No próximo, foco em subir a carga do stiff."></textarea><//>
-        ${d.fotosAluna.length > 0 && html`<div class="grade2">${['antes', 'depois'].map((k) => html`<${Campo} rotulo=${`Foto ${k} (dos arquivos dela)`}>
+      ${podeEditar && html`<details class="rel-extras" open=${pendente}><summary>Palavra do treinador e missão${nota ? ' · salvas' : ''}</summary><div class="pilha">
+        <${Campo} rotulo="Palavra do treinador" dica="Entra na página da missão. A aluna também vê, no app e no PDF."><textarea class="input" rows="4" value=${atual.mensagem} onInput=${(ev) => editar({ mensagem: ev.target.value })} placeholder="Ex.: Mês de muita consistência. No próximo, foco em subir a carga do stiff."></textarea><//>
+        <p class="rotulo">${rotulo.missao}: até 3 focos</p>
+        ${atual.missao.map((f, i) => html`<div class="rel-foco">
+          <div class="grade2">
+            <input class="input" aria-label=${`Foco ${i + 1}`} placeholder=${['Foco 1 · ex.: Búlgaro no Smith', 'Foco 2 · ex.: Proteger o sono', 'Foco 3 · ex.: Zero faltas'][i]} value=${f.titulo} onInput=${(ev) => editarFoco(i, 'titulo', ev.target.value)}/>
+            <input class="input" aria-label=${`Alvo do foco ${i + 1}`} placeholder="Alvo · ex.: 12,5 → 15 kg" value=${f.alvo} onInput=${(ev) => editarFoco(i, 'alvo', ev.target.value)}/>
+          </div>
+          <textarea class="input" rows="2" aria-label=${`Por que o foco ${i + 1}`} placeholder="Por que esse foco (opcional)" value=${f.texto} onInput=${(ev) => editarFoco(i, 'texto', ev.target.value)}></textarea></div>`)}
+        <button type="button" class="btn primario" disabled=${!pendente || salvando} onClick=${salvarNota}>${salvando ? 'Salvando…' : pendente ? 'Salvar palavra e missão' : 'Salvo'}</button>
+      </div></details>`}
+      ${podeEditar && html`<details class="rel-extras"><summary>Fotos antes e depois (opcional)</summary><div class="pilha">
+        ${(d.fotosAluna || []).length > 0 && html`<div class="grade2">${['antes', 'depois'].map((k) => html`<${Campo} rotulo=${`Foto ${k} (dos arquivos dela)`}>
           <select class="input" onChange=${usarFoto(k)}><option value="">Escolher foto</option>${d.fotosAluna.map((x) => html`<option value=${x.id}>${dataBR(x.created_at)} · ${x.nome}</option>`)}</select><//>`)}</div>`}
         <div class="grade2">
           <${Campo} rotulo="Foto antes"><input class="input" type="file" accept="image/*" onChange=${lerFoto('antes')}/><//>
@@ -223,73 +296,45 @@ function RelatorioCorpo({ d, aluna, coachNome, podeEditar }) {
         ${podeEditar && aluna.telefone && html`<a class="btn" target="_blank" rel="noopener" href=${linkWhats(aluna.telefone, resumoTexto())}>Mandar no WhatsApp</a>`}
         ${podeEditar && html`<button class="btn" onClick=${() => copiar(resumoTexto())}>Copiar resumo</button>`}
       </div>
-      <small>${podeEditar ? 'No "Baixar PDF", escolha "Salvar como PDF" e anexe na conversa. A aluna também vê este relatório no app, em Evolução.' : 'No "Baixar PDF", escolha "Salvar como PDF".'}</small>
+      <small>${podeEditar ? 'No "Baixar PDF", escolha "Salvar como PDF" e anexe na conversa. A aluna também vê este relatório no app, em Evolução.' : 'No "Baixar PDF", escolha "Salvar como PDF". A última página é um card para postar nos Stories.'}</small>
     </section>
 
     ${!r.feitas.length && !r.pesosNoPeriodo.length
       ? html`<${Vazio} titulo="Nada registrado nesse período" texto="Escolha outro mês ou período para ver o relatório."/>`
-      : html`<${Folhas} r=${r} aluna=${aluna} coachNome=${coachNome} periodo=${periodo} tipo=${tipo} objetivo=${objetivo} msg=${podeEditar ? msg : ''} fotos=${fotos}/>`}
+      : html`<${Folhas} r=${r} ant=${ant} d=${d} meses=${meses} deusa=${deusa} aluna=${aluna} coachNome=${coachNome} periodo=${periodo} tipo=${tipo} rotulo=${rotulo}
+          objetivo=${objetivo} nota=${podeEditar ? atual : salvo} fotos=${fotos} proxRelatorio=${modo === 'mes' ? fimDoMes(somaMesYM(ym, 1)) : null}/>`}
   </div>`;
 }
 
 // ============================================================
 // FOLHAS (o que vai para o PDF)
 // ============================================================
-const Cab = ({ sobre, titulo }) => html`<header class="rf-cab"><p class="rf-sobre">${sobre}</p><h2>${titulo}</h2></header>`;
-const Rodape = ({ aluna, n }) => html`<footer class="rf-rodape"><span>NEMESIS · ${aluna.nome}</span><span>${n}</span></footer>`;
-const Dado = ({ rot, val, sub, destaque }) => html`<div class="rf-dado"><span class="rf-rot">${rot}</span><b class=${destaque ? 'rf-acento' : ''}>${val}</b>${sub && html`<small>${sub}</small>`}</div>`;
-
-function Folhas({ r, aluna, coachNome, periodo, tipo, objetivo, msg, fotos }) {
+function Folhas({ r, ant, d, meses, deusa, aluna, coachNome, periodo, tipo, rotulo, objetivo, nota, fotos, proxRelatorio }) {
   const temFotos = fotos.antes || fotos.depois;
-  const temCorpo = r.avAtual || r.bemEstar.length || r.pesosNoPeriodo.length > 1;
   let n = 1;
   const pag = () => String(++n).padStart(2, '0');
-  const varPeso = r.pesoAtual && r.pesoRef && r.pesoAtual.data !== r.pesoRef.data ? r.pesoAtual.peso - r.pesoRef.peso : null;
   const maxGanho = Math.max(0.01, ...r.destaques.map((f) => f.ganho));
   const maxGrupo = Math.max(1, ...r.grupos.map((g) => g.n));
+  const obrigIds = new Set(d.treinos.filter((t) => t.ativo && !t.opcional).map((t) => t.id));
+  const temBemEstar = r.checkinsFeitos > 0 || (d.dores || []).length > 0;
+  const todas = conquistas(r, meses, d.avaliacoes);
+  const desbloqueadas = todas.filter((c) => c.data && c.data >= r.ini);
+  // missão: focos e palavra do treinador, as semanas do mesociclo que vem e as próximas datas
+  const meso = proximoMeso(d.mesociclos, r.fim);
+  const datas = [];
+  const aval = (d.agenda || []).find((a) => a.tipo === 'avaliacao' && String(a.inicio).slice(0, 10) > r.fim);
+  if (aval) datas.push(['Próxima avaliação', dataCurta(String(aval.inicio).slice(0, 10)), 'dobras e medidas']);
+  const atual = d.mesociclos.find((m) => m.status === 'ativo');
+  if (atual && atual.fim >= r.fim && diasEntre(r.fim, atual.fim) <= 60) datas.push(['Ficha nova', dataCurta(somaDias(atual.fim, 1)), 'o próximo bloco começa']);
+  if (proxRelatorio) datas.push(['Próximo relatório', dataCurta(proxRelatorio), 'no fim do mês']);
+  const focos = (nota.missao || []).filter((f) => f.titulo || f.texto);
+  const temMissao = focos.length > 0 || !!nota.mensagem || meso.length > 0;
+  const ctx = { r, ant, d, aluna };
 
   return html`<div class="relatorio-folhas">
-    <section class="folha rf-capa">
-      <div class="rf-marca"><span class="rf-logo">NEMESIS</span>${coachNome && html`<small>${coachNome}</small>`}</div>
-      <div class="rf-capa-meio">
-        <p class="rf-sobre">${periodo}</p>
-        <h1>Relatório de <em>Evolução</em></h1>
-        <p class="rf-aluna">${aluna.nome}</p>
-      </div>
-      <div class="rf-faixa" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
-      <div class="rf-capa-pe">
-        <${Dado} rot="Período" val=${`${dataCurta(r.ini)} a ${dataCurta(r.fim)}`} sub=${r.fim.slice(0, 4)}/>
-        <${Dado} rot="Treinos" val=${r.feitas.length} sub="realizados"/>
-        ${coachNome && html`<${Dado} rot="Profissional" val=${coachNome}/>`}
-      </div>
-    </section>
-
-    <section class="folha">
-      <${Cab} sobre="Visão geral" titulo=${`Resumo do ${tipo}`}/>
-      <div class="rf-grade3">
-        <${Dado} rot="Peso atual" val=${r.pesoAtual ? num(r.pesoAtual.peso, 1) : '·'} sub=${r.pesoAtual ? (varPeso != null ? `kg · ${varPeso > 0 ? '+' : ''}${num(varPeso, 1)} kg no período` : 'kg') : 'sem registro'}/>
-        <${Dado} rot="Duração" val=${r.semanas} sub=${r.semanas === 1 ? 'semana' : 'semanas'}/>
-        <${Dado} rot="Treinos realizados" val=${r.feitas.length} sub="no período"/>
-      </div>
-      <div class="rf-grade3 rf-escuro">
-        <${Dado} rot="Aderência" val=${`${num(r.aderencia * 100, 0)}%`} sub=${`${r.feitas.length} de ${r.previstos} previstos`} destaque/>
-        <${Dado} rot="Recordes pessoais" val=${r.recordes.length} sub="de carga" destaque/>
-        <${Dado} rot="Volume total" val=${num(r.volume / 1000, 1)} sub="toneladas" destaque/>
-      </div>
-      <div class="rf-grade3">
-        <${Dado} rot="Esforço médio (RPE)" val=${r.esforcoMedio != null ? num(r.esforcoMedio, 1) : '·'} sub="escala de 0 a 10"/>
-        <${Dado} rot="Duração média" val=${r.duracaoMedia != null ? num(r.duracaoMedia, 0) : '·'} sub="min por sessão"/>
-        <${Dado} rot="Média semanal" val=${num(r.mediaSemanal / 1000, 1)} sub="toneladas"/>
-      </div>
-      <div class="rf-duas">
-        <div><p class="rf-sobre">Objetivo principal</p><p>${objetivo || 'Objetivo não informado.'}</p></div>
-        <div><p class="rf-sobre">Destaques do ${tipo.toLowerCase()}</p>
-          <p>${r.destaques.length ? r.destaques.slice(0, 3).map((f) => `${f.nome} ${pct(f.ganho)}`).join(' · ') : 'Ainda sem comparação de força: precisa de pelo menos duas sessões do mesmo exercício.'}</p></div>
-      </div>
-      ${msg && html`<div class="rf-msg"><p class="rf-sobre">Palavra do treinador</p><p>${msg}</p></div>`}
-      <p class="rf-barra-nota"><b>Peso corporal:</b> ${r.pesosNoPeriodo.length === 0 ? 'nenhum registro no período.' : r.pesosNoPeriodo.length === 1 ? `registro único no período, ${num(r.pesosNoPeriodo[0].peso, 1)} kg em ${dataBR(r.pesosNoPeriodo[0].data)}.` : `${r.pesosNoPeriodo.length} registros, de ${num(r.pesosNoPeriodo[0].peso, 1)} kg a ${num(r.pesosNoPeriodo[r.pesosNoPeriodo.length - 1].peso, 1)} kg.`}</p>
-      <${Rodape} aluna=${aluna} n=${pag()}/>
-    </section>
+    <${Capa} r=${r} aluna=${aluna} coachNome=${coachNome} periodo=${periodo} deusa=${deusa}/>
+    <${Macro} ...${ctx} n=${pag()} tipo=${tipo} rotulo=${rotulo} objetivo=${objetivo} obrigIds=${obrigIds} desbloqueadas=${desbloqueadas}/>
+    <${Comparativo} ...${ctx} n=${pag()} rotulo=${rotulo} objetivo=${objetivo}/>
 
     ${temFotos && html`<section class="folha">
       <${Cab} sobre="Comparativo" titulo="Antes e Depois"/>
@@ -362,22 +407,25 @@ function Folhas({ r, aluna, coachNome, periodo, tipo, objetivo, msg, fotos }) {
       <${Rodape} aluna=${aluna} n=${pag()}/>
     </section>
 
-    ${temCorpo && html`<section class="folha">
-      <${Cab} sobre="Composição e rotina" titulo="Corpo e Bem-estar"/>
-      ${r.avAtual && html`<p class="rf-sobre">Avaliação física <span class="rf-leve">${r.avAnterior ? `${dataBR(r.avAnterior.data)} × ${dataBR(r.avAtual.data)}` : dataBR(r.avAtual.data)}</span></p>
-        <table class="rf-tabela"><thead><tr><th>Medida</th>${r.avAnterior && html`<th>Antes</th>`}<th>Atual</th>${r.avAnterior && html`<th>Diferença</th>`}</tr></thead>
-        <tbody>${[['peso', 'Peso', 'kg'], ['percentual_gordura', '% de gordura', '%'], ...MEDIDAS_TODAS.map(([k, r]) => [k, r, 'cm', true])]
-          .map(([k, rot, un, med]) => { const v = (a) => (a ? (med ? (a.medidas || {})[k] : a[k]) : null); const at = v(r.avAtual), an = v(r.avAnterior);
-            if (at == null || at === '') return null;
-            const dif = an != null && an !== '' ? Number(at) - Number(an) : null;
-            return html`<tr><td>${rot}</td>${r.avAnterior && html`<td class="rf-leve">${an != null && an !== '' ? `${num(an, 1)} ${un}` : '·'}</td>`}<td><b>${num(at, 1)} ${un}</b></td>
-              ${r.avAnterior && html`<td>${dif == null ? '·' : `${dif > 0 ? '+' : ''}${num(dif, 1)} ${un}`}</td>`}</tr>`; })}</tbody></table>`}
-      ${r.bemEstar.length > 0 && html`<p class="rf-sobre">Bem-estar nos check-ins <span class="rf-leve">média de ${r.checkinsFeitos} check-in(s), de 1 a 5</span></p>
-        <div class="rf-barras">${r.bemEstar.map((b) => html`<div class="rf-barra-linha" title=${`${b.r}: ${num(b.v, 1)} de 5`}>
-          <span class="rf-barra-nome">${b.r}<small>${b.alto ? 'quanto maior, melhor' : 'quanto menor, melhor'}</small></span>
-          <span class="rf-barra-trilho fundo"><i class="on" style=${`width:${(b.v / 5) * 100}%`}></i></span>
-          <b>${num(b.v, 1)}</b></div>`)}</div>`}
+    ${r.seriesPeriodo.length > 0 && html`<${MapaDoCorpo} ...${ctx} n=${pag()} objetivo=${objetivo}/>`}
+    ${temBemEstar && html`<${BemEstar} ...${ctx} n=${pag()}/>`}
+
+    ${r.avAtual && html`<section class="folha">
+      <${Cab} sobre="Composição corporal" titulo="Avaliação Física"/>
+      <p class="rf-sobre">Medidas <span class="rf-leve">${r.avAnterior ? `${dataBR(r.avAnterior.data)} × ${dataBR(r.avAtual.data)}` : dataBR(r.avAtual.data)}</span></p>
+      <table class="rf-tabela"><thead><tr><th>Medida</th>${r.avAnterior && html`<th>Antes</th>`}<th>Atual</th>${r.avAnterior && html`<th>Diferença</th>`}</tr></thead>
+      <tbody>${[['peso', 'Peso', 'kg'], ['percentual_gordura', '% de gordura', '%'], ...MEDIDAS_TODAS.map(([k, rt]) => [k, rt, 'cm', true])]
+        .map(([k, rot, un, med]) => { const v = (a) => (a ? (med ? (a.medidas || {})[k] : a[k]) : null); const at = v(r.avAtual), an = v(r.avAnterior);
+          if (at == null || at === '') return null;
+          const dif = an != null && an !== '' ? Number(at) - Number(an) : null;
+          return html`<tr><td>${rot}</td>${r.avAnterior && html`<td class="rf-leve">${an != null && an !== '' ? `${num(an, 1)} ${un}` : '·'}</td>`}<td><b>${num(at, 1)} ${un}</b></td>
+            ${r.avAnterior && html`<td>${dif == null ? '·' : `${dif > 0 ? '+' : ''}${num(dif, 1)} ${un}`}</td>`}</tr>`; })}</tbody></table>
       <${Rodape} aluna=${aluna} n=${pag()}/>
     </section>`}
+
+    <${MetasConquistas} ...${ctx} n=${pag()} todas=${todas}/>
+    ${meses.length >= 2 && html`<${Jornada} ...${ctx} n=${pag()} meses=${meses}/>`}
+    ${temMissao && html`<${Missao} aluna=${aluna} n=${pag()} titulo=${rotulo.missao} missao=${focos} msg=${nota.mensagem} coachNome=${coachNome} meso=${meso} datas=${datas}/>`}
+    <${CardStories} r=${r} aluna=${aluna} deusa=${deusa} rotuloPeriodo=${rotulo.card} assinatura=${(window.NEMESIS_CONFIG || {}).ASSINATURA || coachNome || ''}/>
   </div>`;
 }
