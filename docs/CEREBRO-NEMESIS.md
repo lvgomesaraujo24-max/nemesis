@@ -2,13 +2,15 @@
 
 > Fonte primária do app Nemesis. Reúne o que o app é, como foi construído, onde cada coisa mora, todas as regras de cálculo ("inteligência") e o plano daqui para frente.
 > Dono do produto: **Luiz (LV TEAM · LV Coach)**. Repositório: `github.com/lvgomesaraujo24-max/nemesis`. Endereço do app: `https://lvgomesaraujo24-max.github.io/nemesis/`.
-> Versão deste documento: **01/10/2026**. Descreve o código do `main` (cache `nemesis-v13`, banco até a `atualizacao-15.sql`).
+> Versão deste documento: **03/10/2026**. Descreve o código do `main` (cache `nemesis-v13`, banco até a `atualizacao-15.sql`) e o cardio v2 em andamento na branch `claude/cardio-v2-monitoramento` (`atualizacao-16.sql`).
 
 ### Status real (leia antes de tudo)
 
 | Onde | Versão | Banco |
 |---|---|---|
 | **Produção** (branch `main`, o que as alunas usam hoje) | `nemesis-v12` (v13 no PR da Arena nova) | até a `atualizacao-13.sql` (a 14 vem com a Arena nova) |
+
+**Cardio v2 (03/10/2026):** a estrutura da `atualizacao-16.sql` (zonas de FC, prescrição intervalada, registro por tiro) foi aplicada no Supabase pelo conector, **fora do fluxo do SQL Editor**, antes de o arquivo existir no repositório. A versão final do arquivo acrescenta `aluna_id` em `cardio_estimulos`, troca a política dessa tabela pelo padrão do projeto e recria as duas views; **essa parte ainda não foi rodada**. Rode a `atualizacao-16.sql` inteira no SQL Editor (pode rodar mais de uma vez) antes de publicar as telas. As telas de cardio v2 ainda não existem no `main`.
 
 O PR #2 foi juntado ao `main` em 01/10/2026 e as atualizações 7 a 12 foram rodadas no Supabase no mesmo dia; a 13 (trava da `fase_ciclo`) foi aplicada logo depois. O PR #3 (relatório com deusa, missão e card de Stories) foi incorporado ao PR #2; a migração dele virou a `atualizacao-10.sql`. O branch `claude/happy-lovelace-qmbtuq` (CLAUDE.md, `.claude/` e checagem) também foi incorporado, atualizado para a v10.
 
@@ -213,7 +215,7 @@ Antes de tudo, a aluna sem o aceite da versão atual dos termos e do consentimen
 ### Ordem de instalação
 
 1. `supabase/schema.sql` (base)
-2. `atualizacao-2.sql` até `atualizacao-15.sql`, **nessa ordem**. Todas podem rodar mais de uma vez (testado num Postgres 16 simulando o Supabase: o conjunto inteiro rodou duas vezes seguidas sem erro). **Não rode uma atualização antiga depois de uma nova**: a 2 recria funções que a 11 protege.
+2. `atualizacao-2.sql` até `atualizacao-16.sql`, **nessa ordem**. Todas podem rodar mais de uma vez (testado num Postgres 16 simulando o Supabase: o conjunto inteiro rodou duas vezes seguidas sem erro). **Não rode uma atualização antiga depois de uma nova**: a 2 recria funções que a 11 protege.
 
 | Arquivo | O que liga |
 |---|---|
@@ -232,8 +234,9 @@ Antes de tudo, a aluna sem o aceite da versão atual dos termos e do consentimen
 | `atualizacao-13` | `fase_ciclo` só responde para a própria aluna ou o treinador (antes respondia até sem login); a original vira `fase_ciclo_base`, fechada. Caminho de busca fixo em `nome_regiao` e `avaliar_regra` |
 | `atualizacao-14` | Arena nova e água: `treino_itens.preparatorias`, `series.preparatoria`, `sessoes.notas`, `profiles.agua_meta_ml` e tabela `agua_registros` |
 | `atualizacao-15` | Metas da semana no Oráculo vivo: perguntas `metas_cumpridas` (só aparece se houve meta na semana anterior, com o texto dela no título) e `metas_semana`; o comentário livre passa a ser a última pergunta |
+| `atualizacao-16` | Cardio com monitoramento completo: tabela `zonas_fc` (zonas com histórico), campos de teste máximo em `testes_aerobicos`, prescrição intervalada em `cardio_prescricoes` (tipo, tiros, pausa, alvos, dias, progressão), FC pico, PSE do último tiro, fonte e carga interna (`carga_srpe`) em `cardio_registros`, tabela `cardio_estimulos` (um registro por tiro) e as views `cardio_estimulos_analise` e `cardio_semana` (`security_invoker`) |
 
-### Tabelas (43)
+### Tabelas (45)
 
 **Pessoas e acesso**
 - `profiles`: um por conta (id = `auth.users.id`). `role` (coach/student), `nome`, `email`, `telefone`, `nascimento`, `sexo` (F/M), `objetivo`, `ativo`, `anamnese_ok`, `alistada_em`, `treinos_semana_alvo`, `nivel` (iniciante/intermediaria/avancada), `ciclo_rastrear`, `ciclo_duracao_media`, `contracepcao`, `dia_revisao` (0 = domingo … 6), `combo_nutri`, `agua_meta_ml` (meta de água combinada, a aluna pode editar).
@@ -257,7 +260,12 @@ Antes de tudo, a aluna sem o aceite da versão atual dos termos e do consentimen
 - `anamneses`: Alistamento antigo + PAR-Q.
 - `avaliacoes`: `data`, `idade`, `peso`, `altura`, `dobras` {}, `medidas` {}, `diametros` {}, `percentual_gordura`, `protocolo` (jp7, jp3, weltman, tran, slaughter, perimetria), `autoavaliacao`, `obs`.
 - `metas`: `tipo` (carga, peso, gordura, medida, vo2, livre), alvo, prazo, `status` (ativa/batida/nao_batida/cancelada), causa raiz (`causa_categoria`, `causa_descricao` com 20+ caracteres, `acao_corretiva`, `analisada_em`).
-- `testes_aerobicos`, `cardio_prescricoes`, `cardio_registros`.
+- `testes_aerobicos`: protocolo, `dados` (jsonb com os estágios), `vo2max`, `resultado`, `fc_repouso`, `fc_max`; desde a 16 também `modalidade`, `fc_pico`, `carga_pico`, `nivel_pico` (bike sem watts), `duracao_s`, `pse_final`, limiares (`fc_lv1`, `fc_lv2`, `carga_lv1`, `carga_lv2`), `valido` (atingiu critério de teste máximo) e `video_url`.
+- `zonas_fc`: zonas de FC da aluna com histórico. `vigente_desde`, `fc_repouso`, `fc_max`, `fc_max_fonte` (shargal, tanaka, teste, observada), `metodo` (karvonen, pct_fcmax, limiares), `teste_id`, limites `z1_min` a `z5_max`. A aluna lê, só o treinador escreve. A zona vigente numa data é a linha com o maior `vigente_desde` até aquela data.
+- `cardio_prescricoes`: modalidade (esteira, bike, eliptico, escada, remo, rua, corda, peso_corporal, natacao, outro), modo, velocidade, inclinação, watts, nível, METs, duração, vezes por semana, momento. Desde a 16: `tipo` (continuo, intervalado_longo, hiit_curto, sit, fartlek, livre), `estimulos`, `estimulo_s`, `pausa_s`, `pausa_tipo` (ativa, passiva), `blocos`, `pausa_bloco_s`, alvo do tiro em bpm (`alvo_bpm_min/max`), em % da FCmáx e em PSE (`pse_alvo_min/max`), `controle` (fc, pse, carga, fala), `aquecimento_min`, `volta_calma_min`, `dias_semana`, `regra_dia`, `progressao` (jsonb por semana), `mesociclo_id`, `vigente_de/ate`.
+- `cardio_registros`: um cardio feito. Data, modalidade, carga, duração, distância, FC média, `percepcao` (PSE da sessão, 1 a 10), METs, kcal. Desde a 16: `tipo`, `estimulos_feitos`, `fc_pico`, `pse_ultimo`, `cadencia_media`, `tempo_zonas_s` (jsonb vindo do relógio), `tempo_acima_90_s`, `fonte` (manual, apple_watch, garmin, polar, planilha, coach), `print_url`, `sensacao` e `carga_srpe` (coluna calculada, seção 6.14a).
+- `cardio_estimulos`: um registro por tiro do intervalado. `registro_id`, `aluna_id`, `ordem`, `duracao_s`, `fc_pico`, `fc_fim_pausa`, `pse`, `nivel`, `watts`, `velocidade_kmh`, `cadencia`. A aluna grava e lê os dela; o treinador tudo. A política exige que o tiro pertença a um registro da mesma aluna.
+- Views `cardio_estimulos_analise` (cada tiro com % da FCmáx, recuperação e status no alvo) e `cardio_semana` (resumo por aluna e semana). Ambas com `security_invoker`: cada pessoa só vê o que a RLS das tabelas deixa.
 - `ciclo_registros`: início de cada menstruação.
 - `dor_relatos`: região, lado, intensidade 0–10, quando dói.
 - `arquivos_aluna`: `nome`, `caminho` no Storage, `tipo`, `categoria` (foto, exame, documento, outro), `pose` (frente, lado, costas), `tamanho`.
@@ -544,12 +552,31 @@ Cada item pode ser marcado como visto, resolvido, feito ou adiado (3 dias), e so
 
 ### 6.14 Testes aeróbicos
 
-- **FCmáx: Tanaka = 208 − 0,7 × idade.** (Pendente: o Luiz vai decidir entre Tanaka e Shargal.)
+- **FCmáx: Tanaka = 208 − 0,7 × idade.** (Pendente: o Luiz vai decidir entre Tanaka e Shargal.) Nas zonas de cardio (6.14a) a fonte da FCmáx é escolhida e gravada em cada recálculo; o padrão é Shargal, que é a equação que o Luiz usa na prescrição da LV TEAM.
 - Cooper 12 min: VO2 = (distância − 504,9) ÷ 44,73.
 - Rockport 1 milha: VO2 = 132,853 − 0,0769·peso(lb) − 0,3877·idade + 6,315·(homem = 1) − 3,2649·tempo − 0,1565·FC final.
 - Bruce: homem 14,8 − 1,379t + 0,451t² − 0,012t³; mulher 4,38t − 3,9.
 - Åstrand-Ryhming (bike) com fator de idade; TC6 (distância em metros); valor manual.
 - Regra de leitura: comparar a aluna com ela mesma, no mesmo protocolo.
+
+### 6.14a Cardio: zonas, tiros e carga (desde a atualização 16)
+
+Regras aprovadas pelo Luiz em 03/10/2026, na prescrição de HIIT de uma aluna.
+
+- **FCmáx estimada:** Shargal = 208,609 − 0,716 × idade (arredondado). Tanaka continua disponível como opção. Com teste máximo válido, vale a FC de pico do teste (`fc_max_fonte = 'teste'`). Se um registro passar da FCmáx vigente, ela pode ser trocada pela observada (`'observada'`).
+- **Zonas (Karvonen):** FC alvo = FC repouso + % × (FCmáx − FC repouso), arredondado.
+  - Z1: 50 a 60% da FC de reserva (base aeróbia, LISS)
+  - Z2: 60 a 75% (contínuo moderado)
+  - Z3: 75 a 85% (tempo, intervalado longo)
+  - Z4: 85 a 95% (HIIT)
+  - Z5 fica vazia por enquanto (não foi definida).
+- **Tiro no alvo pela FC:** `fc_pico` do tiro entre `alvo_bpm_min` e `alvo_bpm_max` da prescrição: abaixo, no alvo ou acima. Sem alvo em bpm, o status fica vazio.
+- **Tiro no alvo pela PSE:** `pse` do tiro entre `pse_alvo_min` e `pse_alvo_max`.
+- **Regra de leitura do HIIT curto (30 s):** a FC não estabiliza num estímulo curto, então o tiro é prescrito pela carga ou pela PSE e a FC serve para conferir: os últimos tiros devem passar do limite inferior da Z4. Em tiros longos (3 min ou mais), a zona é alvo de verdade.
+- **Recuperação na pausa:** `fc_pico − fc_fim_pausa` do mesmo tiro, em bpm.
+- **Alerta de FCmáx:** algum tiro ou registro com `fc_pico` acima da `fc_max` vigente na data. Sinal de que a FCmáx estimada está baixa: recalcular as zonas.
+- **Carga interna da sessão (sRPE, Foster):** `percepcao` (PSE da sessão, 1 a 10) × `duracao_min`. Calculada pelo banco (`carga_srpe`).
+- **Resumo semanal:** sessões, minutos, soma da carga interna, PSE média, FC pico média, tiros feitos, % de tiros no alvo (FC e PSE), recuperação média e alerta de FCmáx. Semana começando na segunda.
 
 ### 6.15 Olimpo (recordes) e relatório
 

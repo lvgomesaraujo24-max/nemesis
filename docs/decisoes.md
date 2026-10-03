@@ -129,3 +129,17 @@ Modelo:
 **Decisão**: o gráfico de progressão por série usa quatro cores novas em `:root` (`--serie-1` a `--serie-4`: azul, laranja, verde-água e amarelo).
 **Por quê**: o roxo da marca não serve para separar várias linhas. As quatro cores passaram pelo validador de paleta no fundo escuro do app: diferença para daltonismo ΔE ≥ 8 e contraste ≥ 3:1. Os tons de estado (`--ok`, `--atencao`, `--perigo`) continuam reservados para estado.
 
+
+## 2026-10-03 · Cardio com monitoramento completo (atualização 16)
+**Decisão**: o cardio passa a aceitar intervalado (HIIT, SIT, intervalado longo) na mesma tabela de prescrição do contínuo, com registro por tiro (`cardio_estimulos`), zonas de FC com histórico (`zonas_fc`) e carga interna da sessão (sRPE).
+**Por quê**: pedido do Luiz ("o melhor cardio do mercado no quesito monitoramento"), a partir da auditoria do HIIT de uma aluna. A planilha de auditoria por tiro funcionava, mas dependia da aluna preencher e devolver arquivo; dentro do app o dado chega na hora e o resumo é automático.
+**Consequências**: só colunas e tabelas novas, nada removido. As fórmulas novas estão na §6.14a.
+
+## 2026-10-03 · Atualização 16 aplicada antes de existir no repositório
+**Decisão**: a primeira versão da estrutura do cardio v2 foi aplicada no Supabase pelo conector, durante a conversa com o Luiz, antes de virar `supabase/atualizacao-16.sql`. O arquivo foi escrito depois, idempotente, e passou a ser a fonte da verdade.
+**Por quê**: registro para não repetir. O fluxo do projeto é arquivo primeiro, revisão, depois SQL Editor.
+**Consequências**: a versão final do arquivo acrescenta `aluna_id` em `cardio_estimulos` e recria as views; enquanto ela não for rodada, o banco real tem a versão antiga dessa tabela.
+
+## 2026-10-03 · Zonas de cardio por Karvonen com FCmáx de Shargal
+**Decisão**: zonas Z1 a Z4 pela FC de reserva (50-60, 60-75, 75-85, 85-95%), FCmáx padrão por Shargal, com a fonte gravada em cada recálculo.
+**Por quê**: é a prescrição que o Luiz usa na LV TEAM. A FC de reserva acompanha melhor o %VO2máx do que o %FCmáx puro. Os testes aeróbicos continuam mostrando Tanaka até a decisão final da §6.14.
